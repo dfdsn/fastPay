@@ -1,0 +1,125 @@
+# CI do fastPay (H02). Testa PRs e pushes; publica imagens privadas no GHCR só em push para develop/main.
+# Não há deploy automático: implantação é manual por versão aprovada (especificação §12/§15).
+# Actions fixadas por SHA de commit (comentário mostra a tag); contêineres de job fixados por digest.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    name: Backend (mvnw verify)
+    runs-on: ubuntu-24.04
+    container:
+      image: eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verificar backend
+        run: ./scripts/verify.sh backend
+      - name: Publicar relatórios
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-relatorios-${{ github.sha }}
+          path: |
+            backend/target/surefire-reports/
+            backend/target/site/jacoco/
+            backend/target/spring-modulith-docs/
+          retention-days: 14
+          if-no-files-found: warn
+
+  frontend:
+    name: Frontend (lint, testes, build)
+    runs-on: ubuntu-24.04
+    container:
+      image: node:24.18.0-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Conferir versões
+        run: node --version && npm --version
+      - name: Verificar frontend
+        run: ./scripts/verify.sh frontend
+      - name: Publicar relatórios
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-relatorios-${{ github.sha }}
+          path: frontend/coverage/
+          retention-days: 14
+          if-no-files-found: warn
+
+  images:
+    name: Imagens e smoke Compose
+    needs: [backend, frontend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PUBLISH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Smoke Compose (subir, API pela mesma origem, banco interno, volume após recriar)
+        run: ./scripts/compose-smoke.sh
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Login no GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Metadados backend
+        id: meta-backend
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/fastpay-backend
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+      - name: Metadados frontend
+        id: meta-frontend
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/fastpay-frontend
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+      - name: Imagem backend
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: backend
+          file: infra/backend.Dockerfile
+          build-args: FASTPAY_REVISION=${{ github.sha }}
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+      - name: Imagem frontend
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: frontend
+          file: infra/frontend.Dockerfile
+          build-args: FASTPAY_REVISION=${{ github.sha }}
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}

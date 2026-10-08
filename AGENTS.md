@@ -48,7 +48,7 @@ Antes de commit confira secrets/dados pessoais e diff. Faça commit apenas dos a
 
 ## Comandos e ambiente
 
-Comandos validados em H01 (07/10/2026, ver `docs/evidencias/H01-build.md`) e planejados para histórias seguintes. H02 atualiza esta seção com Compose/CI. Não afirmar que um comando planejado já existe ou rodou.
+Comandos validados em H01 (07/10/2026, ver `docs/evidencias/H01-build.md`) e planejados para histórias seguintes. H02 acrescentou Compose/CI (ver `docs/evidencias/H02-ambientes.md`). Não afirmar que um comando planejado já existe ou rodou.
 
 | Comando (da raiz, salvo indicado) | Uso | Situação |
 |---|---|---|
@@ -59,7 +59,10 @@ Comandos validados em H01 (07/10/2026, ver `docs/evidencias/H01-build.md`) e pla
 | `cd frontend` e `npm run test:ci` | Vitest não interativo com cobertura | Validado em H01 |
 | `cd frontend` e `npm run build` | Build produção | Validado em H01 |
 | `cd frontend` e `npm run e2e` | Playwright | Planejado; não existe ainda |
-| `docker compose -f infra/compose.dev.yml up -d` | Serviços locais; não produção | Planejado para H02 |
+| `./scripts/verify.sh backend` / `frontend` | Metade da verificação, usada pelos jobs da CI | Criado em H02; validado só o modo completo e a recusa de argumento inválido |
+| `docker compose --env-file .env -f infra/compose.dev.yml up -d --build` | Banco/backend/frontend locais em `127.0.0.1:8088`; não produção | Criado em H02; não executado (Docker Desktop falhando) |
+| `./scripts/compose-smoke.sh` | Smoke Compose: saúde, `/api`, banco sem porta, volume após `down`/`up` | Criado em H02; não executado localmente; roda na CI |
+| `docker compose --env-file .env.hml -f infra/compose.hml.yml up -d` | Homologação com imagens do GHCR por tag | Criado em H02; depende de remoto/GHCR |
 
 Executar no WSL2 para manter paridade com Linux; Docker Desktop deve estar acessível. Na máquina de Diego o WSL2 estava sem rede durante H01 e a validação foi no Windows (Git Bash/PowerShell); registrar sempre onde rodou. Usar JDK 25 e o npm que acompanha o Node 24.18.0. Conferir scripts reais antes de usar. CI e local precisam mesmas ferramentas/lockfiles. Se nome real divergir, atualizar docs sem deixar comando fictício.
 

@@ -19,6 +19,20 @@ Pré-requisitos (versões exatas em [evidencias/H01-build.md](docs/evidencias/H0
 | `cd frontend` e `npm run test:ci` | Vitest não interativo com cobertura em `frontend/coverage/` |
 | `cd frontend` e `npm run build` | Build de produção em `frontend/dist/` |
 | `cd frontend` e `npm start` | Servidor de desenvolvimento em `http://localhost:4200`, com `/api` encaminhado ao backend |
+| `./scripts/verify.sh backend` ou `frontend` | Só uma das metades (é o que cada job da CI roda) |
+
+### Docker (H02)
+
+Requer Docker Desktop (WSL2) com Compose v2. Copie `.env.example` para `.env` e defina `POSTGRES_PASSWORD`.
+
+| Comando (a partir da raiz) | Uso |
+|---|---|
+| `docker compose --env-file .env -f infra/compose.dev.yml up -d --build` | Banco, backend e frontend locais; abrir `http://127.0.0.1:8088` |
+| `docker compose --env-file .env -f infra/compose.dev.yml down` | Parar sem apagar o volume do banco (`down -v` apaga os dados locais) |
+| `./scripts/compose-smoke.sh` | Smoke isolado (projeto `fastpay-smoke`): saúde, `/api`, banco sem porta publicada, dado preservado após recriar |
+| `docker compose --env-file .env.hml -f infra/compose.hml.yml up -d` | Homologação com as imagens publicadas pela CI no GHCR (`FASTPAY_IMAGE_OWNER`, `FASTPAY_VERSION`) |
+
+O banco não tem porta publicada no host. A CI (`.github/workflows/ci.yml`) testa PRs para `develop`/`main` e publica imagens privadas no GHCR apenas em push para essas branches; não faz deploy.
 
 Endpoints atuais: `GET /actuator/health` (somente status) e `GET /api/v1/platform/info` (nome, versão e ambiente). Variáveis em [.env.example](.env.example).
 
@@ -34,7 +48,7 @@ Endpoints atuais: `GET /actuator/health` (somente status) e `GET /api/v1/platfor
 | [CLAUDE.md](CLAUDE.md) | Entrada do Claude Code com importação de AGENTS |
 | [progresso.md](docs/progresso.md) | Estado inicial e registros de implementação/testes/PR |
 
-Ordem de leitura: a da tabela. backend, frontend e scripts foram criados em H01; infra vem em H02. As instruções incluem a leitura das referências; não dependem de memória da conversa. Usar Codex OU Claude Code, uma história por vez.
+Ordem de leitura: a da tabela. backend, frontend e scripts foram criados em H01; infra e CI em H02. As instruções incluem a leitura das referências; não dependem de memória da conversa. Usar Codex OU Claude Code, uma história por vez.
 
 Pedido inicial sugerido:
 
