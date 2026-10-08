@@ -1,7 +1,7 @@
 # Especificação técnica — fastPay
 
 Versão 1.0 · 06/10/2026 · Responsável pelo produto e piloto: Diego.
-Base funcional: [PRD v3.0](PRD-fastPay-atualizado.md). Implementação ainda não iniciada.
+Base funcional: [PRD v3.0](PRD-fastPay-atualizado.md). Bootstrap técnico (H01) iniciado em 07/10/2026; regras de negócio ainda não implementadas.
 
 Este documento consolida as escolhas da entrevista e define contratos de implementação. Modelos de tabelas, nomes de pacotes, endpoints e variáveis abaixo são diretrizes técnicas para materializar essas escolhas, não código existente. Pendências têm gates em [decisoes-pendentes.md](decisoes-pendentes.md); não converter uma hipótese em regra aprovada.
 
@@ -22,7 +22,7 @@ Este documento consolida as escolhas da entrevista e define contratos de impleme
 | Backup | pgBackRest + WAL para AWS S3 | Fixar versão compatível com o PostgreSQL selecionado em T-01 |
 | Telemetria | Actuator, Micrometer, logs JSON, Grafana Cloud | Coletor e limites definidos antes de produção; não presumir serviço ilimitado |
 
-As famílias aprovadas não autorizam tags `latest` nem resolução flutuante em CI. H01 deve registrar versões exatas, fontes oficiais, checksums/digests, build e testes executados. Escolher patches compatíveis é trabalho técnico autorizado; trocar linguagem/framework/major aprovado exige decisão de Diego. A matriz pública consultada do Modulith não bastou para confirmar a combinação completa: o gate de integração permanece explícito.
+As famílias aprovadas não autorizam tags `latest` nem resolução flutuante em CI. H01 deve registrar versões exatas, fontes oficiais, checksums/digests, build e testes executados. Escolher patches compatíveis é trabalho técnico autorizado; trocar linguagem/framework/major aprovado exige decisão de Diego. A matriz pública consultada do Modulith não bastou para confirmar a combinação completa: o gate de integração permanece explícito. Versões fixadas em H01: [evidencias/H01-build.md](evidencias/H01-build.md) (Temurin 25.0.4.1+1, Maven 3.9.16, Boot 4.1.1, Modulith 2.1.1, Angular 22.0.8, Node 24.18.0/npm 11.16.0).
 
 Fontes técnicas consultadas em 06/10/2026: [Spring Boot](https://docs.spring.io/spring-boot/system-requirements.html), [Angular](https://angular.dev/reference/versions), [Modulith/compatibilidade](https://docs.spring.io/spring-modulith/reference/appendix.html), [eventos Modulith](https://docs.spring.io/spring-modulith/reference/events.html), [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html), [pgBackRest](https://pgbackrest.org/user-guide.html). Revalidar ao fixar versões; este documento não comprova build.
 

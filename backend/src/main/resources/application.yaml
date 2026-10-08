@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: fastpay
+  mvc:
+    problemdetails:
+      enabled: true
+
+fastpay:
+  # APP_ENV: development | homologation | production
+  environment: ${APP_ENV:development}
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true

@@ -73,7 +73,7 @@ Estes pontos não exigem nova entrevista para escolhas rotineiras dentro da arqu
 
 | ID | Pendência técnica | Gate / responsável | Encerramento |
 |---|---|---|---|
-| T-01 | Patches exatos, major PostgreSQL, compatibilidade Boot/Modulith, pgBackRest, plugins Java25, Playwright e npm | H01/H03/H04, agente de desenvolvimento | Lockfiles/wrappers/imagens e smoke/migration/eventrecovery; versões registradas e reproduzíveis |
+| T-01 — Parcial (H01) | Patches exatos, major PostgreSQL, compatibilidade Boot/Modulith, pgBackRest, plugins Java25, Playwright e npm. H01 fixou JDK/Maven/Boot/Modulith/JaCoCo/Angular/Node/npm e provou Boot 4.1.1+Modulith 2.1.1+Java 25 (contexto e verificação de módulos), ver evidencias/H01-build.md. Faltam PostgreSQL/digest, Testcontainers/Flyway (H03), registry de eventos (H04), pgBackRest, Playwright e PIT | H01/H03/H04, agente de desenvolvimento | Lockfiles/wrappers/imagens e smoke/migration/eventrecovery; versões registradas e reproduzíveis |
 | T-02 | Linux/proxy/collector, DNS/tunnel, região S3, acesso SES/Google/PSP/GitHub, orçamento, e-mails reais | H12/H49–H52, Diego+implementação | Inventário sem secrets, URLs, conta/acessos mínimos e testes; contratar/provisionar depende autorização específica |
 | T-03 | Limites monetários/texto/dimensões, export volume, quotas/rate limits e backoff técnico exato | Antes do endpoint afetado em H08/H13/H16/H22/H45 | Valores documentados, erros claros e testes de fronteira; não inventar limite comercial de loja |
 | T-04 | Inspeção/quarentena de uploads e recuperação/versionamento dos objetos | H13/H36/H49/H51 | Política validada, teste arquivo malformado/malicioso e recuperação de evidência |

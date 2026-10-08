@@ -1,8 +1,28 @@
-# fastPay — pacote de preparação para desenvolvimento
+# fastPay
 
-Consolidado em 06/10/2026 para Diego. Contém documentos; não contém a aplicação implementada.
+Monólito modular (Spring Boot + Spring Modulith) com frontend Angular. Documentação consolidada em 06/10/2026; bootstrap técnico (H01) em 07/10/2026. Regras comerciais ainda não implementadas.
 
-## Arquivos e ordem de leitura
+## Como executar
+
+Pré-requisitos (versões exatas em [evidencias/H01-build.md](docs/evidencias/H01-build.md)):
+
+- JDK Temurin 25 com `JAVA_HOME` apontando para ele. Maven não precisa estar instalado: use o wrapper (3.9.16, checksum fixado).
+- Node 24.18.0 (`frontend/.nvmrc`) com o npm 11.16.0 que o acompanha. O projeto recusa outro npm (`engine-strict`); um npm global mais antigo em `%APPDATA%\npm` precisa ser removido ou contornado.
+
+| Comando (a partir da raiz) | Uso |
+|---|---|
+| `./scripts/verify.sh` | Verificação completa: backend `clean verify` + frontend `npm ci`, lint, testes, build |
+| `cd backend` e `./mvnw verify` (`mvnw.cmd` no Windows) | Compilar, testes JUnit, fronteiras Modulith, JaCoCo |
+| `java -jar backend/target/fastpay-backend-0.1.0-SNAPSHOT.jar` | Subir o backend em `http://localhost:8080` |
+| `cd frontend` e `npm ci` | Instalar exatamente o lockfile |
+| `cd frontend` e `npm run lint` | ESLint (TypeScript, templates e acessibilidade) |
+| `cd frontend` e `npm run test:ci` | Vitest não interativo com cobertura em `frontend/coverage/` |
+| `cd frontend` e `npm run build` | Build de produção em `frontend/dist/` |
+| `cd frontend` e `npm start` | Servidor de desenvolvimento em `http://localhost:4200`, com `/api` encaminhado ao backend |
+
+Endpoints atuais: `GET /actuator/health` (somente status) e `GET /api/v1/platform/info` (nome, versão e ambiente). Variáveis em [.env.example](.env.example).
+
+## Documentação
 
 | Arquivo | Finalidade |
 |---|---|
@@ -14,7 +34,7 @@ Consolidado em 06/10/2026 para Diego. Contém documentos; não contém a aplica�
 | [CLAUDE.md](CLAUDE.md) | Entrada do Claude Code com importação de AGENTS |
 | [progresso.md](docs/progresso.md) | Estado inicial e registros de implementação/testes/PR |
 
-Coloque AGENTS.md, CLAUDE.md e este README na raiz do repositório, com a pasta docs preservada. O bootstrap criará backend/frontend/infra/scripts. As instruções incluem a leitura das referências; não dependem de memória da conversa. Usar Codex OU Claude Code, uma história por vez.
+Ordem de leitura: a da tabela. backend, frontend e scripts foram criados em H01; infra vem em H02. As instruções incluem a leitura das referências; não dependem de memória da conversa. Usar Codex OU Claude Code, uma história por vez.
 
 Pedido inicial sugerido:
 
