@@ -44,6 +44,23 @@ public class TenantTransactions {
         });
     }
 
+    /**
+     * Transação nova com a identidade no contexto ({@code app.identity_id}) e sem unidade: só enxerga o que
+     * pertence à própria pessoa, como os seus vínculos para escolher a unidade (H07). Mesmas garantias de
+     * escopo de {@link #inEstablishment}.
+     */
+    public <T> T asIdentity(UUID identityId, Supplier<T> work) {
+        Objects.requireNonNull(identityId, "identityId");
+        Objects.requireNonNull(work, "work");
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Contexto de identidade exige transação própria; já existe uma ativa.");
+        }
+        return transactions.execute(status -> {
+            jdbc.queryForObject("SELECT set_config('app.identity_id', ?, true)", String.class, identityId.toString());
+            return work.get();
+        });
+    }
+
     public void runInEstablishment(UUID establishmentId, Runnable work) {
         Objects.requireNonNull(work, "work");
         inEstablishment(establishmentId, () -> {
