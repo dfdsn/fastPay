@@ -63,11 +63,45 @@ Atenção: o `JAVA_HOME` padrão desta máquina aponta para o JDK 23. O enforcer
 - Configuração resolvida: rede `fastpay-dev_internal` com `internal: true`; a única porta publicada é a do frontend (8088, em 127.0.0.1).
 - `.github/workflows/ci.yml` lido como YAML válido (jobs `backend`, `frontend`, `images`). Não foi validado pelo GitHub nem pelo actionlint.
 
+### 3.3 Primeira execução da CI (GitHub Actions, 08/10/2026)
+
+| Run | Evento / commit | Backend | Frontend | Imagens e smoke |
+|---|---|---|---|---|
+| 37806871793 | PR #1, `1f749b7` | falhou | **sucesso** | skipped |
+| 37828730825 | push `develop`, `216002c` | falhou | **sucesso** | skipped |
+
+Falha do backend nas duas: `Error: Failed to validate Maven distribution SHA-256, your Maven distribution might be compromised.` O SHA-256 fixado (`5af3b743…d89ce`) é o do `apache-maven-3.9.16-bin.zip` e confere com o SHA-512 oficial (rechecado em 11/10/2026). O `mvnw` em Linux usa o `.tar.gz` quando não encontra `unzip`; a imagem Temurin não traz `unzip`. Reproduzido em 11/10/2026 no WSL Ubuntu (clone limpo de `216002c`, `MVNW_VERBOSE=true sh ./mvnw -v`): baixou `apache-maven-3.9.16-bin.tar.gz` e falhou com a mesma mensagem.
+
+Correção (`feature/H02-corrige-ci-maven`): instalar `unzip` no job de backend e no estágio de build de `infra/backend.Dockerfile`, mantendo um único checksum, que é o do `.zip` exigido pelo `mvnw.cmd` no Windows. O resultado da CI dessa correção fica registrado no PR.
+
+CI do PR #2 com essa correção (run 38105063288, commit `253d823`, 11/10/2026): backend **sucesso**, frontend **sucesso**, imagens e smoke **falhou**. O backend ficou `unhealthy` (`dependency failed to start: container fastpay-smoke-backend-1 is unhealthy`). Causa: o healthcheck usava `curl`, mas a imagem `eclipse-temurin` JRE noble não traz `curl` nem `wget` (conferido no Dockerfile oficial `adoptium/containers` 25/jre/ubuntu/noble). Correção: healthcheck com `bash` e `/dev/tcp`, sem pacote novo. Testado em 11/10/2026 no Git Bash contra o jar real na porta 18080: exit 0 com `{"status":"UP"}` em `/actuator/health/liveness` e exit 1 em rota inexistente. O `compose-smoke.sh` passou a mostrar `ps` e logs quando o `up --wait` falha.
+
+### 3.4 CI verde (run 38105381291, commit `ebb6871`, PR #2, 11/10/2026 02:30–02:34 UTC)
+
+Backend **sucesso**, frontend **sucesso**, imagens e smoke Compose **sucesso**. Artefatos: `backend-relatorios-…` (151 KB), `frontend-relatorios-…` (26 KB) e os registros de build das duas imagens. Trecho do smoke (runner `ubuntu-24.04`):
+
+```
+== subir ambiente
+naming to docker.io/library/fastpay-frontend:dev done
+naming to docker.io/library/fastpay-backend:dev done
+== verificar frontend e API pela mesma origem
+ok http://127.0.0.1:18088/healthz -> ok
+ok http://127.0.0.1:18088/api/v1/platform/info -> {"name":"fastPay","version":"0.1.0-SNAPSHOT","environment":"development"}
+ok http://127.0.0.1:18088/ -> <!doctype html>
+== banco não publicado no host
+ok sem porta publicada
+== gravar marcador e recriar contêineres preservando o volume
+ok marcador preservado após down/up
+== smoke concluído
+```
+
+Em PR as imagens são construídas sem push (`push: false`), como previsto. A publicação no GHCR só acontece no push para `develop`/`main` depois do merge e ainda não foi observada.
+
 ## 4. Não executado (bloqueios reais)
 
 | Validação exigida | Situação | Motivo / quem resolve |
 |---|---|---|
-| Build das imagens e smoke Compose (`scripts/compose-smoke.sh`) | **Não executado** | O Docker Desktop 4.50.0 fecha ao iniciar. O log mostra `initializing Inference manager: listening on unix://…\AppData\Local\Docker\run\dockerInference: remove …: The file cannot be accessed by the system`. Há sockets antigos (24/09/2026) em `%LOCALAPPDATA%\Docker\run` que `del`/`File.Delete` não removem, e mover a pasta foi bloqueado como ação local destrutiva. Diego: reiniciar o Windows ou remover `%LOCALAPPDATA%\Docker\run` com o Docker fechado (ou "Reset to factory defaults", que apaga imagens/volumes locais) |
-| Restart sem perder DB | **Não executado** | Coberto pelo `compose-smoke.sh`; depende do Docker acima |
+| Build das imagens e smoke Compose (`scripts/compose-smoke.sh`) localmente | **Não executado localmente; aprovado na CI (§3.4)** | O Docker Desktop 4.50.0 fecha ao iniciar. O log mostra `initializing Inference manager: listening on unix://…\AppData\Local\Docker\run\dockerInference: remove …: The file cannot be accessed by the system`. Há sockets antigos (24/09/2026) em `%LOCALAPPDATA%\Docker\run` que `del`/`File.Delete` não removem, e mover a pasta foi bloqueado como ação local destrutiva. Diego: reiniciar o Windows ou remover `%LOCALAPPDATA%\Docker\run` com o Docker fechado (ou "Reset to factory defaults", que apaga imagens/volumes locais) |
+| Restart sem perder DB localmente | **Não executado localmente; aprovado na CI (§3.4)** | Coberto pelo `compose-smoke.sh`; depende do Docker acima |
 | Execução no WSL2 | **Não executado** | O WSL Ubuntu voltou a ter rede (`curl https://repo1.maven.org/maven2/` → 200), mas não tem JDK nem Node instalados. Não foram instalados sem pedido. A CI roda em Linux e cobre a paridade quando existir remoto |
-| CI com artefatos e publicação no GHCR | **Não executado** | Não existe repositório remoto (T-02, Diego). O workflow só roda depois do push |
+| Publicação no GHCR | **Pendente** | Só ocorre em push para `develop`/`main` após o merge do PR #2; conferir depois que os pacotes ficaram privados |

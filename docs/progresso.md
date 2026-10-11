@@ -4,15 +4,19 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 08/10/2026 por Claude Code.
+Atualizado em 11/10/2026 por Claude Code.
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
 **Troca de história:** em 08/10/2026 Diego pediu “Implemente a próxima história elegível” com a H01 aguardando validação. Tratei o pedido como a autorização explícita de troca exigida pelo AGENTS. A H01 continua aguardando validação.
 
-**Remoto:** Diego informou `https://github.com/dfdsn/fastPay.git` em 08/10/2026 e pediu que o trabalho passe a ser feito por lá. O resultado do push e da CI fica registrado na atualização seguinte deste arquivo.
+**Remoto:** `https://github.com/dfdsn/fastPay` desde 08/10/2026. Branches `main`, `develop`, `feature/H01-bootstrap` e `feature/H02-ambientes-docker-ci` publicadas em 08/10/2026.
 
-História ativa: **H02, bloqueada** (código e configuração prontos; build de imagens e smoke Compose locais não executados por falha do Docker Desktop; CI ainda não executada). Próximo passo: push das branches, PRs para `develop` (H01 primeiro) e conferir a CI, que roda o smoke Compose em Linux.
+**PR #1 (11/10/2026, reconciliação):** [dfdsn/fastPay#1](https://github.com/dfdsn/fastPay/pull/1) (H01 + H02, base `develop`) foi mergeado por Diego; merge `216002c` em `develop`. A CI desse PR (run 37806871793) e a do push em `develop` (run 37828730825) **falharam** no job de backend: `Failed to validate Maven distribution SHA-256`. O frontend passou nas duas. Causa: sem `unzip` (caso da imagem Temurin e do WSL) o `mvnw` troca o `.zip` pelo `.tar.gz`, e o checksum fixado é o do `.zip` (conferido de novo contra o SHA-512 oficial em 11/10/2026). Reproduzido no WSL Ubuntu com clone limpo de `216002c`. O job de imagens e smoke Compose ficou `skipped` e nunca rodou. Correção na branch `feature/H02-corrige-ci-maven`.
+
+**PR #2 (11/10/2026):** [dfdsn/fastPay#2](https://github.com/dfdsn/fastPay/pull/2) corrige a CI em dois pontos: `unzip` para o Maven Wrapper e healthcheck do backend sem `curl` (a imagem JRE não tem `curl`). CI verde no commit `ebb6871` (run 38105381291): backend, frontend, imagens e smoke Compose. Evidência em [evidencias/H02-ambientes.md](evidencias/H02-ambientes.md) §3.3–3.4.
+
+Histórias ativas: **H01 e H02 aguardando revisão** (PR #2 aberto). Próximo passo: Diego revisa e faz o merge do PR #2; depois, conferir a CI do push em `develop` e a publicação das imagens no GHCR (privadas) e registrar H01/H02 como concluídas com o hash real.
 
 ## Estados
 
@@ -22,8 +26,8 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 | ID | História | Estado | Evidência / próximo passo |
 |---|---|---|---|
-| H01 | Bootstrap reproduzível e contratos de qualidade | Aguardando validação | Verificação local verde em 07/10/2026 ([evidência](evidencias/H01-build.md)); commit em `feature/H01-bootstrap`, sem PR; ver registro abaixo |
-| H02 | Ambientes Docker e pipeline GitHub | Bloqueada | Arquivos prontos e `verify.sh` verde em 08/10/2026 ([evidência](evidencias/H02-ambientes.md)); Docker Desktop falhando localmente; CI pendente; ver registro abaixo |
+| H01 | Bootstrap reproduzível e contratos de qualidade | Aguardando revisão | Verificação local verde em 07/10/2026 ([evidência](evidencias/H01-build.md)); commit em `feature/H01-bootstrap`, sem PR; ver registro abaixo |
+| H02 | Ambientes Docker e pipeline GitHub | Aguardando revisão | Arquivos prontos e `verify.sh` verde em 08/10/2026 ([evidência](evidencias/H02-ambientes.md)); Docker Desktop falhando localmente; CI pendente; ver registro abaixo |
 | H03 | Migrations e fundação de isolamento RLS | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H04 | Eventos duráveis, idempotência e jobs | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H05 | Prova PSP: recebedor, cobrança e split | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -135,7 +139,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Execução no WSL2: WSL com rede, mas sem JDK/Node instalados; não instalei nada sem pedido.
   - CI com artefatos, GHCR e “repositório usa develop/main”: dependem do push para o remoto e da primeira execução da CI.
 - Branch e commit reais: `feature/H02-ambientes-docker-ci`, criada a partir de `feature/H01-bootstrap` (`403c606`); hash no `git log`.
-- PR, checks e merge real: nenhum até este commit.
+- PR, checks e merge real: [dfdsn/fastPay#1](https://github.com/dfdsn/fastPay/pull/1) mergeado em `develop` (`216002c`) com o job de backend falhando (checksum do Maven Wrapper; ver Situação real). Frontend verde na CI. Correção no [PR #2](https://github.com/dfdsn/fastPay/pull/2), CI verde em `ebb6871`.
 - Arquivos alterados: `infra/**` (Dockerfiles, `.dockerignore`, Compose dev/HML), `frontend/nginx/default.conf.template`, `.github/workflows/ci.yml`, `scripts/verify.sh`, `scripts/compose-smoke.sh`, `.env.example`, `README.md`, `AGENTS.md` (comandos), `docs/especificacao-tecnica.md`, `docs/decisoes-pendentes.md` (T-01), `docs/evidencias/H02-ambientes.md`, este arquivo. Sem migrations nem contratos de negócio.
 - Testes:
   - `./scripts/verify.sh` (Git Bash, Windows 11 10.0.26200, Temurin 25.0.4.1+1, Node 24.18.0, npm 11.16.0), 08/10/2026 09:47–09:49 BRT: **exit 0** (6 testes backend, enforcer e JaCoCo ok; lint, 4 testes Vitest, build). Sem commit testado: árvore de trabalho.

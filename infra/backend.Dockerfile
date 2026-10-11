@@ -3,6 +3,8 @@
 # Bases fixadas por tag + digest (T-01/H02); atualizar ambas juntas e registrar em docs/evidencias.
 
 FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4 AS build
+# Sem unzip o mvnw baixa o .tar.gz, cujo SHA-256 difere do .zip fixado no wrapper.
+RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
@@ -22,6 +24,7 @@ COPY --from=build /workspace/app.jar app.jar
 USER fastpay
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080
+# A imagem JRE não tem curl/wget; o teste usa só o bash da imagem (/dev/tcp).
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
-    CMD curl -fsS http://127.0.0.1:8080/actuator/health/liveness || exit 1
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /actuator/health/liveness HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3 && grep -q "\"status\":\"UP\"" <&3'
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
