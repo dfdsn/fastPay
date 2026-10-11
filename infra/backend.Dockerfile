@@ -24,6 +24,7 @@ COPY --from=build /workspace/app.jar app.jar
 USER fastpay
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080
+# A imagem JRE não tem curl/wget; o teste usa só o bash da imagem (/dev/tcp).
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
-    CMD curl -fsS http://127.0.0.1:8080/actuator/health/liveness || exit 1
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /actuator/health/liveness HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3 && grep -q "\"status\":\"UP\"" <&3'
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

@@ -34,8 +34,18 @@ psql_db() {
   docker compose "${compose_args[@]}" exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -tA -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"' _ "$1"
 }
 
+# up --wait encerra antes de qualquer diagnóstico; em falha mostra estado e logs dos serviços.
+up_or_dump() {
+  if ! docker compose "${compose_args[@]}" up -d --wait "$@"; then
+    echo "falhou: ambiente não ficou saudável" >&2
+    docker compose "${compose_args[@]}" ps -a >&2 || true
+    docker compose "${compose_args[@]}" logs --no-color --tail 80 >&2 || true
+    exit 1
+  fi
+}
+
 echo "== subir ambiente"
-docker compose "${compose_args[@]}" up -d --build --wait
+up_or_dump --build
 
 echo "== verificar frontend e API pela mesma origem"
 wait_http "http://127.0.0.1:$port/healthz" "ok"
@@ -53,7 +63,7 @@ echo "== gravar marcador e recriar contêineres preservando o volume"
 marker="smoke-$(date +%s)"
 psql_db "CREATE TABLE IF NOT EXISTS h02_smoke (marker text NOT NULL); INSERT INTO h02_smoke VALUES ('$marker');" >/dev/null
 docker compose "${compose_args[@]}" down
-docker compose "${compose_args[@]}" up -d --wait
+up_or_dump
 found="$(psql_db "SELECT count(*) FROM h02_smoke WHERE marker = '$marker';")"
 if [[ "$found" != "1" ]]; then
   echo "falhou: marcador não encontrado após recriar (count=$found)" >&2

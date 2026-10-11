@@ -74,6 +74,8 @@ Falha do backend nas duas: `Error: Failed to validate Maven distribution SHA-256
 
 Correção (`feature/H02-corrige-ci-maven`): instalar `unzip` no job de backend e no estágio de build de `infra/backend.Dockerfile`, mantendo um único checksum, que é o do `.zip` exigido pelo `mvnw.cmd` no Windows. O resultado da CI dessa correção fica registrado no PR.
 
+CI do PR #2 com essa correção (run 38105063288, commit `253d823`, 11/10/2026): backend **sucesso**, frontend **sucesso**, imagens e smoke **falhou**. O backend ficou `unhealthy` (`dependency failed to start: container fastpay-smoke-backend-1 is unhealthy`). Causa: o healthcheck usava `curl`, mas a imagem `eclipse-temurin` JRE noble não traz `curl` nem `wget` (conferido no Dockerfile oficial `adoptium/containers` 25/jre/ubuntu/noble). Correção: healthcheck com `bash` e `/dev/tcp`, sem pacote novo. Testado em 11/10/2026 no Git Bash contra o jar real na porta 18080: exit 0 com `{"status":"UP"}` em `/actuator/health/liveness` e exit 1 em rota inexistente. O `compose-smoke.sh` passou a mostrar `ps` e logs quando o `up --wait` falha.
+
 ## 4. Não executado (bloqueios reais)
 
 | Validação exigida | Situação | Motivo / quem resolve |
