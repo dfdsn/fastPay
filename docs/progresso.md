@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 11/10/2026 por Claude Code (H01–H03 reconciliadas; H04 em revisão).
+Atualizado em 11/10/2026 por Claude Code (H01–H04 reconciliadas; H07 em revisão).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -24,6 +24,10 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H04 (11/10/2026):** Diego pediu “Implemente a próxima história elegível”. Sem história em revisão, a menor elegível é a H04 (depende só da H03; H05 depende de acesso ao PSP). Feita em `feature/H04-eventos-duraveis-jobs`, a partir de `develop` (`96ac6bf`). **Aguardando revisão** no [PR #4](https://github.com/dfdsn/fastPay/pull/4), CI verde; detalhes no registro da H04.
 
+**Reconciliação da H04 (11/10/2026):** Diego fez o merge do [PR #4](https://github.com/dfdsn/fastPay/pull/4) em `develop` (`4bed847`, 20:56 UTC). CI do push em `develop` verde (run 38174306620). **H04 concluída.** A T-06 (fila própria em vez do registry do Modulith) entrou em `develop` com o merge, mas não há aceite explícito registrado; continua aguardando a palavra de Diego.
+
+**H07 (11/10/2026):** Diego pediu “pode seguir com a próxima história”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); a menor elegível é a H07 (depende só da H03). Feita em `feature/H07-identidade-vinculos`, a partir de `develop` (`4bed847`). **Aguardando revisão** no PR da H07; detalhes no registro da H07.
+
 ## Estados
 
 Não iniciada → em andamento → aguardando validação ou revisão → concluída. Bloqueada quando falta pré-requisito concreto. Aguardando revisão inclui PR aberto; concluída só após checks e merge develop verificados. Uma release possui registro separado do estado das histórias. Progresso inicialmente sem agente/branch/commit/PR.
@@ -35,10 +39,10 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H01 | Bootstrap reproduzível e contratos de qualidade | Concluída | Merge em `develop` pelo [PR #1](https://github.com/dfdsn/fastPay/pull/1) (`216002c`) e correção da CI no [PR #2](https://github.com/dfdsn/fastPay/pull/2) (`33dfc80`); CI de `develop` verde (run 38166528466) ([evidência](evidencias/H01-build.md)) |
 | H02 | Ambientes Docker e pipeline GitHub | Concluída | [PR #1](https://github.com/dfdsn/fastPay/pull/1) + [PR #2](https://github.com/dfdsn/fastPay/pull/2) (`33dfc80`); CI de `develop` verde com imagens e smoke (run 38166528466) ([evidência](evidencias/H02-ambientes.md)); visibilidade do GHCR a conferir (T-02) |
 | H03 | Migrations e fundação de isolamento RLS | Concluída | [PR #3](https://github.com/dfdsn/fastPay/pull/3) (`96ac6bf`); CI de `develop` verde (run 38167523089) ([evidência](evidencias/H03-migrations-rls.md)) |
-| H04 | Eventos duráveis, idempotência e jobs | Aguardando revisão | [PR #4](https://github.com/dfdsn/fastPay/pull/4), CI verde com PostgreSQL real ([evidência](evidencias/H04-eventos-jobs.md)); ver registro abaixo |
-| H05 | Prova PSP: recebedor, cobrança e split | Não iniciada | Sem evidência; ver dependências/gates no backlog |
-| H06 | Prova PSP: devolução, conciliação e mensalidade | Não iniciada | Sem evidência; ver dependências/gates no backlog |
-| H07 | Identidade, vínculo e seleção de unidade | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H04 | Eventos duráveis, idempotência e jobs | Concluída | [PR #4](https://github.com/dfdsn/fastPay/pull/4) (`4bed847`); CI de `develop` verde (run 38174306620) ([evidência](evidencias/H04-eventos-jobs.md)); aceite explícito da T-06 pendente |
+| H05 | Prova PSP: recebedor, cobrança e split | Bloqueada | Falta acesso ao PSP (P-01); Diego providencia |
+| H06 | Prova PSP: devolução, conciliação e mensalidade | Bloqueada | Depende da H05 e do acesso ao PSP (P-01) |
+| H07 | Identidade, vínculo e seleção de unidade | Aguardando revisão | PR da H07 para `develop` ([evidência](evidencias/H07-identidade-vinculos.md)); ver registro abaixo |
 | H08 | Login da equipe e sessões seguras | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H09 | TOTP, códigos e bootstrap administrativo | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H10 | Criar estabelecimento e convidar dono | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -183,13 +187,35 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Financeiros sem teto de tentativas.
 - Critérios faltantes / motivo: nenhum dos critérios da H04. Fica para histórias seguintes, por depender de identidade e permissões: o endpoint/tela da fila de falhas e a checagem de permissão do ator na retomada (H07/H11; hoje o chamador autoriza) e a chave de idempotência de comandos HTTP com hash do payload (especificação §4; entra com o primeiro comando crítico, H16). Nenhum efeito real usa a fila ainda (primeiro uso: e-mail em H12).
 - Branch e commit reais: `feature/H04-eventos-duraveis-jobs` (a partir de `develop` `96ac6bf`); hash no `git log`.
-- PR, checks e merge real: [PR #4](https://github.com/dfdsn/fastPay/pull/4) para `develop`; run 38170119581 em `f715888` verde (backend, frontend, imagens e smoke). Sem merge.
+- PR, checks e merge real: [PR #4](https://github.com/dfdsn/fastPay/pull/4) para `develop`; run 38170119581 em `f715888` verde (backend, frontend, imagens e smoke). Merge por Diego em `4bed847` (11/10/2026 20:56 UTC); CI de `develop` verde (run 38174306620).
 - Arquivos/migrations/contratos: `V3__fila_de_jobs.sql` (tabela `job`, função `claim_due_jobs`, coluna `audit_event.subject_id`), módulo `jobs` (`Jobs`, `JobHandler`, `JobRequest`, `JobExecution`, `JobFailure`, `JobSummary`, `domain/RetryPolicy`, `domain/SafeError`, `application/JobWorker`, `application/JobHandlers`, `infrastructure/*`), testes em `jobs/` e `MigrationsIntegrationTest`, `PostgresIntegrationTest` (worker desligado nos testes), `application.yaml`, especificação §9, decisões (T-01, T-06), [evidência](evidencias/H04-eventos-jobs.md).
 - Testes: `./mvnw -B -ntp clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` (mesmo digest da CI) com Docker para o Testcontainers (PostgreSQL 18.6, mesmo digest), 11/10/2026: **39 testes, 0 falhas**, enforcer e JaCoCo ok, BUILD SUCCESS. Detalhes e cobertura na evidência. CI do PR verde em `f715888` (run 38170119581).
 - Testes não executados e por quê: frontend sem mudança (roda na CI); E2E/PIT fora do escopo (sem regra financeira crítica nesta história).
 - Decisões novas/alteradas: T-06 (fila de jobs própria no PostgreSQL em vez do registry JDBC do Spring Modulith), registrada para aceite de Diego no PR.
 - Bloqueios / quem resolve: nenhum para a H04. Aceite da T-06: Diego.
-- Próximo passo concreto: Diego revisa o PR e decide a T-06; após o merge, reconciliar o progresso com o hash real.
+- Próximo passo concreto: ~~Diego revisa o PR e decide a T-06~~ PR mergeado; falta só o aceite explícito da T-06.
+- Estado após o merge: **concluída** (reconciliado em 11/10/2026 no registro da H07).
+
+### H07 — Identidade, vínculo e seleção de unidade
+
+- História e estado: H07, **aguardando revisão** (critérios atendidos e testados com PostgreSQL real; sem merge).
+- Data/hora e agente: 11/10/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - Identidade global (`user_identity`) separada do vínculo por unidade (`membership`, com papel e situação).
+  - Selecionar só unidade com vínculo ativo; lista mostra o papel em cada uma; com um único vínculo, entrada direta; unidade ativa e papel sempre visíveis no cabeçalho.
+  - Trocar de unidade limpa o contexto no frontend (limpezas registradas) e no servidor (troca do id da sessão; cada operação revalida o vínculo na mesma transação).
+  - Desativar vínculo preserva a linha (autor, data, papel), audita e não afeta vínculos da pessoa em outras unidades; a sessão com a unidade revogada perde acesso na operação seguinte.
+  - Acesso global (admin fastPay) não concede operação de loja.
+  - Admin de uma loja não vê vínculos em outras (RLS).
+- Critérios faltantes / motivo: nenhum dos critérios da H07. Fica para as histórias seguintes: login que grava a identidade na sessão, Spring Session JDBC e CSRF (H08; até lá a API responde 401 fora dos testes); criar vínculos por convite e o comando HTTP de desativação com permissão (H10/H11); permissões por ação (H11).
+- Branch e commit reais: `feature/H07-identidade-vinculos` (a partir de `develop` `4bed847`); código em `c5de5a5`, documentação no commit seguinte.
+- PR, checks e merge real: PR da H07 para `develop`; CI a conferir no PR. Sem merge.
+- Arquivos/migrations/contratos: `V4__identidade_e_vinculos.sql` (`current_identity_id()`, `user_identity`, `membership`, policies e leitura do nome das próprias unidades), módulo `identity` (`Memberships`, `SessionContext`, `UnitMembership`, `MembershipRole`, `IdentitySummary`, exceções, `infrastructure/JdbcMembershipStore`, `web/SessionUnitController`, `web/IdentityProblems`), `tenancy.TenantTransactions.asIdentity`, frontend `src/app/session/*`, `app.ts`, `app.routes.ts`, `app.config.ts`, especificação §5, [evidência](evidencias/H07-identidade-vinculos.md).
+- Testes: backend `./mvnw -B -ntp clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` (mesmo digest da CI) com Docker para o Testcontainers (PostgreSQL 18.6), em `c5de5a5`: **61 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. Frontend `./scripts/verify.sh frontend` no contêiner `node:24.18.0-trixie-slim` (mesmo digest da CI): lint ok, **28 testes Vitest**, build ok. Detalhes na evidência.
+- Testes não executados e por quê: E2E Playwright (ainda não configurado no projeto); jornada com login real (depende de H08).
+- Decisões novas/alteradas: nenhuma de produto. Escolhas técnicas registradas na especificação §5: unidade escolhida na sessão do servidor, 409 `UNIDADE_NAO_SELECIONADA`, mesma resposta 403 para unidade alheia/inexistente/desativada.
+- Bloqueios / quem resolve: nenhum para a H07.
+- Próximo passo concreto: Diego revisa e faz o merge do PR da H07; depois, reconciliar o progresso com o hash real. A próxima elegível é a H08 (gate P-07, política de senha, antes de concluir).
 
 ## Registro de release (ainda nenhum)
 
