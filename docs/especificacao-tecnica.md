@@ -167,7 +167,7 @@ Conta zerada encerra sem pagamento/PSP/comissão. Externo pode ser invalidado po
 
 ## 9. Eventos, jobs e e-mail
 
-Spring Modulith com registry persistido no PostgreSQL e mesma transação do fato. Schema Flyway; validar a versão escolhida. Listener idempotente com efeitos deduplicados; não depender só de evento em memória nem `@Async` isolado. Worker identifica contexto tenant do evento e restaura autorização adequada. Claim/lease de job evita execução concorrente; falha/restart recupera trabalho abandonado. Não transportar segredos em eventos.
+Fila de jobs própria no PostgreSQL (tabela `job`, módulo `jobs`, H04), gravada na mesma transação do fato; o registry JDBC do Spring Modulith foi avaliado e não adotado (T-06). Schema Flyway. Configuração técnica em `fastpay.jobs.*` (worker, intervalo, lote, lease, tentativas e backoff). Listener idempotente com efeitos deduplicados; não depender só de evento em memória nem `@Async` isolado. Worker identifica contexto tenant do evento e restaura autorização adequada. Claim/lease de job evita execução concorrente; falha/restart recupera trabalho abandonado. Não transportar segredos em eventos.
 
 | Job | Gatilho / repetição | Critério de fim |
 |---|---|---|

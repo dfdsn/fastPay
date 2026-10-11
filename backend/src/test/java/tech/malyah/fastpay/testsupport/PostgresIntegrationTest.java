@@ -52,6 +52,10 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.flyway.password", () -> MIGRATION_PASSWORD);
         // Fixtures de teste (versões 1000+) aplicadas depois das migrations reais.
         registry.add("spring.flyway.locations", () -> "classpath:db/migration,classpath:db/testfixture");
+        // Contextos de teste ficam em cache e compartilham o banco: sem worker periódico, cada teste
+        // executa jobs explicitamente e um contexto não consome jobs de outro. Um teste do próprio
+        // worker liga com fastpay.test.jobs-worker=true.
+        registry.add("fastpay.jobs.worker-enabled", () -> "${fastpay.test.jobs-worker:false}");
     }
 
     protected static String migrationPassword() {

@@ -35,6 +35,17 @@ spring:
 fastpay:
   # APP_ENV: development | homologation | production
   environment: ${APP_ENV:development}
+  # Fila de efeitos assíncronos (H04, especificação §9). Configuração técnica, não limite de loja.
+  jobs:
+    worker-enabled: ${JOBS_WORKER_ENABLED:true}
+    poll-interval: 5s
+    batch-size: 10
+    lease: 5m
+    # Não financeiros: tentativas totais, contando a primeira. Financeiros não têm teto.
+    max-attempts: 5
+    initial-backoff: 15s
+    backoff-multiplier: 2.0
+    max-backoff: 5m
 
 server:
   port: ${SERVER_PORT:8080}
