@@ -11,11 +11,16 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-fastpay}
       POSTGRES_USER: ${POSTGRES_USER:-fastpay_owner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.hml}
+      # Papéis criados por init/01-roles.sh na primeira inicialização do volume (H03).
+      FASTPAY_MIGRATION_PASSWORD: ${FASTPAY_MIGRATION_PASSWORD:?defina FASTPAY_MIGRATION_PASSWORD no .env.hml}
+      FASTPAY_APP_PASSWORD: ${FASTPAY_APP_PASSWORD:?defina FASTPAY_APP_PASSWORD no .env.hml}
     volumes:
       - db-data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     networks: [internal]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      # Por TCP: durante o init o servidor temporário só escuta no socket local.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -26,6 +31,9 @@ services:
     pull_policy: always
     environment:
       APP_ENV: homologation
+      JDBC_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-fastpay}
+      JDBC_APP_PASSWORD: ${FASTPAY_APP_PASSWORD}
+      JDBC_MIGRATION_PASSWORD: ${FASTPAY_MIGRATION_PASSWORD}
     depends_on:
       db:
         condition: service_healthy

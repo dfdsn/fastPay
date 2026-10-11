@@ -52,7 +52,7 @@ Comandos validados em H01 (07/10/2026, ver `docs/evidencias/H01-build.md`) e pla
 
 | Comando (da raiz, salvo indicado) | Uso | Situação |
 |---|---|---|
-| `./scripts/verify.sh` | Backend `clean verify` + frontend `npm ci`, lint, `test:ci`, build | Validado em H01 |
+| `./scripts/verify.sh` | Backend `clean verify` + frontend `npm ci`, lint, `test:ci`, build. Desde H03 o backend exige Docker (Testcontainers) | Validado em H01; com Docker, validado pela CI em H03 |
 | `cd backend` e `./mvnw verify` | Compilar, JUnit, fronteiras Modulith, enforcer, JaCoCo | Validado em H01 |
 | `cd frontend` e `npm ci` | Instalar lockfile (npm 11.16.0 obrigatório) | Validado em H01 |
 | `cd frontend` e `npm run lint` | ESLint/angular-eslint | Validado em H01 |

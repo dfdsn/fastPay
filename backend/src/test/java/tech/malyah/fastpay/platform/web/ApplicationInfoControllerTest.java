@@ -14,9 +14,11 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import tech.malyah.fastpay.testsupport.PostgresIntegrationTest;
+
 @SpringBootTest(properties = "fastpay.environment=test")
 @AutoConfigureMockMvc
-class ApplicationInfoControllerTest {
+class ApplicationInfoControllerTest extends PostgresIntegrationTest {
 
     @Autowired
     MockMvc mvc;

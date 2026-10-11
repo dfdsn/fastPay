@@ -11,8 +11,9 @@ port="${FASTPAY_HTTP_PORT:-18088}"
 env_file="$(mktemp)"
 trap 'docker compose "${compose_args[@]}" down -v --remove-orphans >/dev/null 2>&1 || true; rm -f "$env_file"' EXIT
 
-# Senha descartável gerada na hora; só existe neste projeto Compose temporário.
-printf 'POSTGRES_PASSWORD=%s\nFASTPAY_HTTP_PORT=%s\n' "smoke-$RANDOM-$RANDOM-$$" "$port" > "$env_file"
+# Senhas descartáveis geradas na hora; só existem neste projeto Compose temporário.
+printf 'POSTGRES_PASSWORD=%s\nFASTPAY_MIGRATION_PASSWORD=%s\nFASTPAY_APP_PASSWORD=%s\nFASTPAY_HTTP_PORT=%s\n' \
+  "smoke-$RANDOM-$RANDOM-$$" "mig-$RANDOM-$RANDOM-$$" "app-$RANDOM-$RANDOM-$$" "$port" > "$env_file"
 compose_args=(--env-file "$env_file" -f "$root/infra/compose.dev.yml" -p fastpay-smoke)
 
 wait_http() {
@@ -58,6 +59,19 @@ if docker compose "${compose_args[@]}" port db 5432 >/dev/null 2>&1; then
   exit 1
 fi
 echo "ok sem porta publicada"
+
+echo "== migrations aplicadas pelo papel de migração e runtime sem privilégios"
+applied="$(psql_db "SELECT count(*) FROM fastpay.flyway_schema_history WHERE success AND installed_by = 'fastpay_migration';")"
+if [[ "$applied" -lt 2 ]]; then
+  echo "falhou: migrations não aplicadas por fastpay_migration (count=$applied)" >&2
+  exit 1
+fi
+privileged="$(psql_db "SELECT count(*) FROM pg_roles WHERE rolname = 'fastpay_app' AND (rolsuper OR rolbypassrls);")"
+if [[ "$privileged" != "0" ]]; then
+  echo "falhou: fastpay_app é superusuário ou ignora RLS" >&2
+  exit 1
+fi
+echo "ok $applied migrations; fastpay_app sem SUPERUSER/BYPASSRLS"
 
 echo "== gravar marcador e recriar contêineres preservando o volume"
 marker="smoke-$(date +%s)"

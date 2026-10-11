@@ -23,6 +23,13 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4
+      # Testcontainers (PostgreSQL real, H03) usa o Docker do runner pelo socket e acessa as portas
+      # publicadas pelo gateway do host.
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      options: --add-host=host.docker.internal:host-gateway
+    env:
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

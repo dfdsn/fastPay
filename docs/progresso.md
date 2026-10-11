@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 11/10/2026 por Claude Code.
+Atualizado em 11/10/2026 por Claude Code (H03 iniciada).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -16,7 +16,9 @@ Atualizado em 11/10/2026 por Claude Code.
 
 **PR #2 (11/10/2026):** [dfdsn/fastPay#2](https://github.com/dfdsn/fastPay/pull/2) corrige a CI em dois pontos: `unzip` para o Maven Wrapper e healthcheck do backend sem `curl` (a imagem JRE não tem `curl`). CI verde no commit `ebb6871` (run 38105381291): backend, frontend, imagens e smoke Compose. Evidência em [evidencias/H02-ambientes.md](evidencias/H02-ambientes.md) §3.3–3.4.
 
-Histórias ativas: **H01 e H02 aguardando revisão** (PR #2 aberto). Próximo passo: Diego revisa e faz o merge do PR #2; depois, conferir a CI do push em `develop` e a publicação das imagens no GHCR (privadas) e registrar H01/H02 como concluídas com o hash real.
+Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo passo delas: Diego revisa e faz o merge do PR #2; depois, conferir a CI do push em `develop` e a publicação das imagens no GHCR (privadas) e registrar H01/H02 como concluídas com o hash real.
+
+**Troca para H03 (11/10/2026):** Diego pediu “Siga com o desenvolvimento” com o PR #2 ainda aberto. Tratei como autorização para a próxima história. A H03 foi feita em `feature/H03-migrations-rls`, criada a partir de `feature/H02-corrige-ci-maven`, porque precisa da CI corrigida. História ativa: **H03, em andamento**; a prova com PostgreSQL real depende da CI, porque o Docker desta máquina não inicia.
 
 ## Estados
 
@@ -28,7 +30,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 |---|---|---|---|
 | H01 | Bootstrap reproduzível e contratos de qualidade | Aguardando revisão | Verificação local verde em 07/10/2026 ([evidência](evidencias/H01-build.md)); commit em `feature/H01-bootstrap`, sem PR; ver registro abaixo |
 | H02 | Ambientes Docker e pipeline GitHub | Aguardando revisão | Arquivos prontos e `verify.sh` verde em 08/10/2026 ([evidência](evidencias/H02-ambientes.md)); Docker Desktop falhando localmente; CI pendente; ver registro abaixo |
-| H03 | Migrations e fundação de isolamento RLS | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H03 | Migrations e fundação de isolamento RLS | Em andamento | Código e testes prontos ([evidência](evidencias/H03-migrations-rls.md)); prova com PostgreSQL real pela CI; ver registro abaixo |
 | H04 | Eventos duráveis, idempotência e jobs | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H05 | Prova PSP: recebedor, cobrança e split | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H06 | Prova PSP: devolução, conciliação e mensalidade | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -148,6 +150,20 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: T-01 parcial atualizado. Escolhas técnicas rotineiras: PostgreSQL 18.6 (19 ainda beta); nginx sem root servindo o frontend e encaminhando `/api` em dev/HML; CI dentro de contêineres com o mesmo digest dos Dockerfiles; imagens etiquetadas `sha-<commit>` e nome da branch.
 - Bloqueios / quem resolve: (1) chave GPG: resolvido em 08/10/2026; (2) Docker Desktop: Diego reinicia o Windows ou remove `%LOCALAPPDATA%\Docker\run` com o Docker fechado; (3) visibilidade privada dos pacotes no GHCR: Diego confere após a primeira publicação (T-02); (4) `JAVA_HOME` padrão aponta para o JDK 23: usar `%USERPROFILE%\.tools\jdk-25.0.4.1+1`.
 - Próximo passo concreto: push, PR da H01 e da H02 para `develop`, conferir a CI (smoke Compose em Linux) e registrar o resultado.
+
+### H03 — Migrations e fundação de isolamento RLS
+
+- História e estado: H03, **em andamento** (implementação pronta; aguardando a CI com PostgreSQL real).
+- Data/hora e agente: 11/10/2026, Claude Code. Troca autorizada pelo pedido de Diego (ver Situação real).
+- Objetivo e critérios atendidos no código: schema inicial pelo Flyway (V1 contexto, V2 `establishment` global e `audit_event` por unidade); papéis `fastpay_migration`/`fastpay_app`; contexto de tenant transacional (`TenantTransactions`); convenção de FK escopada com prova em fixture; tabela global separada com policy própria; Hibernate `validate`; RLS ENABLE + FORCE e fail-closed; Testcontainers com o mesmo script de papéis e a mesma imagem do Compose.
+- Critérios faltantes / motivo: execução dos testes com PostgreSQL real e do smoke Compose: só na CI (Docker local quebrado).
+- Branch e commit reais: `feature/H03-migrations-rls` (a partir de `feature/H02-corrige-ci-maven`); hash no `git log`.
+- PR, checks e merge real: nenhum até este commit.
+- Arquivos/migrations/contratos: `backend/src/main/resources/db/migration/V1__contexto_de_tenant.sql`, `V2__estabelecimento_e_auditoria.sql`, `backend/pom.xml`, `application.yaml`, módulos `tenancy` e `establishments`, testes em `tenancy/` e `testsupport/`, fixture `db/testfixture/V1000__…`, `infra/postgres/init/01-roles.sh`, Compose, `compose-smoke.sh`, CI, `.env.example`, README, AGENTS, T-01, [evidência](evidencias/H03-migrations-rls.md).
+- Testes: `test-compile` ok; `Modularity*` 3/3 ok (Windows, Git Bash, Temurin 25.0.4.1+1, 11/10/2026). Testes com PostgreSQL: não executados localmente (Docker).
+- Decisões novas/alteradas: T-01 atualizado. Escolhas técnicas: contexto por `set_config(..., true)` e recusa de transação aninhada; `audit_event` como primeira tabela por unidade (append-only); `establishment` só legível no contexto até H10; senhas dos papéis por variável de ambiente no init.
+- Bloqueios / quem resolve: Docker Desktop local (Diego); volumes de dev criados antes da H03 precisam ser recriados (`down -v`, dados sintéticos).
+- Próximo passo concreto: push, PR para `develop` e CI verde; então H03 passa a aguardando revisão.
 
 ## Registro de release (ainda nenhum)
 
