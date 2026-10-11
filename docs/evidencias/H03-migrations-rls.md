@@ -42,6 +42,33 @@ Gerenciadas pelo BOM do Spring Boot 4.1.1, sem sobrescrita: Flyway 12.4.0 (`spri
 - Testes com PostgreSQL: **não executados localmente**. O Docker Desktop desta máquina continua sem iniciar (ver H02). A prova é a CI.
 - O download das dependências novas falhou com `PKIX path building failed` (interceptação TLS da rede). Funcionou com `MAVEN_OPTS=-Djavax.net.ssl.trustStoreType=Windows-ROOT` só na sessão, sem alterar configuração.
 
-### 3.2 CI
+### 3.2 CI (GitHub Actions, PR #3, 11/10/2026)
 
-Resultado registrado no PR da H03 e na atualização seguinte do progresso.
+| Run | Commit | Backend | Frontend | Imagens e smoke |
+|---|---|---|---|---|
+| 38165808131 | `88ab990` | falhou (4 de 9 em `TenantIsolationIntegrationTest`) | sucesso | skipped |
+| 38165969878 | `0d10270` | **sucesso** | **sucesso** | **sucesso** |
+
+Primeira execução: o PostgreSQL recusou exatamente o esperado (`new row violates row-level security policy for table "audit_event"`, `permission denied for table audit_event`, `query would be affected by row-level security policy for table "audit_event"`), mas as asserções verificavam a mensagem da exceção do Spring em vez da causa raiz. Corrigido em `0d10270` sem mudar o comportamento testado. O Testcontainers funcionou no contêiner do job (socket do Docker + `host.docker.internal`) na primeira tentativa.
+
+Execução verde (`0d10270`), runner `ubuntu-24.04`, contêiner Temurin 25.0.4.1:
+
+```
+Tests run: 1, Failures: 0 -- in tech.malyah.fastpay.ModularityGateTest
+Tests run: 2, Failures: 0 -- in tech.malyah.fastpay.ModularityTest
+Tests run: 9, Failures: 0 -- in tech.malyah.fastpay.tenancy.TenantIsolationIntegrationTest
+Tests run: 2, Failures: 0 -- in tech.malyah.fastpay.tenancy.MigrationsIntegrationTest
+Tests run: 3, Failures: 0 -- in tech.malyah.fastpay.platform.web.ApplicationInfoControllerTest
+Tests run: 17, Failures: 0, Errors: 0, Skipped: 0
+All coverage checks have been met.
+BUILD SUCCESS
+```
+
+Smoke Compose no mesmo run:
+
+```
+ok http://127.0.0.1:18088/api/v1/platform/info -> {"name":"fastPay","version":"0.1.0-SNAPSHOT","environment":"development"}
+ok sem porta publicada
+ok 2 migrations; fastpay_app sem SUPERUSER/BYPASSRLS
+ok marcador preservado após down/up
+```
