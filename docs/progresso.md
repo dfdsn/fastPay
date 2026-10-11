@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 11/10/2026 por Claude Code.
+Atualizado em 11/10/2026 por Claude Code (H03 iniciada).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -16,7 +16,9 @@ Atualizado em 11/10/2026 por Claude Code.
 
 **PR #2 (11/10/2026):** [dfdsn/fastPay#2](https://github.com/dfdsn/fastPay/pull/2) corrige a CI em dois pontos: `unzip` para o Maven Wrapper e healthcheck do backend sem `curl` (a imagem JRE não tem `curl`). CI verde no commit `ebb6871` (run 38105381291): backend, frontend, imagens e smoke Compose. Evidência em [evidencias/H02-ambientes.md](evidencias/H02-ambientes.md) §3.3–3.4.
 
-Histórias ativas: **H01 e H02 aguardando revisão** (PR #2 aberto). Próximo passo: Diego revisa e faz o merge do PR #2; depois, conferir a CI do push em `develop` e a publicação das imagens no GHCR (privadas) e registrar H01/H02 como concluídas com o hash real.
+Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo passo delas: Diego revisa e faz o merge do PR #2; depois, conferir a CI do push em `develop` e a publicação das imagens no GHCR (privadas) e registrar H01/H02 como concluídas com o hash real.
+
+**Troca para H03 (11/10/2026):** Diego pediu “Siga com o desenvolvimento” com o PR #2 ainda aberto. Tratei como autorização para a próxima história. A H03 foi feita em `feature/H03-migrations-rls`, criada a partir de `feature/H02-corrige-ci-maven`, porque precisa da CI corrigida. **H03 aguardando revisão** no [PR #3](https://github.com/dfdsn/fastPay/pull/3): CI verde em `0d10270` (run 38165969878), com 17 testes, incluindo os de isolamento e migração em PostgreSQL real, e o smoke Compose. Próximo passo: Diego faz o merge do PR #2 e depois do PR #3; então conferir a CI em `develop` e registrar H01–H03 como concluídas com os hashes reais.
 
 ## Estados
 
@@ -28,7 +30,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 |---|---|---|---|
 | H01 | Bootstrap reproduzível e contratos de qualidade | Aguardando revisão | Verificação local verde em 07/10/2026 ([evidência](evidencias/H01-build.md)); commit em `feature/H01-bootstrap`, sem PR; ver registro abaixo |
 | H02 | Ambientes Docker e pipeline GitHub | Aguardando revisão | Arquivos prontos e `verify.sh` verde em 08/10/2026 ([evidência](evidencias/H02-ambientes.md)); Docker Desktop falhando localmente; CI pendente; ver registro abaixo |
-| H03 | Migrations e fundação de isolamento RLS | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H03 | Migrations e fundação de isolamento RLS | Aguardando revisão | [PR #3](https://github.com/dfdsn/fastPay/pull/3), CI verde com PostgreSQL real ([evidência](evidencias/H03-migrations-rls.md)); ver registro abaixo |
 | H04 | Eventos duráveis, idempotência e jobs | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H05 | Prova PSP: recebedor, cobrança e split | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H06 | Prova PSP: devolução, conciliação e mensalidade | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -148,6 +150,20 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: T-01 parcial atualizado. Escolhas técnicas rotineiras: PostgreSQL 18.6 (19 ainda beta); nginx sem root servindo o frontend e encaminhando `/api` em dev/HML; CI dentro de contêineres com o mesmo digest dos Dockerfiles; imagens etiquetadas `sha-<commit>` e nome da branch.
 - Bloqueios / quem resolve: (1) chave GPG: resolvido em 08/10/2026; (2) Docker Desktop: Diego reinicia o Windows ou remove `%LOCALAPPDATA%\Docker\run` com o Docker fechado; (3) visibilidade privada dos pacotes no GHCR: Diego confere após a primeira publicação (T-02); (4) `JAVA_HOME` padrão aponta para o JDK 23: usar `%USERPROFILE%\.tools\jdk-25.0.4.1+1`.
 - Próximo passo concreto: push, PR da H01 e da H02 para `develop`, conferir a CI (smoke Compose em Linux) e registrar o resultado.
+
+### H03 — Migrations e fundação de isolamento RLS
+
+- História e estado: H03, **aguardando revisão** (critérios atendidos e CI verde; sem merge).
+- Data/hora e agente: 11/10/2026, Claude Code. Troca autorizada pelo pedido de Diego (ver Situação real).
+- Objetivo e critérios atendidos no código: schema inicial pelo Flyway (V1 contexto, V2 `establishment` global e `audit_event` por unidade); papéis `fastpay_migration`/`fastpay_app`; contexto de tenant transacional (`TenantTransactions`); convenção de FK escopada com prova em fixture; tabela global separada com policy própria; Hibernate `validate`; RLS ENABLE + FORCE e fail-closed; Testcontainers com o mesmo script de papéis e a mesma imagem do Compose.
+- Critérios faltantes / motivo: nenhum dos critérios da história. A execução local com PostgreSQL não é possível nesta máquina (Docker); a prova é a CI.
+- Branch e commit reais: `feature/H03-migrations-rls` (a partir de `feature/H02-corrige-ci-maven`); hash no `git log`.
+- PR, checks e merge real: [PR #3](https://github.com/dfdsn/fastPay/pull/3) para `develop`; run 38165808131 falhou por asserção (ver evidência §3.2); run 38165969878 em `0d10270` verde (backend, frontend, imagens e smoke). Sem merge.
+- Arquivos/migrations/contratos: `backend/src/main/resources/db/migration/V1__contexto_de_tenant.sql`, `V2__estabelecimento_e_auditoria.sql`, `backend/pom.xml`, `application.yaml`, módulos `tenancy` e `establishments`, testes em `tenancy/` e `testsupport/`, fixture `db/testfixture/V1000__…`, `infra/postgres/init/01-roles.sh`, Compose, `compose-smoke.sh`, CI, `.env.example`, README, AGENTS, T-01, [evidência](evidencias/H03-migrations-rls.md).
+- Testes: local `test-compile` ok e `Modularity*` 3/3 (Windows, Git Bash, Temurin 25.0.4.1+1, 11/10/2026). CI `0d10270`: 17/17 no backend com PostgreSQL 18.6 real via Testcontainers, smoke Compose com `ok 2 migrations; fastpay_app sem SUPERUSER/BYPASSRLS`.
+- Decisões novas/alteradas: T-01 atualizado. Escolhas técnicas: contexto por `set_config(..., true)` e recusa de transação aninhada; `audit_event` como primeira tabela por unidade (append-only); `establishment` só legível no contexto até H10; senhas dos papéis por variável de ambiente no init.
+- Bloqueios / quem resolve: Docker Desktop local (Diego); volumes de dev criados antes da H03 precisam ser recriados (`down -v`, dados sintéticos).
+- Próximo passo concreto: revisão e merge do PR #2 e do PR #3 por Diego; depois, reconciliar o progresso com os hashes de merge.
 
 ## Registro de release (ainda nenhum)
 

@@ -7,6 +7,7 @@ Monólito modular (Spring Boot + Spring Modulith) com frontend Angular. Document
 Pré-requisitos (versões exatas em [evidencias/H01-build.md](docs/evidencias/H01-build.md)):
 
 - JDK Temurin 25 com `JAVA_HOME` apontando para ele. Maven não precisa estar instalado: use o wrapper (3.9.16, checksum fixado). Em Linux/WSL instale também o `unzip`: sem ele o `mvnw` baixa o `.tar.gz`, que não bate com o checksum do `.zip`.
+- Docker em execução para os testes do backend: desde H03 eles sobem PostgreSQL real com Testcontainers.
 - Node 24.18.0 (`frontend/.nvmrc`) com o npm 11.16.0 que o acompanha. O projeto recusa outro npm (`engine-strict`); um npm global mais antigo em `%APPDATA%\npm` precisa ser removido ou contornado.
 
 | Comando (a partir da raiz) | Uso |
