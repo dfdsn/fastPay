@@ -71,7 +71,7 @@ class TenantIsolationIntegrationTest extends PostgresIntegrationTest {
         assertThat(contarEventos()).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM establishment", Integer.class)).isZero();
         assertThatThrownBy(() -> inserirEvento(lojaA)).isInstanceOf(DataAccessException.class)
-                .hasMessageContaining("row-level security");
+                .rootCause().hasMessageContaining("row-level security");
     }
 
     @Test
@@ -89,7 +89,7 @@ class TenantIsolationIntegrationTest extends PostgresIntegrationTest {
     void gravarComIdDeOutraUnidadeEhRecusado() {
         assertThatThrownBy(() -> tenants.runInEstablishment(lojaA, () -> inserirEvento(lojaB)))
                 .isInstanceOf(DataAccessException.class)
-                .hasMessageContaining("row-level security");
+                .rootCause().hasMessageContaining("row-level security");
         assertThat(admin().queryForObject("SELECT count(*) FROM fastpay.audit_event WHERE establishment_id = ?",
                 Integer.class, lojaB)).isEqualTo(1);
     }
@@ -98,9 +98,9 @@ class TenantIsolationIntegrationTest extends PostgresIntegrationTest {
     void auditoriaNaoPodeSerAlteradaNemApagadaPeloRuntime() {
         assertThatThrownBy(() -> tenants.runInEstablishment(lojaA,
                 () -> jdbc.update("UPDATE audit_event SET action = 'teste.alterado'")))
-                .isInstanceOf(DataAccessException.class).hasMessageContaining("permission denied");
+                .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("permission denied");
         assertThatThrownBy(() -> tenants.runInEstablishment(lojaA, () -> jdbc.update("DELETE FROM audit_event")))
-                .isInstanceOf(DataAccessException.class).hasMessageContaining("permission denied");
+                .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("permission denied");
     }
 
     @Test
@@ -108,7 +108,7 @@ class TenantIsolationIntegrationTest extends PostgresIntegrationTest {
         assertThatThrownBy(() -> tenants.runInEstablishment(lojaA, () -> {
             jdbc.execute("SET LOCAL row_security = off");
             contarEventos();
-        })).isInstanceOf(DataAccessException.class).hasMessageContaining("row-level security");
+        })).isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("row-level security");
     }
 
     @Test
