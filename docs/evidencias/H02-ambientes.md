@@ -63,6 +63,17 @@ Atenção: o `JAVA_HOME` padrão desta máquina aponta para o JDK 23. O enforcer
 - Configuração resolvida: rede `fastpay-dev_internal` com `internal: true`; a única porta publicada é a do frontend (8088, em 127.0.0.1).
 - `.github/workflows/ci.yml` lido como YAML válido (jobs `backend`, `frontend`, `images`). Não foi validado pelo GitHub nem pelo actionlint.
 
+### 3.3 Primeira execução da CI (GitHub Actions, 08/10/2026)
+
+| Run | Evento / commit | Backend | Frontend | Imagens e smoke |
+|---|---|---|---|---|
+| 37806871793 | PR #1, `1f749b7` | falhou | **sucesso** | skipped |
+| 37828730825 | push `develop`, `216002c` | falhou | **sucesso** | skipped |
+
+Falha do backend nas duas: `Error: Failed to validate Maven distribution SHA-256, your Maven distribution might be compromised.` O SHA-256 fixado (`5af3b743…d89ce`) é o do `apache-maven-3.9.16-bin.zip` e confere com o SHA-512 oficial (rechecado em 11/10/2026). O `mvnw` em Linux usa o `.tar.gz` quando não encontra `unzip`; a imagem Temurin não traz `unzip`. Reproduzido em 11/10/2026 no WSL Ubuntu (clone limpo de `216002c`, `MVNW_VERBOSE=true sh ./mvnw -v`): baixou `apache-maven-3.9.16-bin.tar.gz` e falhou com a mesma mensagem.
+
+Correção (`feature/H02-corrige-ci-maven`): instalar `unzip` no job de backend e no estágio de build de `infra/backend.Dockerfile`, mantendo um único checksum, que é o do `.zip` exigido pelo `mvnw.cmd` no Windows. O resultado da CI dessa correção fica registrado no PR.
+
 ## 4. Não executado (bloqueios reais)
 
 | Validação exigida | Situação | Motivo / quem resolve |

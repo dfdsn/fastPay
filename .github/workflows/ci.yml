@@ -28,6 +28,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Sem unzip o mvnw baixa o .tar.gz, cujo SHA-256 difere do .zip fixado no wrapper.
+      - name: Instalar unzip para o Maven Wrapper
+        run: apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
       - name: Verificar backend
         run: ./scripts/verify.sh backend
       - name: Publicar relatórios

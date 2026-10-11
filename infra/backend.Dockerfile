@@ -3,6 +3,8 @@
 # Bases fixadas por tag + digest (T-01/H02); atualizar ambas juntas e registrar em docs/evidencias.
 
 FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4 AS build
+# Sem unzip o mvnw baixa o .tar.gz, cujo SHA-256 difere do .zip fixado no wrapper.
+RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
