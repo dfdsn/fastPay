@@ -69,9 +69,13 @@ Cobertura JaCoCo (gate 80/70 em domain/application): `RetryPolicy` 21/21 linhas 
 
 Primeira execução com a H04: 4 falhas, todas de teste (contagem de migrations no teste da H03, consulta de auditoria que pegava também o efeito do teste, e propriedade do worker sobrescrita pela base dos testes). Corrigidas sem mudar o comportamento testado.
 
-### 3.2 CI
+### 3.2 CI (GitHub Actions, PR #4, 11/10/2026)
 
-Registrada no PR depois da execução.
+| Run | Commit | Backend | Frontend | Imagens e smoke |
+|---|---|---|---|---|
+| 38170119581 | `f715888` | **sucesso** | **sucesso** | **sucesso** |
+
+Verde na primeira execução, com os mesmos 39 testes do backend contra PostgreSQL real.
 
 ## 4. Fora desta história
 

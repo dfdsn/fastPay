@@ -22,7 +22,7 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **Reconciliação após merge (11/10/2026):** Diego fez o merge do [PR #2](https://github.com/dfdsn/fastPay/pull/2) (`33dfc80`, 19:05 UTC) e do [PR #3](https://github.com/dfdsn/fastPay/pull/3) (`96ac6bf`, 19:19 UTC) em `develop`. CI do push em `develop`: run 38166528466 em `33dfc80` e run 38167523089 em `96ac6bf`, ambas verdes (backend, frontend, imagens e smoke Compose). Com isso **H01, H02 e H03 estão concluídas**. A visibilidade privada dos pacotes no GHCR não pôde ser conferida pela API desta sessão (T-02, Diego confere).
 
-**H04 (11/10/2026):** Diego pediu “Implemente a próxima história elegível”. Sem história em revisão, a menor elegível é a H04 (depende só da H03; H05 depende de acesso ao PSP). Feita em `feature/H04-eventos-duraveis-jobs`, a partir de `develop` (`96ac6bf`). **Aguardando revisão** no PR para `develop`; detalhes no registro da H04.
+**H04 (11/10/2026):** Diego pediu “Implemente a próxima história elegível”. Sem história em revisão, a menor elegível é a H04 (depende só da H03; H05 depende de acesso ao PSP). Feita em `feature/H04-eventos-duraveis-jobs`, a partir de `develop` (`96ac6bf`). **Aguardando revisão** no [PR #4](https://github.com/dfdsn/fastPay/pull/4), CI verde; detalhes no registro da H04.
 
 ## Estados
 
@@ -35,7 +35,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H01 | Bootstrap reproduzível e contratos de qualidade | Concluída | Merge em `develop` pelo [PR #1](https://github.com/dfdsn/fastPay/pull/1) (`216002c`) e correção da CI no [PR #2](https://github.com/dfdsn/fastPay/pull/2) (`33dfc80`); CI de `develop` verde (run 38166528466) ([evidência](evidencias/H01-build.md)) |
 | H02 | Ambientes Docker e pipeline GitHub | Concluída | [PR #1](https://github.com/dfdsn/fastPay/pull/1) + [PR #2](https://github.com/dfdsn/fastPay/pull/2) (`33dfc80`); CI de `develop` verde com imagens e smoke (run 38166528466) ([evidência](evidencias/H02-ambientes.md)); visibilidade do GHCR a conferir (T-02) |
 | H03 | Migrations e fundação de isolamento RLS | Concluída | [PR #3](https://github.com/dfdsn/fastPay/pull/3) (`96ac6bf`); CI de `develop` verde (run 38167523089) ([evidência](evidencias/H03-migrations-rls.md)) |
-| H04 | Eventos duráveis, idempotência e jobs | Aguardando revisão | PR para `develop` a partir de `feature/H04-eventos-duraveis-jobs`; 39 testes verdes com PostgreSQL real ([evidência](evidencias/H04-eventos-jobs.md)); ver registro abaixo |
+| H04 | Eventos duráveis, idempotência e jobs | Aguardando revisão | [PR #4](https://github.com/dfdsn/fastPay/pull/4), CI verde com PostgreSQL real ([evidência](evidencias/H04-eventos-jobs.md)); ver registro abaixo |
 | H05 | Prova PSP: recebedor, cobrança e split | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H06 | Prova PSP: devolução, conciliação e mensalidade | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H07 | Identidade, vínculo e seleção de unidade | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -183,9 +183,9 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Financeiros sem teto de tentativas.
 - Critérios faltantes / motivo: nenhum dos critérios da H04. Fica para histórias seguintes, por depender de identidade e permissões: o endpoint/tela da fila de falhas e a checagem de permissão do ator na retomada (H07/H11; hoje o chamador autoriza) e a chave de idempotência de comandos HTTP com hash do payload (especificação §4; entra com o primeiro comando crítico, H16). Nenhum efeito real usa a fila ainda (primeiro uso: e-mail em H12).
 - Branch e commit reais: `feature/H04-eventos-duraveis-jobs` (a partir de `develop` `96ac6bf`); hash no `git log`.
-- PR, checks e merge real: PR para `develop` aberto em 11/10/2026; CI no PR. Sem merge.
+- PR, checks e merge real: [PR #4](https://github.com/dfdsn/fastPay/pull/4) para `develop`; run 38170119581 em `f715888` verde (backend, frontend, imagens e smoke). Sem merge.
 - Arquivos/migrations/contratos: `V3__fila_de_jobs.sql` (tabela `job`, função `claim_due_jobs`, coluna `audit_event.subject_id`), módulo `jobs` (`Jobs`, `JobHandler`, `JobRequest`, `JobExecution`, `JobFailure`, `JobSummary`, `domain/RetryPolicy`, `domain/SafeError`, `application/JobWorker`, `application/JobHandlers`, `infrastructure/*`), testes em `jobs/` e `MigrationsIntegrationTest`, `PostgresIntegrationTest` (worker desligado nos testes), `application.yaml`, especificação §9, decisões (T-01, T-06), [evidência](evidencias/H04-eventos-jobs.md).
-- Testes: `./mvnw -B -ntp clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` (mesmo digest da CI) com Docker para o Testcontainers (PostgreSQL 18.6, mesmo digest), 11/10/2026: **39 testes, 0 falhas**, enforcer e JaCoCo ok, BUILD SUCCESS. Detalhes e cobertura na evidência. CI do PR registrada depois da execução.
+- Testes: `./mvnw -B -ntp clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` (mesmo digest da CI) com Docker para o Testcontainers (PostgreSQL 18.6, mesmo digest), 11/10/2026: **39 testes, 0 falhas**, enforcer e JaCoCo ok, BUILD SUCCESS. Detalhes e cobertura na evidência. CI do PR verde em `f715888` (run 38170119581).
 - Testes não executados e por quê: frontend sem mudança (roda na CI); E2E/PIT fora do escopo (sem regra financeira crítica nesta história).
 - Decisões novas/alteradas: T-06 (fila de jobs própria no PostgreSQL em vez do registry JDBC do Spring Modulith), registrada para aceite de Diego no PR.
 - Bloqueios / quem resolve: nenhum para a H04. Aceite da T-06: Diego.
