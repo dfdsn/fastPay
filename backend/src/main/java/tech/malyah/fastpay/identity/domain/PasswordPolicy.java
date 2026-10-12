@@ -6,10 +6,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Política de senha da equipe (H08). P-07 ainda não definiu a política; esta é a proposta registrada
- * para decisão de Diego, baseada no NIST SP 800-63B: comprimento mínimo configurável (padrão 12), sem
- * regras de composição nem troca periódica, recusa de senhas muito comuns e de senha que contenha o
- * e-mail. O máximo de 64 caracteres (e 72 bytes) vem do algoritmo de hash escolhido (bcrypt).
+ * Política de senha da equipe (H08; P-07 aprovada por Diego em 12/10/2026), baseada no NIST SP
+ * 800-63B: comprimento mínimo configurável (padrão 12), sem regras de composição nem troca periódica,
+ * recusa de senhas muito comuns e de senha que contenha o e-mail. O máximo de 64 caracteres (e 72 bytes) vem do algoritmo de hash escolhido (bcrypt).
  */
 public final class PasswordPolicy {
 

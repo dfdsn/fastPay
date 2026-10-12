@@ -53,7 +53,7 @@ fastpay:
     initial-backoff: 15s
     backoff-multiplier: 2.0
     max-backoff: 5m
-  # Login e redefinição de senha (H08). Política de senha e limites são proposta pendente de P-07/T-03.
+  # Login e redefinição de senha (H08). Política de senha e limites aprovados em P-07/T-03.
   auth:
     password-min-length: 12
     bcrypt-strength: 12

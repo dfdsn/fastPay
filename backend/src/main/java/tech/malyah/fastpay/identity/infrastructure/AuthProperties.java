@@ -9,7 +9,7 @@ import tech.malyah.fastpay.identity.domain.AttemptLimit;
 
 /**
  * Configuração técnica do login e da redefinição de senha ({@code fastpay.auth.*}, H08). Os valores
- * padrão são a proposta registrada em P-07/T-03 para decisão de Diego; os prazos de sessão por perfil e
+ * padrão são os aprovados em P-07/T-03 (12/10/2026); os prazos de sessão por perfil e
  * os 30 minutos do link de redefinição são regra da especificação §5 e não ficam aqui.
  *
  * @param passwordMinLength        comprimento mínimo da senha (8..64)

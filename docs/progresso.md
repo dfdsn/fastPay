@@ -30,7 +30,7 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **Reconciliação da H07 (12/10/2026):** Diego fez o merge do [PR #5](https://github.com/dfdsn/fastPay/pull/5) em `develop` (`97dde12`, 11/10/2026 22:37 UTC). CI do push em `develop` verde (run 38181137432). **H07 concluída.**
 
-**H08 (12/10/2026):** Diego pediu “próxima história”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); a menor elegível é a H08 (depende só da H07). O gate P-07 (política de senha) não tinha resposta: a H08 adota uma proposta configurável, registrada em P-07/T-03 para decisão de Diego, sem tratá-la como aprovada. Feita em `feature/H08-login-sessoes`, a partir de `develop` (`97dde12`). **Aguardando revisão** no PR da H08; detalhes no registro da H08.
+**H08 (12/10/2026):** Diego pediu “próxima história”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); a menor elegível é a H08 (depende só da H07). O gate P-07 (política de senha) não tinha resposta: a H08 adotou uma proposta configurável, aprovada por Diego em 12/10/2026 junto com os limites de tentativa (P-07/T-03). Feita em `feature/H08-login-sessoes`, a partir de `develop` (`97dde12`). **Aguardando revisão** no PR da H08; detalhes no registro da H08.
 
 ## Estados
 
@@ -47,7 +47,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H05 | Prova PSP: recebedor, cobrança e split | Bloqueada | Falta acesso ao PSP (P-01); Diego providencia |
 | H06 | Prova PSP: devolução, conciliação e mensalidade | Bloqueada | Depende da H05 e do acesso ao PSP (P-01) |
 | H07 | Identidade, vínculo e seleção de unidade | Concluída | [PR #5](https://github.com/dfdsn/fastPay/pull/5) (`97dde12`); CI de `develop` verde (run 38181137432) ([evidência](evidencias/H07-identidade-vinculos.md)) |
-| H08 | Login da equipe e sessões seguras | Aguardando revisão | PR da H08 para `develop` ([evidência](evidencias/H08-login-sessoes.md)); política de senha e limites aguardam decisão (P-07/T-03); ver registro abaixo |
+| H08 | Login da equipe e sessões seguras | Aguardando revisão | [PR #6](https://github.com/dfdsn/fastPay/pull/6) para `develop` ([evidência](evidencias/H08-login-sessoes.md)); política de senha e limites aprovados (P-07/T-03); ver registro abaixo |
 | H09 | TOTP, códigos e bootstrap administrativo | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H10 | Criar estabelecimento e convidar dono | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H11 | Equipe, permissões e concessão de suporte | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -224,7 +224,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H08 — Login da equipe e sessões seguras
 
-- História e estado: H08, **aguardando revisão** (critérios atendidos e testados com PostgreSQL real; sem merge). Política de senha e limites de tentativa são proposta ainda não aprovada (P-07/T-03): a H08 só fica concluída com o merge e a decisão de Diego sobre esses valores.
+- História e estado: H08, **aguardando revisão** (critérios atendidos e testados com PostgreSQL real; sem merge). Política de senha e limites de tentativa aprovados por Diego em 12/10/2026 (P-07/T-03).
 - Data/hora e agente: 12/10/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - E-mail/senha da equipe com hash `{bcrypt}`; Spring Session JDBC (schema na V5) e cookie `FASTPAY_SESSION` HttpOnly, Secure e SameSite=Lax; login descarta a sessão anterior e emite id novo.
@@ -234,15 +234,15 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Mensagens não enumeram contas (login e pedido de redefinição com a mesma resposta; bloqueio por tentativas também para e-mail inexistente).
   - Remetente de teste (caixa em memória) até H12; nenhum e-mail real.
   - Frontend: telas de login, “esqueci minha senha” e nova senha; guard de sessão; volta ao login com sessão vencida; nome e “Sair” no cabeçalho.
-- Critérios faltantes / motivo: nenhum dos critérios de código da H08. Pendentes de decisão: política de senha (P-07) e limites de tentativa (T-03), propostos e configuráveis. Fora do aceite e registrados na evidência: aviso antes de expirar (a API já devolve os prazos), MFA (H09), e-mail real (H12), E2E (Playwright não configurado).
+- Critérios faltantes / motivo: nenhum dos critérios de código da H08. Política de senha (P-07) e limites (T-03) aprovados por Diego em 12/10/2026. Fora do aceite e registrados na evidência: aviso antes de expirar (a API já devolve os prazos), MFA (H09), e-mail real (H12), E2E (Playwright não configurado).
 - Branch e commit reais: `feature/H08-login-sessoes` (a partir de `develop` `97dde12`); hash no `git log`.
-- PR, checks e merge real: PR da H08 para `develop`; CI a conferir no PR. Sem merge.
+- PR, checks e merge real: [PR #6](https://github.com/dfdsn/fastPay/pull/6) para `develop`; CI a conferir no PR. Sem merge.
 - Arquivos/migrations/contratos: `V5__credenciais_e_sessoes.sql` (`user_credential`, `password_reset_token`, `auth_attempt`, `spring_session*`, policy de login em `user_identity`), `backend/pom.xml` (Spring Security, Spring Session JDBC, security-test), `application.yaml` (`fastpay.auth.*`), `tenancy.TenantTransactions` (`forLoginEmail`, `forResetToken`), módulo `identity` (`SessionContext`, `domain/*`, `application/*`, `infrastructure/AuthConfiguration`, `AuthProperties`, `JdbcCredentialStore`, `JdbcAuthAttemptStore`, `TestMailbox`, `web/AuthController`, `SessionExpiryFilter`, `TestMailboxController`), frontend `src/app/auth/*`, `app.ts`, `app.routes.ts`, `app.config.ts`, `status-page.ts`, Compose dev/HML, `.env.example`, README, especificação §5, decisões P-07/T-03, [evidência](evidencias/H08-login-sessoes.md).
 - Testes: backend `./mvnw -B -ntp clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` (mesmo digest da CI) com Docker para o Testcontainers (PostgreSQL 18.6): **109 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. Frontend `./scripts/verify.sh frontend` no contêiner `node:24.18.0-trixie-slim` (mesmo digest da CI): lint ok, **53 testes Vitest**, build ok. Smoke com o jar real e `curl` (CSRF, reset, login, sessão, logout). Detalhes na evidência.
 - Testes não executados e por quê: E2E Playwright (não configurado); envio real de e-mail (H12); reset com MFA real (H09).
-- Decisões novas/alteradas: P-07 (proposta de política de senha) e T-03 (limites de login e redefinição), ambos aguardando Diego. Escolhas técnicas na especificação §5: bcrypt prefixado, token no fragmento do link, header `X-Fastpay-Background`, cookie definido por customizador (o Boot 4.1 ignora `server.servlet.session.cookie.*` sem servidor embutido).
-- Bloqueios / quem resolve: aceite da política de senha e dos limites (Diego). Aceite da T-06 continua pendente desde a H04.
-- Próximo passo concreto: Diego revisa o PR e decide P-07/T-03 (aceitar a proposta ou informar outros valores); depois do merge, reconciliar o progresso com o hash real. A próxima elegível depois da H08 é a H09 (TOTP, códigos e bootstrap; gate P-07 recuperação excepcional e T-05).
+- Decisões novas/alteradas: P-07 (política de senha) e T-03 (limites de login e redefinição), propostos na H08 e aprovados por Diego em 12/10/2026. Escolhas técnicas na especificação §5: bcrypt prefixado, token no fragmento do link, header `X-Fastpay-Background`, cookie definido por customizador (o Boot 4.1 ignora `server.servlet.session.cookie.*` sem servidor embutido).
+- Bloqueios / quem resolve: nenhum para a H08. Aceite da T-06 continua pendente desde a H04.
+- Próximo passo concreto: Diego revisa e faz o merge do PR #6; depois do merge, reconciliar o progresso com o hash real. A próxima elegível depois da H08 é a H09 (TOTP, códigos e bootstrap; gate P-07 recuperação excepcional e T-05).
 
 ## Registro de release (ainda nenhum)
 
