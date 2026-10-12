@@ -35,7 +35,9 @@ Requer Docker Desktop (WSL2) com Compose v2. Copie `.env.example` para `.env` e 
 
 O banco não tem porta publicada no host. A CI (`.github/workflows/ci.yml`) testa PRs para `develop`/`main` e publica imagens privadas no GHCR apenas em push para essas branches; não faz deploy.
 
-Endpoints atuais: `GET /actuator/health` (somente status) e `GET /api/v1/platform/info` (nome, versão e ambiente). Variáveis em [.env.example](.env.example).
+Endpoints atuais: `GET /actuator/health` (somente status), `GET /api/v1/platform/info` (nome, versão e ambiente), login e sessão em `/api/v1/auth/*` (H08) e seleção de unidade em `/api/v1/session/*` (H07). Mutações exigem o header `X-XSRF-TOKEN` com o valor do cookie `XSRF-TOKEN`. Variáveis em [.env.example](.env.example).
+
+Primeiro acesso em desenvolvimento (até convites, H10, e bootstrap do admin, H09): não há cadastro público. Crie a identidade e o vínculo direto no banco com o superusuário (dados sintéticos), peça "Esqueci minha senha" em `/esqueci-a-senha` com o e-mail dela e abra o link guardado na caixa de teste (`GET /api/v1/dev/caixa-de-teste`, ligado só no Compose dev). Nenhum e-mail real é enviado até H12.
 
 ## Documentação
 

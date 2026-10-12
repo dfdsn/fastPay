@@ -24,6 +24,13 @@ spring:
     placeholders:
       # Nome fixo: o papel é criado por infra/postgres/init/01-roles.sh.
       app_role: fastpay_app
+  # Spring Session JDBC (H08): schema pelo Flyway (V5); limpeza de sessões vencidas pelo próprio Spring Session.
+  session:
+    jdbc:
+      initialize-schema: never
+  autoconfigure:
+    # Sem usuário em memória: login só pela identidade da equipe (H08).
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   jpa:
     open-in-view: false
     hibernate:
@@ -46,9 +53,27 @@ fastpay:
     initial-backoff: 15s
     backoff-multiplier: 2.0
     max-backoff: 5m
+  # Login e redefinição de senha (H08). Política de senha e limites aprovados em P-07/T-03.
+  auth:
+    password-min-length: 12
+    bcrypt-strength: 12
+    reset-link-base: ${PASSWORD_RESET_LINK_BASE:http://127.0.0.1:8088/redefinir-senha}
+    login-failures-per-account: 5
+    login-failures-per-client: 20
+    login-window: 15m
+    reset-requests-per-account: 3
+    reset-requests-per-client: 10
+    reset-failures-per-client: 10
+    reset-window: 1h
+    # Cookie de sessão FASTPAY_SESSION (HttpOnly, SameSite=Lax). Secure só pode ser desligado em dev sem HTTPS.
+    session-cookie-secure: ${SESSION_COOKIE_SECURE:true}
+    # Caixa de teste legível pela API: só desenvolvimento local (expõe links de redefinição).
+    test-mailbox-endpoint: ${TEST_MAILBOX_ENDPOINT:false}
 
 server:
   port: ${SERVER_PORT:8080}
+  # Endereço do cliente e esquema vindos do proxy (nginx/tunnel), aceitos só de redes internas.
+  forward-headers-strategy: native
   error:
     include-stacktrace: never
     include-message: never

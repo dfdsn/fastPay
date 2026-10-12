@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { RouterLink } from '@angular/router';
 
 import { ApplicationInfo, PlatformInfoService } from '../platform/platform-info.service';
 
@@ -13,7 +14,7 @@ type ConnectionState =
 
 @Component({
   selector: 'fp-status-page',
-  imports: [MatCardModule, MatButtonModule, MatProgressSpinnerModule],
+  imports: [MatCardModule, MatButtonModule, MatProgressSpinnerModule, RouterLink],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -38,6 +39,11 @@ type ConnectionState =
           }
         </div>
       </mat-card-content>
+      @if (state().kind === 'ready') {
+        <mat-card-actions>
+          <a mat-flat-button routerLink="/entrar">Entrar</a>
+        </mat-card-actions>
+      }
       @if (state().kind === 'error') {
         <mat-card-actions>
           <button mat-flat-button type="button" (click)="load()">Tentar novamente</button>

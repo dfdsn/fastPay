@@ -4,6 +4,8 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import { App } from './app';
+import { AuthService } from './auth/auth.service';
+import { SESSAO, comCookieCsrf } from './auth/auth-testing';
 import { UnitContextService } from './session/unit-context.service';
 
 describe('App', () => {
@@ -67,5 +69,23 @@ describe('App', () => {
     http.expectOne('/api/v1/session/unit').flush(null, { status: 503, statusText: 'Unavailable' });
 
     expect(context.current()).toBeNull();
+  });
+
+  it('mostra quem está na sessão e sai', () => {
+    comCookieCsrf(true);
+    const auth = TestBed.inject(AuthService);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    auth.session.set(SESSAO);
+    const fixture = render();
+    const element = fixture.nativeElement as HTMLElement;
+
+    expect(element.querySelector('header .person')?.textContent).toBe('Ana');
+    element.querySelector<HTMLButtonElement>('header .sign-out')?.click();
+    http.expectOne('/api/v1/auth/logout').flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+
+    expect(auth.session()).toBeNull();
+    expect(navigate).toHaveBeenCalledWith(['/entrar']);
+    expect(element.querySelector('header .person')).toBeNull();
   });
 });

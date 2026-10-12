@@ -53,11 +53,14 @@ class IdentityProblems {
     }
 
     static ErrorResponseException invalidRequest(String detail) {
-        return new ErrorResponseException(HttpStatus.BAD_REQUEST,
-                problem(HttpStatus.BAD_REQUEST, "REQUISICAO_INVALIDA", detail), null);
+        return error(HttpStatus.BAD_REQUEST, "REQUISICAO_INVALIDA", detail);
     }
 
-    private static ProblemDetail problem(HttpStatus status, String code, String detail) {
+    static ErrorResponseException error(HttpStatus status, String code, String detail) {
+        return new ErrorResponseException(status, problem(status, code, detail), null);
+    }
+
+    static ProblemDetail problem(HttpStatus status, String code, String detail) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setType(URI.create("urn:fastpay:problema:" + code.toLowerCase()));
         problem.setProperty("code", code);

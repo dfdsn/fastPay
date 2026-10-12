@@ -34,6 +34,8 @@ services:
       JDBC_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-fastpay}
       JDBC_APP_PASSWORD: ${FASTPAY_APP_PASSWORD}
       JDBC_MIGRATION_PASSWORD: ${FASTPAY_MIGRATION_PASSWORD}
+      # H08: links de redefinição ficam só na caixa de teste em memória até H12 (sem envio real).
+      PASSWORD_RESET_LINK_BASE: ${PASSWORD_RESET_LINK_BASE:-http://127.0.0.1:8089/redefinir-senha}
     depends_on:
       db:
         condition: service_healthy
