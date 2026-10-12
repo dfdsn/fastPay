@@ -25,8 +25,8 @@ class MigrationsIntegrationTest extends PostgresIntegrationTest {
         MigrateResult resultado = flyway.migrate();
 
         assertThat(resultado.success).isTrue();
-        assertThat(resultado.migrationsExecuted).isEqualTo(4);
-        assertThat(resultado.targetSchemaVersion).isEqualTo("4");
+        assertThat(resultado.migrationsExecuted).isEqualTo(5);
+        assertThat(resultado.targetSchemaVersion).isEqualTo("5");
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
@@ -40,8 +40,8 @@ class MigrationsIntegrationTest extends PostgresIntegrationTest {
 
         MigrateResult resultado = flywayPara(banco, null).migrate();
 
-        assertThat(resultado.migrationsExecuted).isEqualTo(3);
-        assertThat(resultado.targetSchemaVersion).isEqualTo("4");
+        assertThat(resultado.migrationsExecuted).isEqualTo(4);
+        assertThat(resultado.targetSchemaVersion).isEqualTo("5");
         assertThat(admin.queryForObject(
                 "SELECT tableowner FROM pg_tables WHERE schemaname = 'fastpay' AND tablename = 'audit_event'", String.class))
                 .isEqualTo("fastpay_migration");

@@ -33,15 +33,7 @@ public class TenantTransactions {
 
     public <T> T inEstablishment(UUID establishmentId, Supplier<T> work) {
         Objects.requireNonNull(establishmentId, "establishmentId");
-        Objects.requireNonNull(work, "work");
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException("Contexto de estabelecimento exige transação própria; já existe uma ativa.");
-        }
-        return transactions.execute(status -> {
-            jdbc.queryForObject("SELECT set_config('app.establishment_id', ?, true)", String.class,
-                    establishmentId.toString());
-            return work.get();
-        });
+        return inContext("app.establishment_id", establishmentId.toString(), work);
     }
 
     /**
@@ -51,14 +43,22 @@ public class TenantTransactions {
      */
     public <T> T asIdentity(UUID identityId, Supplier<T> work) {
         Objects.requireNonNull(identityId, "identityId");
-        Objects.requireNonNull(work, "work");
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException("Contexto de identidade exige transação própria; já existe uma ativa.");
-        }
-        return transactions.execute(status -> {
-            jdbc.queryForObject("SELECT set_config('app.identity_id', ?, true)", String.class, identityId.toString());
-            return work.get();
-        });
+        return inContext("app.identity_id", identityId.toString(), work);
+    }
+
+    /**
+     * Transação nova em que só a identidade com este e-mail (já normalizado) é visível, sem credencial:
+     * localizar a conta no login ou no pedido de redefinição de senha (H08).
+     */
+    public <T> T forLoginEmail(String normalizedEmail, Supplier<T> work) {
+        Objects.requireNonNull(normalizedEmail, "normalizedEmail");
+        return inContext("app.login_email", normalizedEmail, work);
+    }
+
+    /** Transação nova em que só o token de redefinição com este hash é visível (H08). */
+    public <T> T forResetToken(String tokenHash, Supplier<T> work) {
+        Objects.requireNonNull(tokenHash, "tokenHash");
+        return inContext("app.reset_token_hash", tokenHash, work);
     }
 
     public void runInEstablishment(UUID establishmentId, Runnable work) {
@@ -66,6 +66,17 @@ public class TenantTransactions {
         inEstablishment(establishmentId, () -> {
             work.run();
             return null;
+        });
+    }
+
+    private <T> T inContext(String setting, String value, Supplier<T> work) {
+        Objects.requireNonNull(work, "work");
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Contexto " + setting + " exige transação própria; já existe uma ativa.");
+        }
+        return transactions.execute(status -> {
+            jdbc.queryForObject("SELECT set_config(?, ?, true)", String.class, setting, value);
+            return work.get();
         });
     }
 }

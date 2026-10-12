@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { Router, RouterOutlet } from '@angular/router';
 
+import { AuthService } from './auth/auth.service';
 import { UnitContextService, roleLabel } from './session/unit-context.service';
 
 @Component({
@@ -20,6 +21,10 @@ import { UnitContextService, roleLabel } from './session/unit-context.service';
             >&nbsp;·&nbsp;<span class="unit-role">{{ role() }}</span>
           </span>
           <button mat-button type="button" (click)="switchUnit()">Trocar unidade</button>
+        }
+        @if (session(); as current) {
+          <span class="person" [class.alone]="!unit()">{{ current.displayName }}</span>
+          <button mat-button type="button" class="sign-out" (click)="signOut()">Sair</button>
         }
       </mat-toolbar>
     </header>
@@ -39,6 +44,13 @@ import { UnitContextService, roleLabel } from './session/unit-context.service';
     .unit-name {
       font-weight: 500;
     }
+    .person {
+      margin-left: 8px;
+      font: var(--mat-sys-body-medium);
+    }
+    .person.alone {
+      margin-left: auto;
+    }
     main {
       padding: 16px;
     }
@@ -46,10 +58,12 @@ import { UnitContextService, roleLabel } from './session/unit-context.service';
 })
 export class App {
   private readonly context = inject(UnitContextService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly unit = this.context.current;
+  protected readonly session = this.auth.session;
   protected readonly role = computed(() => {
     const current = this.unit();
     return current ? roleLabel(current.role) : '';
@@ -67,5 +81,12 @@ export class App {
           void this.router.navigate(['/unidades']);
         },
       });
+  }
+
+  protected signOut(): void {
+    this.auth
+      .logout()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => void this.router.navigate(['/entrar']));
   }
 }

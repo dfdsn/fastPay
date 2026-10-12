@@ -3,12 +3,13 @@ import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
+import { sessionExpiredInterceptor } from './auth/session-expired.interceptor';
 import { unitContextInterceptor } from './session/unit-context.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideHttpClient(withFetch(), withInterceptors([unitContextInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([sessionExpiredInterceptor, unitContextInterceptor])),
     provideRouter(routes),
   ],
 };

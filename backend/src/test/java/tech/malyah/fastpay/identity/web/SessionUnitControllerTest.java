@@ -1,9 +1,7 @@
 package tech.malyah.fastpay.identity.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,7 +19,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,8 +33,8 @@ import tech.malyah.fastpay.testsupport.PostgresIntegrationTest;
 
 /**
  * Seleção e troca de unidade pela API (H07, FR-03, CA-03), com PostgreSQL real: duas lojas, IDs
- * forjados, vínculo revogado com a unidade já escolhida e identidade com papéis distintos. A identidade
- * é posta na sessão diretamente porque o login chega em H08.
+ * forjados, vínculo revogado com a unidade já escolhida e identidade com papéis distintos. Cada pessoa
+ * entra pelo login real (H08), com sessão no Spring Session JDBC e CSRF.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,12 +54,16 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
     UUID bruno;
     UUID vinculoAnaA;
 
+    static final String SENHA = "uma senha longa de teste";
+
     @BeforeEach
     void duasLojas() {
         lojaA = fixtures.establishment("Bar da Praia");
         lojaB = fixtures.establishment("Adega Centro");
         ana = fixtures.identity("Ana");
         bruno = fixtures.identity("Bruno");
+        fixtures.credential(ana, SENHA);
+        fixtures.credential(bruno, SENHA);
         vinculoAnaA = fixtures.membership(ana, lojaA, MembershipRole.GERENTE);
         fixtures.membership(ana, lojaB, MembershipRole.GARCOM);
         fixtures.membership(bruno, lojaA, MembershipRole.PRODUCAO);
@@ -72,18 +73,18 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
 
     @Test
     void semIdentidadeNaSessaoResponde401EmPortugues() throws Exception {
-        mvc.perform(get("/api/v1/session/units"))
+        Browser anonimo = new Browser(mvc);
+        anonimo.get("/api/v1/session/units")
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("SESSAO_AUSENTE"))
                 .andExpect(jsonPath("$.detail").value("Sua sessão não está ativa. Entre novamente."));
-        mvc.perform(put("/api/v1/session/unit").contentType(MediaType.APPLICATION_JSON).content(corpo(lojaA)))
-                .andExpect(status().isUnauthorized());
+        selecionar(anonimo, lojaA).andExpect(status().isUnauthorized());
     }
 
     @Test
     void listaUnidadesDaIdentidadeComPapelDeCada() throws Exception {
-        mvc.perform(get("/api/v1/session/units").session(sessao(ana)))
+        entrar(ana).get("/api/v1/session/units")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Ana"))
                 .andExpect(jsonPath("$.units.length()").value(2))
@@ -96,40 +97,39 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
 
     @Test
     void escolherUnidadeGuardaNaSessaoTrocaOIdDaSessaoEMostraOPapel() throws Exception {
-        MockHttpSession sessao = sessao(ana);
-        String idAntes = sessao.getId();
+        Browser sessao = entrar(ana);
+        String idAntes = sessao.cookie("FASTPAY_SESSION").orElseThrow();
 
         selecionar(sessao, lojaA).andExpect(status().isOk())
                 .andExpect(jsonPath("$.establishmentId").value(lojaA.toString()))
                 .andExpect(jsonPath("$.name").value("Bar da Praia"))
                 .andExpect(jsonPath("$.role").value("GERENTE"));
 
-        assertThat(sessao.getId()).isNotEqualTo(idAntes);
-        assertThat(sessao.getAttribute(SessionContext.UNIT_ATTRIBUTE)).isEqualTo(lojaA);
-        mvc.perform(get("/api/v1/session/unit").session(sessao))
+        assertThat(sessao.cookie("FASTPAY_SESSION")).hasValueSatisfying(id -> assertThat(id).isNotEqualTo(idAntes));
+        sessao.get("/api/v1/session/unit")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("GERENTE"));
-        mvc.perform(get("/api/v1/session/units").session(sessao))
+        sessao.get("/api/v1/session/units")
                 .andExpect(jsonPath("$.currentEstablishmentId").value(lojaA.toString()));
     }
 
     @Test
     void trocarDeUnidadeLimitaConsultasAoNovoVinculo() throws Exception {
-        MockHttpSession sessao = sessao(ana);
+        Browser sessao = entrar(ana);
         selecionar(sessao, lojaA).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/test/unidade/eventos").session(sessao))
+        sessao.get("/api/v1/test/unidade/eventos")
                 .andExpect(jsonPath("$").value(org.hamcrest.Matchers.contains("teste.a")));
 
         selecionar(sessao, lojaB).andExpect(status().isOk()).andExpect(jsonPath("$.role").value("GARCOM"));
 
-        mvc.perform(get("/api/v1/test/unidade/eventos").session(sessao))
+        sessao.get("/api/v1/test/unidade/eventos")
                 .andExpect(jsonPath("$").value(org.hamcrest.Matchers.contains("teste.b")));
-        mvc.perform(get("/api/v1/test/unidade/estabelecimentos/" + lojaA).session(sessao))
+        sessao.get("/api/v1/test/unidade/estabelecimentos/" + lojaA)
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void unidadeForjadaOuInexistenteRecebeAMesmaRecusa() throws Exception {
-        MockHttpSession sessao = sessao(bruno);
+        Browser sessao = entrar(bruno);
         String alheia = selecionar(sessao, lojaB).andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("UNIDADE_NAO_AUTORIZADA"))
@@ -139,36 +139,36 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
 
         assertThat(inexistente).isEqualTo(alheia);
         assertThat(alheia).doesNotContain(lojaB.toString()).doesNotContain("Adega");
-        assertThat(sessao.getAttribute(SessionContext.UNIT_ATTRIBUTE)).isNull();
+        sessao.get("/api/v1/session/unit").andExpect(status().isConflict());
     }
 
     @Test
     void idsDeOutraLojaEmCaminhoOuHeaderNaoMudamAUnidade() throws Exception {
-        MockHttpSession sessao = sessao(bruno);
+        Browser sessao = entrar(bruno);
         selecionar(sessao, lojaA).andExpect(status().isOk());
 
-        mvc.perform(get("/api/v1/test/unidade/estabelecimentos/" + lojaB).session(sessao))
+        sessao.get("/api/v1/test/unidade/estabelecimentos/" + lojaB)
                 .andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/test/unidade/eventos").session(sessao).header("X-Establishment-Id", lojaB.toString()))
+        sessao.send(get("/api/v1/test/unidade/eventos").header("X-Establishment-Id", lojaB.toString()))
                 .andExpect(jsonPath("$").value(org.hamcrest.Matchers.contains("teste.a")));
         // Recusa de outra loja não derruba a escolha válida.
         selecionar(sessao, lojaB).andExpect(status().isForbidden());
-        assertThat(sessao.getAttribute(SessionContext.UNIT_ATTRIBUTE)).isEqualTo(lojaA);
+        sessao.get("/api/v1/session/unit").andExpect(jsonPath("$.establishmentId").value(lojaA.toString()));
     }
 
     @Test
     void vinculoRevogadoComUnidadeEscolhidaPerdeAcessoNaProximaOperacao() throws Exception {
-        MockHttpSession sessao = sessao(ana);
+        Browser sessao = entrar(ana);
         selecionar(sessao, lojaA).andExpect(status().isOk());
 
         memberships.deactivate(lojaA, vinculoAnaA, bruno, null);
 
-        mvc.perform(get("/api/v1/test/unidade/eventos").session(sessao))
+        sessao.get("/api/v1/test/unidade/eventos")
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("UNIDADE_NAO_AUTORIZADA"));
-        assertThat(sessao.getAttribute(SessionContext.UNIT_ATTRIBUTE)).as("escolha esquecida").isNull();
-        mvc.perform(get("/api/v1/session/unit").session(sessao))
+        // Escolha esquecida: volta à seleção.
+        sessao.get("/api/v1/session/unit")
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("UNIDADE_NAO_SELECIONADA"));
-        mvc.perform(get("/api/v1/session/units").session(sessao))
+        sessao.get("/api/v1/session/units")
                 .andExpect(jsonPath("$.units.length()").value(1))
                 .andExpect(jsonPath("$.units[0].name").value("Adega Centro"));
         selecionar(sessao, lojaB).andExpect(status().isOk());
@@ -176,62 +176,67 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
 
     @Test
     void listaDeUnidadesDescartaEscolhaJaRevogada() throws Exception {
-        MockHttpSession sessao = sessao(ana);
+        Browser sessao = entrar(ana);
         selecionar(sessao, lojaA).andExpect(status().isOk());
         memberships.deactivate(lojaA, vinculoAnaA, bruno, null);
 
-        mvc.perform(get("/api/v1/session/units").session(sessao))
+        sessao.get("/api/v1/session/units")
                 .andExpect(jsonPath("$.currentEstablishmentId").doesNotExist());
-        assertThat(sessao.getAttribute(SessionContext.UNIT_ATTRIBUTE)).isNull();
+        sessao.get("/api/v1/session/unit").andExpect(status().isConflict());
     }
 
     @Test
     void adminFastPaySemVinculoNaoOperaLoja() throws Exception {
         UUID adminFastPay = fixtures.identity("Admin plataforma", "ADMIN_FASTPAY");
-        MockHttpSession sessao = sessao(adminFastPay);
+        fixtures.credential(adminFastPay, SENHA);
+        Browser sessao = entrar(adminFastPay);
 
-        mvc.perform(get("/api/v1/session/units").session(sessao))
+        sessao.get("/api/v1/session/units")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.units.length()").value(0));
         selecionar(sessao, lojaA).andExpect(status().isForbidden());
     }
 
     @Test
     void sairDaUnidadeExigeNovaEscolha() throws Exception {
-        MockHttpSession sessao = sessao(ana);
+        Browser sessao = entrar(ana);
         selecionar(sessao, lojaA).andExpect(status().isOk());
 
-        mvc.perform(delete("/api/v1/session/unit").session(sessao)).andExpect(status().isNoContent());
+        sessao.delete("/api/v1/session/unit").andExpect(status().isNoContent());
 
-        mvc.perform(get("/api/v1/test/unidade/eventos").session(sessao)).andExpect(status().isConflict());
+        sessao.get("/api/v1/test/unidade/eventos").andExpect(status().isConflict());
     }
 
     @Test
     void pedidoSemUnidadeEhInvalido() throws Exception {
-        mvc.perform(put("/api/v1/session/unit").session(sessao(ana)).contentType(MediaType.APPLICATION_JSON).content("{}"))
+        entrar(ana).put("/api/v1/session/unit", "{}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("REQUISICAO_INVALIDA"))
                 .andExpect(jsonPath("$.detail").value("Escolha uma unidade."));
     }
 
     @Test
-    void identidadeInexistenteNaSessaoEhTratadaComoSemSessao() throws Exception {
-        mvc.perform(get("/api/v1/session/units").session(sessao(UUID.randomUUID())))
-                .andExpect(status().isUnauthorized());
+    void trocarDeUnidadeSemTokenCsrfEhRecusado() throws Exception {
+        Browser sessao = entrar(ana);
+
+        sessao.send(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/session/unit")
+                        .contentType(MediaType.APPLICATION_JSON).content(corpo(lojaA)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PAGINA_DESATUALIZADA"));
+        sessao.get("/api/v1/session/unit").andExpect(status().isConflict());
     }
 
-    private ResultActions selecionar(MockHttpSession sessao, UUID unidade) throws Exception {
-        return mvc.perform(put("/api/v1/session/unit").session(sessao)
-                .contentType(MediaType.APPLICATION_JSON).content(corpo(unidade)));
+    private Browser entrar(UUID identidade) throws Exception {
+        Browser browser = new Browser(mvc);
+        browser.login(IdentityFixtures.email(identidade), SENHA).andExpect(status().isOk());
+        return browser;
+    }
+
+    private static ResultActions selecionar(Browser sessao, UUID unidade) throws Exception {
+        return sessao.put("/api/v1/session/unit", corpo(unidade));
     }
 
     private static String corpo(UUID unidade) {
         return "{\"establishmentId\":\"" + unidade + "\"}";
-    }
-
-    private static MockHttpSession sessao(UUID identidade) {
-        MockHttpSession sessao = new MockHttpSession();
-        sessao.setAttribute(SessionContext.IDENTITY_ATTRIBUTE, identidade);
-        return sessao;
     }
 
     /**

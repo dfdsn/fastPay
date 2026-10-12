@@ -35,6 +35,11 @@ services:
       JDBC_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-fastpay}
       JDBC_APP_PASSWORD: ${FASTPAY_APP_PASSWORD}
       JDBC_MIGRATION_PASSWORD: ${FASTPAY_MIGRATION_PASSWORD}
+      # H08: link de redefinição aponta para o frontend local; a caixa de teste fica legível em
+      # /api/v1/dev/caixa-de-teste (só dev, nenhum e-mail real é enviado até H12).
+      PASSWORD_RESET_LINK_BASE: http://127.0.0.1:${FASTPAY_HTTP_PORT:-8088}/redefinir-senha
+      TEST_MAILBOX_ENDPOINT: "true"
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
     depends_on:
       db:
         condition: service_healthy
