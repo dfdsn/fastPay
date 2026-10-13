@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 import tech.malyah.fastpay.identity.domain.AttemptLimit;
 
 /**
- * Configuração técnica do login e da redefinição de senha ({@code fastpay.auth.*}, H08). Os valores
+ * Configuração técnica do login, da redefinição de senha e do MFA ({@code fastpay.auth.*}, H08/H09). Os valores
  * padrão são os aprovados em P-07/T-03 (12/10/2026); os prazos de sessão por perfil e
  * os 30 minutos do link de redefinição são regra da especificação §5 e não ficam aqui.
  *
@@ -23,6 +23,10 @@ import tech.malyah.fastpay.identity.domain.AttemptLimit;
  * @param resetFailuresPerClient   links inválidos apresentados por origem na janela antes de recusar
  * @param resetWindow              janela dos pedidos e falhas de redefinição
  * @param sessionCookieSecure      cookie de sessão só por HTTPS; desligar apenas em dev sem HTTPS
+ * @param mfaEncryptionKey         chave AES-256 (Base64) do segredo TOTP, fora do banco; obrigatória (H09)
+ * @param mfaIssuer                nome do emissor mostrado no aplicativo autenticador
+ * @param mfaFailuresPerAccount    códigos errados (TOTP ou recuperação) por identidade na janela de login
+ * @param mfaPendingTimeout        prazo para concluir a verificação ou o cadastro do MFA depois da senha
  */
 @ConfigurationProperties("fastpay.auth")
 public record AuthProperties(
@@ -36,7 +40,11 @@ public record AuthProperties(
         @DefaultValue("10") int resetRequestsPerClient,
         @DefaultValue("10") int resetFailuresPerClient,
         @DefaultValue("1h") Duration resetWindow,
-        @DefaultValue("true") boolean sessionCookieSecure) {
+        @DefaultValue("true") boolean sessionCookieSecure,
+        String mfaEncryptionKey,
+        @DefaultValue("fastPay") String mfaIssuer,
+        @DefaultValue("5") int mfaFailuresPerAccount,
+        @DefaultValue("10m") Duration mfaPendingTimeout) {
 
     public AuthProperties {
         if (bcryptStrength < 10 || bcryptStrength > 16) {
@@ -44,6 +52,9 @@ public record AuthProperties(
         }
         if (resetLinkBase == null || resetLinkBase.isBlank() || resetLinkBase.contains("#")) {
             throw new IllegalArgumentException("fastpay.auth.reset-link-base deve ser um endereço sem fragmento");
+        }
+        if (mfaPendingTimeout.isNegative() || mfaPendingTimeout.isZero() || mfaPendingTimeout.toMinutes() > 30) {
+            throw new IllegalArgumentException("fastpay.auth.mfa-pending-timeout deve estar entre 1 s e 30 min");
         }
     }
 
@@ -61,6 +72,10 @@ public record AuthProperties(
 
     public AttemptLimit resetRequestPerClient() {
         return new AttemptLimit(resetRequestsPerClient, resetWindow);
+    }
+
+    public AttemptLimit mfaPerAccount() {
+        return new AttemptLimit(mfaFailuresPerAccount, loginWindow);
     }
 
     public AttemptLimit resetFailurePerClient() {

@@ -69,6 +69,12 @@ fastpay:
     session-cookie-secure: ${SESSION_COOKIE_SECURE:true}
     # Caixa de teste legível pela API: só desenvolvimento local (expõe links de redefinição).
     test-mailbox-endpoint: ${TEST_MAILBOX_ENDPOINT:false}
+    # MFA (H09). Chave AES-256 do segredo TOTP, em Base64, guardada fora do banco; obrigatória, sem padrão.
+    mfa-encryption-key: ${MFA_ENCRYPTION_KEY:}
+    mfa-issuer: fastPay
+    mfa-failures-per-account: 5
+    # Prazo para digitar o código ou cadastrar o autenticador depois da senha.
+    mfa-pending-timeout: 10m
 
 server:
   port: ${SERVER_PORT:8080}

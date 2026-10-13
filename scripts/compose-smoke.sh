@@ -12,8 +12,9 @@ env_file="$(mktemp)"
 trap 'docker compose "${compose_args[@]}" down -v --remove-orphans >/dev/null 2>&1 || true; rm -f "$env_file"' EXIT
 
 # Senhas descartáveis geradas na hora; só existem neste projeto Compose temporário.
-printf 'POSTGRES_PASSWORD=%s\nFASTPAY_MIGRATION_PASSWORD=%s\nFASTPAY_APP_PASSWORD=%s\nFASTPAY_HTTP_PORT=%s\n' \
-  "smoke-$RANDOM-$RANDOM-$$" "mig-$RANDOM-$RANDOM-$$" "app-$RANDOM-$RANDOM-$$" "$port" > "$env_file"
+printf 'POSTGRES_PASSWORD=%s\nFASTPAY_MIGRATION_PASSWORD=%s\nFASTPAY_APP_PASSWORD=%s\nFASTPAY_HTTP_PORT=%s\nMFA_ENCRYPTION_KEY=%s\n' \
+  "smoke-$RANDOM-$RANDOM-$$" "mig-$RANDOM-$RANDOM-$$" "app-$RANDOM-$RANDOM-$$" "$port" \
+  "$(head -c 32 /dev/urandom | base64)" > "$env_file"
 compose_args=(--env-file "$env_file" -f "$root/infra/compose.dev.yml" -p fastpay-smoke)
 
 wait_http() {

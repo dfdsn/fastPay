@@ -28,10 +28,13 @@ import tech.malyah.fastpay.identity.application.TeamAuthentication;
 import tech.malyah.fastpay.identity.application.TeamAuthentication.Authenticated;
 import tech.malyah.fastpay.identity.application.TeamAuthentication.Rejected;
 import tech.malyah.fastpay.identity.application.TeamAuthentication.Throttled;
+import tech.malyah.fastpay.identity.domain.AuthStage;
 import tech.malyah.fastpay.identity.domain.SessionWindow;
+import tech.malyah.fastpay.identity.infrastructure.AuthProperties;
 
 /**
- * Login da equipe, sessão e redefinição de senha (H08, FR-04). Todas as mutações exigem o token CSRF.
+ * Login da equipe, sessão e redefinição de senha (H08, FR-04). Quando a pessoa tem ou precisa de MFA, o
+ * login só abre a etapa do segundo fator ({@link MfaController}, H09). Todas as mutações exigem o token CSRF.
  * Mensagens de erro não dizem se o e-mail existe.
  */
 @RestController
@@ -45,24 +48,32 @@ class AuthController {
     private final PasswordResets resets;
     private final Memberships memberships;
     private final SessionContext session;
+    private final AuthProperties properties;
     private final Clock clock;
 
     AuthController(TeamAuthentication authentication, PasswordResets resets, Memberships memberships,
-            SessionContext session, Clock clock) {
+            SessionContext session, AuthProperties properties, Clock clock) {
         this.authentication = authentication;
         this.resets = resets;
         this.memberships = memberships;
         this.session = session;
+        this.properties = properties;
         this.clock = clock;
     }
 
     @PostMapping("/login")
     SessionView login(@RequestBody LoginRequest body, HttpServletRequest request) {
         return switch (authentication.login(body.email(), body.password(), request.getRemoteAddr())) {
-            case Authenticated ok -> {
+            case Authenticated ok when ok.stage() == AuthStage.AUTENTICADO -> {
                 Instant now = clock.instant();
-                session.signIn(request, ok.identityId(), ok.profile(), now);
+                session.signIn(request, ok.identityId(), ok.profile(), now, false);
                 yield SessionView.of(ok.displayName(), SessionWindow.startingAt(ok.profile(), now));
+            }
+            case Authenticated ok -> {
+                // Senha certa; o acesso só abre depois do segundo fator ou do cadastro do autenticador.
+                session.beginPending(request, ok.identityId(), ok.stage(), clock.instant(),
+                        properties.mfaPendingTimeout());
+                yield SessionView.pending(ok.displayName(), ok.stage());
             }
             case Rejected rejected -> throw IdentityProblems.error(HttpStatus.UNAUTHORIZED, "CREDENCIAIS_INVALIDAS",
                     "E-mail ou senha incorretos.");
@@ -70,9 +81,18 @@ class AuthController {
         };
     }
 
-    /** Sessão atual. Prazos já aplicados pelo filtro: sessão vencida chega aqui sem identidade. */
+    /**
+     * Sessão atual. Prazos já aplicados pelo filtro: sessão vencida chega aqui sem identidade. Sessão na
+     * etapa do MFA responde com a etapa, sem prazos, para a tela levar à verificação ou ao cadastro.
+     */
     @GetMapping("/session")
     SessionView current(HttpServletRequest request) {
+        var pending = session.pending(request);
+        if (pending.isPresent()) {
+            IdentitySummary identity = memberships.identity(pending.get().identityId())
+                    .orElseThrow(AuthenticationRequiredException::new);
+            return SessionView.pending(identity.displayName(), pending.get().stage());
+        }
         var identityId = session.requireIdentity(request);
         IdentitySummary identity = memberships.identity(identityId).orElseThrow(AuthenticationRequiredException::new);
         SessionWindow window = session.window(request).orElseThrow(AuthenticationRequiredException::new);
@@ -126,13 +146,18 @@ class AuthController {
     }
 
     /**
-     * Quem está na sessão e quando ela vence. {@code idleTimeoutSeconds} permite ao frontend avisar antes
-     * de a sessão expirar por inatividade.
+     * Quem está na sessão, em que etapa (H09) e quando ela vence. {@code idleTimeoutSeconds} permite ao
+     * frontend avisar antes de a sessão expirar por inatividade. Na etapa do MFA não há prazos de sessão.
      */
-    record SessionView(String displayName, long idleTimeoutSeconds, Instant idleExpiresAt, Instant absoluteExpiresAt) {
+    record SessionView(AuthStage stage, String displayName, Long idleTimeoutSeconds, Instant idleExpiresAt,
+            Instant absoluteExpiresAt) {
         static SessionView of(String displayName, SessionWindow window) {
-            return new SessionView(displayName, window.profile().idleTimeout().toSeconds(), window.idleDeadline(),
-                    window.absoluteDeadline());
+            return new SessionView(AuthStage.AUTENTICADO, displayName, window.profile().idleTimeout().toSeconds(),
+                    window.idleDeadline(), window.absoluteDeadline());
+        }
+
+        static SessionView pending(String displayName, AuthStage stage) {
+            return new SessionView(stage, displayName, null, null, null);
         }
     }
 }

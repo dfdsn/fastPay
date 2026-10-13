@@ -28,6 +28,9 @@ public abstract class PostgresIntegrationTest {
 
     private static final String MIGRATION_PASSWORD = "mig-" + UUID.randomUUID();
     private static final String APP_PASSWORD = "app-" + UUID.randomUUID();
+    /** Chave de teste do segredo TOTP (H09), nova a cada execução. */
+    public static final String MFA_KEY = java.util.Base64.getEncoder().encodeToString(
+            java.security.SecureRandom.getSeed(32));
 
     protected static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
             DockerImageName.parse(IMAGE).asCompatibleSubstituteFor("postgres"))
@@ -50,6 +53,7 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.password", () -> APP_PASSWORD);
         registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
         registry.add("spring.flyway.password", () -> MIGRATION_PASSWORD);
+        registry.add("fastpay.auth.mfa-encryption-key", () -> MFA_KEY);
         // Fixtures de teste (versões 1000+) aplicadas depois das migrations reais.
         registry.add("spring.flyway.locations", () -> "classpath:db/migration,classpath:db/testfixture");
         // Contextos de teste ficam em cache e compartilham o banco: sem worker periódico, cada teste

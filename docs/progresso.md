@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 12/10/2026 por Claude Code (H07 reconciliada; H08 em revisão).
+Atualizado em 13/10/2026 por Claude Code (H08 reconciliada; H09 em revisão).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -32,6 +32,10 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H08 (12/10/2026):** Diego pediu “próxima história”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); a menor elegível é a H08 (depende só da H07). O gate P-07 (política de senha) não tinha resposta: a H08 adotou uma proposta configurável, aprovada por Diego em 12/10/2026 junto com os limites de tentativa (P-07/T-03). Feita em `feature/H08-login-sessoes`, a partir de `develop` (`97dde12`). **Aguardando revisão** no PR da H08; detalhes no registro da H08.
 
+**Reconciliação da H08 (13/10/2026):** Diego fez o merge do [PR #6](https://github.com/dfdsn/fastPay/pull/6) em `develop` (`85659f7`, 12/10/2026 03:17 UTC). CI do push em `develop` verde (run 38199173689). **H08 concluída.**
+
+**H09 (13/10/2026):** Diego pediu “próxima historia”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); a menor elegível é a H09 (depende só da H08). Os gates P-07 (recuperação excepcional) e T-05 (bootstrap) não tinham resposta: a H09 implementou uma proposta configurável e a registrou como pendente de aprovação. Feita em `feature/H09-totp-bootstrap-admin`, a partir de `develop` (`85659f7`). **Aguardando revisão** no PR da H09; detalhes no registro da H09.
+
 ## Estados
 
 Não iniciada → em andamento → aguardando validação ou revisão → concluída. Bloqueada quando falta pré-requisito concreto. Aguardando revisão inclui PR aberto; concluída só após checks e merge develop verificados. Uma release possui registro separado do estado das histórias. Progresso inicialmente sem agente/branch/commit/PR.
@@ -47,8 +51,8 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H05 | Prova PSP: recebedor, cobrança e split | Bloqueada | Falta acesso ao PSP (P-01); Diego providencia |
 | H06 | Prova PSP: devolução, conciliação e mensalidade | Bloqueada | Depende da H05 e do acesso ao PSP (P-01) |
 | H07 | Identidade, vínculo e seleção de unidade | Concluída | [PR #5](https://github.com/dfdsn/fastPay/pull/5) (`97dde12`); CI de `develop` verde (run 38181137432) ([evidência](evidencias/H07-identidade-vinculos.md)) |
-| H08 | Login da equipe e sessões seguras | Aguardando revisão | [PR #6](https://github.com/dfdsn/fastPay/pull/6) para `develop` ([evidência](evidencias/H08-login-sessoes.md)); política de senha e limites aprovados (P-07/T-03); ver registro abaixo |
-| H09 | TOTP, códigos e bootstrap administrativo | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H08 | Login da equipe e sessões seguras | Concluída | [PR #6](https://github.com/dfdsn/fastPay/pull/6) (`85659f7`); CI de `develop` verde (run 38199173689) ([evidência](evidencias/H08-login-sessoes.md)); política de senha e limites aprovados (P-07/T-03) |
+| H09 | TOTP, códigos e bootstrap administrativo | Aguardando revisão | PR da H09 para `develop` ([evidência](evidencias/H09-mfa-bootstrap.md)); recuperação excepcional (P-07) e bootstrap (T-05) propostos, aguardam aprovação de Diego; ver registro abaixo |
 | H10 | Criar estabelecimento e convidar dono | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H11 | Equipe, permissões e concessão de suporte | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H12 | Convites e e-mail durável em homologação | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -243,6 +247,28 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: P-07 (política de senha) e T-03 (limites de login e redefinição), propostos na H08 e aprovados por Diego em 12/10/2026. Escolhas técnicas na especificação §5: bcrypt prefixado, token no fragmento do link, header `X-Fastpay-Background`, cookie definido por customizador (o Boot 4.1 ignora `server.servlet.session.cookie.*` sem servidor embutido).
 - Bloqueios / quem resolve: nenhum para a H08. Aceite da T-06 continua pendente desde a H04.
 - Próximo passo concreto: Diego revisa e faz o merge do PR #6; depois do merge, reconciliar o progresso com o hash real. A próxima elegível depois da H08 é a H09 (TOTP, códigos e bootstrap; gate P-07 recuperação excepcional e T-05).
+
+### H09 — TOTP, códigos e bootstrap administrativo
+
+- História e estado: H09, **aguardando revisão** (critérios atendidos e testados com PostgreSQL real; sem merge). Recuperação excepcional de MFA (P-07) e bootstrap do admin (T-05) implementados como proposta, aguardando aprovação de Diego.
+- Data/hora e agente: 13/10/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - MFA privilegiado obrigatório (admin fastPay, admin do estabelecimento, gerente) antes de qualquer função; opcional para garçom e produção, ativável pela tela “Segurança”.
+  - TOTP (RFC 6238) com janela de um passo de cada lado e sem reuso do mesmo passo; segredo cifrado com chave fora do banco (`MFA_ENCRYPTION_KEY`).
+  - 10 códigos de recuperação de uso único, só hash no banco, mostrados uma vez.
+  - Senha + código de recuperação abre só o recadastro, que invalida autenticador e códigos antigos, encerra todas as sessões e envia aviso (caixa de teste até H12).
+  - Promoção durante a sessão exige o cadastro antes da operação seguinte; redefinir a senha não remove MFA.
+  - Bootstrap do primeiro admin fastPay por comando de operador, sem cadastro público nem credencial padrão; recuperação excepcional (inclusive do único admin) pelo mesmo caminho, com operador e motivo na trilha `security_event`. Procedimento no README e na especificação §5.
+  - Frontend: telas `/verificacao` e `/configurar-verificacao`; login, guard e interceptor levam à etapa certa.
+- Critérios faltantes / motivo: aprovação de Diego para a recuperação excepcional (P-07) e para o bootstrap (T-05); ensaio no ambiente produtivo fica para H50. Fora do aceite: QR code na tela (exigiria biblioteca nova; há link `otpauth://` e chave para digitar), aviso por e-mail real (H12), E2E (Playwright não configurado).
+- Branch e commit reais: `feature/H09-totp-bootstrap-admin` (a partir de `develop` `85659f7`); hash no `git log`.
+- PR, checks e merge real: PR da H09 para `develop`; CI a conferir no PR. Sem merge.
+- Arquivos/migrations/contratos: `V6__mfa_e_operador.sql`; módulo `identity` (`MfaRequiredException`, `SessionContext`, `domain/AuthStage`, `Totp`, `Base32`, `RecoveryCodes`, `application/MultiFactor`, `OperatorCommands`, `AccountMailer` (antes `PasswordResetMailer`), `TeamAuthentication`, `infrastructure/MfaSecretCipher`, `JdbcMfaStore`, `OperatorCommandRunner`, `AuthProperties`, `TestMailbox`, `web/MfaController`, `AuthController`, `IdentityProblems`, `SessionExpiryFilter`); `application.yaml`; frontend `src/app/auth/*`, `app.ts`, `app.routes.ts`; Compose dev/HML, `scripts/compose-smoke.sh`, `.env.example`, README, especificação §5, decisões P-07/T-05, [evidência](evidencias/H09-mfa-bootstrap.md).
+- Testes: backend `./mvnw -B -ntp verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` com Docker para o Testcontainers (PostgreSQL 18.6): **155 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. Frontend `./scripts/verify.sh frontend` no contêiner `node:24.18.0-trixie-slim`: lint ok, **68 testes Vitest**, build ok. Smoke com o jar real (bootstrap, cadastro do MFA pela API, recuperação excepcional). Detalhes na evidência.
+- Testes não executados e por quê: `compose-smoke.sh` (roda na CI do PR); E2E Playwright (não configurado); aplicativo autenticador num celular real; envio real de e-mail (H12).
+- Decisões novas/alteradas: propostas P-07 (recuperação excepcional e limite de 5 códigos errados por identidade em 15 min) e T-05 (bootstrap), aguardando Diego. Escolhas técnicas na especificação §5: etapas de sessão, AES-256-GCM com id da identidade como dado associado, códigos de 16 caracteres, comandos de operador com a credencial de migração.
+- Bloqueios / quem resolve: aprovação de P-07/T-05 (Diego). Aceite da T-06 continua pendente desde a H04.
+- Próximo passo concreto: Diego revisa o PR, decide P-07/T-05 e faz o merge; depois, reconciliar o progresso com o hash real. A próxima elegível depois da H09 é a H12 (convites e e-mail durável; H10 depende de H09 e H12).
 
 ## Registro de release (ainda nenhum)
 

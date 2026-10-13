@@ -8,9 +8,9 @@ import { MatInputModule } from '@angular/material/input';
 import { Router, RouterLink } from '@angular/router';
 
 import { problemCode } from '../session/unit-context.service';
-import { AUTH_MESSAGES, AuthService } from './auth.service';
+import { AUTH_MESSAGES, AuthService, stageRoute } from './auth.service';
 
-/** Login da equipe por e-mail e senha (H08, FR-04). */
+/** Login da equipe por e-mail e senha (H08, FR-04); depois, a etapa do MFA quando houver (H09). */
 @Component({
   selector: 'fp-login-page',
   imports: [
@@ -94,11 +94,14 @@ export class LoginPage {
   protected readonly error = signal<string | null>(null);
 
   constructor() {
-    // Quem já está com sessão vai direto para as unidades.
+    // Quem já está com sessão vai direto para as unidades (ou para a etapa do MFA que falta).
     this.auth
       .refresh()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: () => void this.router.navigate(['/unidades']), error: () => undefined });
+      .subscribe({
+        next: (session) => void this.router.navigate([stageRoute(session.stage)]),
+        error: () => undefined,
+      });
   }
 
   protected submit(): void {
@@ -113,9 +116,9 @@ export class LoginPage {
       .login(email, password)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => {
+        next: (session) => {
           this.submitting.set(false);
-          void this.router.navigate(['/unidades']);
+          void this.router.navigate([stageRoute(session.stage)]);
         },
         error: (error: unknown) => {
           this.submitting.set(false);

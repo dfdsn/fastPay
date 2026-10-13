@@ -5,7 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 
 import { UnitContextService } from '../session/unit-context.service';
 import { AuthService } from './auth.service';
-import { SESSAO } from './auth-testing';
+import { SESSAO, sessaoNaEtapa } from './auth-testing';
 import { sessionExpiredInterceptor } from './session-expired.interceptor';
 
 describe('sessionExpiredInterceptor', () => {
@@ -56,6 +56,25 @@ describe('sessionExpiredInterceptor', () => {
 
   it('sem sessão conhecida deixa a decisão para quem chamou', () => {
     falhar(401, 'SESSAO_AUSENTE');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('MFA exigido no meio da sessão leva à tela do MFA e esquece a unidade', () => {
+    auth.session.set(SESSAO);
+    const units = TestBed.inject(UnitContextService);
+    units.current.set({ establishmentId: 'a', name: 'Bar', role: 'GERENTE' });
+
+    expect(falhar(403, 'MFA_CADASTRO_OBRIGATORIO')).toBeDefined();
+
+    expect(auth.session()?.stage).toBe('MFA_CADASTRO_OBRIGATORIO');
+    expect(units.current()).toBeNull();
+    expect(navigate).toHaveBeenCalledWith(['/configurar-verificacao']);
+  });
+
+  it('403 de MFA na própria etapa do MFA não navega de novo', () => {
+    auth.session.set(sessaoNaEtapa('MFA_PENDENTE'));
+    falhar(403, 'MFA_PENDENTE');
+    falhar(403, 'UNIDADE_NAO_AUTORIZADA');
     expect(navigate).not.toHaveBeenCalled();
   });
 });

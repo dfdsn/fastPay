@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import tech.malyah.fastpay.identity.domain.AuthKeys;
+import tech.malyah.fastpay.identity.domain.AuthStage;
 import tech.malyah.fastpay.identity.domain.PasswordPolicy;
 import tech.malyah.fastpay.identity.domain.SessionProfile;
 import tech.malyah.fastpay.identity.infrastructure.AuthProperties;
@@ -19,10 +20,11 @@ import tech.malyah.fastpay.identity.infrastructure.JdbcAuthAttemptStore;
 import tech.malyah.fastpay.identity.infrastructure.JdbcAuthAttemptStore.Kind;
 import tech.malyah.fastpay.identity.infrastructure.JdbcCredentialStore;
 import tech.malyah.fastpay.identity.infrastructure.JdbcCredentialStore.Account;
+import tech.malyah.fastpay.identity.infrastructure.JdbcMfaStore;
 import tech.malyah.fastpay.tenancy.TenantTransactions;
 
 /**
- * Login da equipe por e-mail e senha (H08, FR-04). Conta inexistente, sem senha ou senha errada têm a
+ * Login da equipe por e-mail e senha (H08, FR-04), primeiro passo antes do MFA (H09). Conta inexistente, sem senha ou senha errada têm a
  * mesma resposta e custo parecido (o hash é sempre verificado). Falhas são limitadas por conta e por
  * origem antes de a senha ser conferida.
  */
@@ -34,7 +36,12 @@ public class TeamAuthentication {
     public sealed interface LoginOutcome {
     }
 
-    public record Authenticated(UUID identityId, String displayName, SessionProfile profile) implements LoginOutcome {
+    /**
+     * Senha certa. {@code stage} diz se a sessão já fica autenticada ou se ainda falta a verificação em
+     * duas etapas (H09).
+     */
+    public record Authenticated(UUID identityId, String displayName, SessionProfile profile, AuthStage stage)
+            implements LoginOutcome {
     }
 
     public record Rejected() implements LoginOutcome {
@@ -44,6 +51,7 @@ public class TeamAuthentication {
     }
 
     private final JdbcCredentialStore credentials;
+    private final JdbcMfaStore mfa;
     private final JdbcAuthAttemptStore attempts;
     private final TenantTransactions tenants;
     private final PasswordEncoder encoder;
@@ -51,9 +59,10 @@ public class TeamAuthentication {
     private final Clock clock;
     private final String decoyHash;
 
-    TeamAuthentication(JdbcCredentialStore credentials, JdbcAuthAttemptStore attempts, TenantTransactions tenants,
-            PasswordEncoder encoder, AuthProperties properties, Clock clock) {
+    TeamAuthentication(JdbcCredentialStore credentials, JdbcMfaStore mfa, JdbcAuthAttemptStore attempts,
+            TenantTransactions tenants, PasswordEncoder encoder, AuthProperties properties, Clock clock) {
         this.credentials = credentials;
+        this.mfa = mfa;
         this.attempts = attempts;
         this.tenants = tenants;
         this.encoder = encoder;
@@ -84,10 +93,17 @@ public class TeamAuthentication {
 
         UUID identityId = account.get().id();
         attempts.clearSubject(Kind.LOGIN_FALHOU, subjectKey);
-        SessionProfile profile = tenants.asIdentity(identityId, () -> SessionProfile.mostRestrictive(
-                credentials.isPlatformAdmin(identityId), credentials.activeRoles(identityId)));
-        log.info("Login aceito para a identidade {} com perfil de sessão {}", identityId, profile);
-        return new Authenticated(identityId, account.get().displayName(), profile);
+        record Access(SessionProfile profile, AuthStage stage) {
+        }
+        Access access = tenants.asIdentity(identityId, () -> {
+            boolean platformAdmin = credentials.isPlatformAdmin(identityId);
+            var roles = credentials.activeRoles(identityId);
+            return new Access(SessionProfile.mostRestrictive(platformAdmin, roles), AuthStage.afterPassword(
+                    mfa.authenticator(identityId).isPresent(), AuthStage.mfaRequired(platformAdmin, roles)));
+        });
+        log.info("Senha aceita para a identidade {} com perfil de sessão {} e etapa {}", identityId, access.profile(),
+                access.stage());
+        return new Authenticated(identityId, account.get().displayName(), access.profile(), access.stage());
     }
 
     /** Sempre roda o hash, com o da conta ou um falso, para não revelar se a conta existe pelo tempo. */

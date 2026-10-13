@@ -2,14 +2,14 @@ import { Component, DestroyRef, computed, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { Router, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterOutlet } from '@angular/router';
 
 import { AuthService } from './auth/auth.service';
 import { UnitContextService, roleLabel } from './session/unit-context.service';
 
 @Component({
   selector: 'fp-root',
-  imports: [RouterOutlet, MatToolbarModule, MatButtonModule],
+  imports: [RouterOutlet, RouterLink, MatToolbarModule, MatButtonModule],
   template: `
     <header>
       <mat-toolbar>
@@ -24,6 +24,9 @@ import { UnitContextService, roleLabel } from './session/unit-context.service';
         }
         @if (session(); as current) {
           <span class="person" [class.alone]="!unit()">{{ current.displayName }}</span>
+          @if (current.stage === 'AUTENTICADO') {
+            <a mat-button class="security" routerLink="/configurar-verificacao">Segurança</a>
+          }
           <button mat-button type="button" class="sign-out" (click)="signOut()">Sair</button>
         }
       </mat-toolbar>

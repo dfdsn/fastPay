@@ -24,7 +24,7 @@ Pré-requisitos (versões exatas em [evidencias/H01-build.md](docs/evidencias/H0
 
 ### Docker (H02)
 
-Requer Docker Desktop (WSL2) com Compose v2. Copie `.env.example` para `.env` e defina `POSTGRES_PASSWORD`.
+Requer Docker Desktop (WSL2) com Compose v2. Copie `.env.example` para `.env` e defina as senhas e a `MFA_ENCRYPTION_KEY` (32 bytes aleatórios em Base64: `head -c 32 /dev/urandom | base64`).
 
 | Comando (a partir da raiz) | Uso |
 |---|---|
@@ -35,9 +35,19 @@ Requer Docker Desktop (WSL2) com Compose v2. Copie `.env.example` para `.env` e 
 
 O banco não tem porta publicada no host. A CI (`.github/workflows/ci.yml`) testa PRs para `develop`/`main` e publica imagens privadas no GHCR apenas em push para essas branches; não faz deploy.
 
-Endpoints atuais: `GET /actuator/health` (somente status), `GET /api/v1/platform/info` (nome, versão e ambiente), login e sessão em `/api/v1/auth/*` (H08) e seleção de unidade em `/api/v1/session/*` (H07). Mutações exigem o header `X-XSRF-TOKEN` com o valor do cookie `XSRF-TOKEN`. Variáveis em [.env.example](.env.example).
+Endpoints atuais: `GET /actuator/health` (somente status), `GET /api/v1/platform/info` (nome, versão e ambiente), login e sessão em `/api/v1/auth/*` (H08), verificação em duas etapas em `/api/v1/auth/mfa/*` (H09) e seleção de unidade em `/api/v1/session/*` (H07). Mutações exigem o header `X-XSRF-TOKEN` com o valor do cookie `XSRF-TOKEN`. Variáveis em [.env.example](.env.example).
 
-Primeiro acesso em desenvolvimento (até convites, H10, e bootstrap do admin, H09): não há cadastro público. Crie a identidade e o vínculo direto no banco com o superusuário (dados sintéticos), peça "Esqueci minha senha" em `/esqueci-a-senha` com o e-mail dela e abra o link guardado na caixa de teste (`GET /api/v1/dev/caixa-de-teste`, ligado só no Compose dev). Nenhum e-mail real é enviado até H12.
+Primeiro admin fastPay (H09): não há cadastro público nem senha padrão. Quem opera o servidor roda o comando abaixo, que usa a credencial de migração, cria a identidade e imprime um link de uso único (30 min) para a pessoa criar a senha; no primeiro login ela cadastra o aplicativo autenticador. O mesmo comando com `--fastpay.operator.command=redefinir-mfa` (sem `display-name`) é a recuperação excepcional de MFA, ainda pendente de aprovação (P-07): tira autenticador, códigos e senha, encerra as sessões e imprime um link novo. Saída 0 = feito, 2 = recusado.
+
+```bash
+docker compose --env-file .env -f infra/compose.dev.yml run --rm backend \
+  --server.port=0 --fastpay.jobs.worker-enabled=false \
+  --fastpay.operator.command=criar-admin-fastpay --fastpay.operator.email=admin@exemplo.com \
+  --fastpay.operator.display-name="Nome da pessoa" --fastpay.operator.operator="Quem executa" \
+  --fastpay.operator.reason="Primeiro acesso da plataforma"
+```
+
+Equipe de loja em desenvolvimento (até convites, H10): crie a identidade e o vínculo direto no banco com o superusuário (dados sintéticos), peça "Esqueci minha senha" em `/esqueci-a-senha` com o e-mail dela e abra o link guardado na caixa de teste (`GET /api/v1/dev/caixa-de-teste`, ligado só no Compose dev). Gerente e admin do estabelecimento cadastram o autenticador no primeiro login. Nenhum e-mail real é enviado até H12.
 
 ## Documentação
 

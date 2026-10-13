@@ -25,6 +25,16 @@ export const routes: Routes = [
     loadComponent: () => import('./auth/reset-password-page').then((m) => m.ResetPasswordPage),
   },
   {
+    path: 'verificacao',
+    title: 'Verificação em duas etapas · fastPay',
+    loadComponent: () => import('./auth/mfa-verify-page').then((m) => m.MfaVerifyPage),
+  },
+  {
+    path: 'configurar-verificacao',
+    title: 'Configurar verificação em duas etapas · fastPay',
+    loadComponent: () => import('./auth/mfa-setup-page').then((m) => m.MfaSetupPage),
+  },
+  {
     path: 'unidades',
     title: 'Escolha a unidade · fastPay',
     canActivate: [signedInGuard],
