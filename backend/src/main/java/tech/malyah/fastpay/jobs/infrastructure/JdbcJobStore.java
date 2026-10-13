@@ -14,8 +14,9 @@ import org.springframework.stereotype.Repository;
 import tech.malyah.fastpay.jobs.JobSummary;
 
 /**
- * Acesso SQL à tabela {@code job} (V3). Tudo, exceto {@link #claimDue}, roda com o papel de runtime
- * dentro do contexto de uma unidade, então as policies de RLS limitam cada operação à unidade atual.
+ * Acesso SQL à tabela {@code job} (V3, V7). Tudo, exceto {@link #claimDue}, roda com o papel de runtime
+ * dentro do contexto de uma unidade ou de uma identidade (jobs da conta, H12), então as policies de RLS
+ * limitam cada operação ao escopo atual.
  */
 @Repository
 public class JdbcJobStore {
@@ -26,37 +27,53 @@ public class JdbcJobStore {
         this.jdbc = jdbc;
     }
 
-    /** Unidade do contexto da transação atual, ou vazio se nenhuma foi definida. */
-    public Optional<UUID> currentEstablishment() {
-        return Optional.ofNullable(jdbc.queryForObject("SELECT current_establishment_id()", UUID.class));
+    /**
+     * Escopo do contexto da transação atual: a unidade, se houver; senão a identidade (jobs da conta); vazio
+     * se nenhum foi definido.
+     */
+    public Optional<Scope> currentScope() {
+        return jdbc.query("SELECT current_establishment_id(), current_identity_id()", (rs, n) -> {
+            UUID establishment = rs.getObject(1, UUID.class);
+            UUID identity = rs.getObject(2, UUID.class);
+            if (establishment != null) {
+                return new Scope(establishment, null);
+            }
+            return identity == null ? null : new Scope(null, identity);
+        }).stream().filter(java.util.Objects::nonNull).findFirst();
     }
 
     /**
-     * Grava a intenção na unidade do contexto. Se o efeito já existe (mesmo tipo e chave), não grava e
+     * Grava a intenção no escopo do contexto. Se o efeito já existe (mesmo tipo e chave), não grava e
      * devolve o job existente.
      */
-    public Inserted insertIfAbsent(UUID id, String kind, String dedupKey, String payload, Integer maxAttempts,
-            String correlationId) {
+    public Inserted insertIfAbsent(Scope scope, UUID id, String kind, String dedupKey, String payload,
+            Integer maxAttempts, String correlationId) {
+        String owner = scope.establishmentId() != null ? "establishment_id" : "identity_id";
+        String current = scope.establishmentId() != null ? "current_establishment_id()" : "current_identity_id()";
+        String conflict = scope.establishmentId() != null
+                ? "(establishment_id, kind, dedup_key)"
+                : "(identity_id, kind, dedup_key) WHERE identity_id IS NOT NULL";
         List<UUID> created = jdbc.queryForList("""
-                INSERT INTO job (id, establishment_id, kind, dedup_key, payload, max_attempts, correlation_id)
-                VALUES (?, current_establishment_id(), ?, ?, ?::jsonb, ?, ?)
-                ON CONFLICT (establishment_id, kind, dedup_key) DO NOTHING
+                INSERT INTO job (id, %s, kind, dedup_key, payload, max_attempts, correlation_id)
+                VALUES (?, %s, ?, ?, ?::jsonb, ?, ?)
+                ON CONFLICT %s DO NOTHING
                 RETURNING id
-                """, UUID.class, id, kind, dedupKey, payload, maxAttempts, correlationId);
+                """.formatted(owner, current, conflict), UUID.class, id, kind, dedupKey, payload, maxAttempts,
+                correlationId);
         if (!created.isEmpty()) {
             return new Inserted(created.getFirst(), true);
         }
-        UUID existing = jdbc.queryForObject("""
-                SELECT id FROM job WHERE establishment_id = current_establishment_id() AND kind = ? AND dedup_key = ?
-                """, UUID.class, kind, dedupKey);
+        UUID existing = jdbc.queryForObject("SELECT id FROM job WHERE %s = %s AND kind = ? AND dedup_key = ?"
+                .formatted(owner, current), UUID.class, kind, dedupKey);
         return new Inserted(existing, false);
     }
 
-    /** Reserva jobs vencidos de todas as unidades; devolve só metadados mínimos. */
+    /** Reserva jobs vencidos de todas as unidades e identidades; devolve só metadados mínimos. */
     public List<Claimed> claimDue(int limit, Duration lease) {
-        return jdbc.query("SELECT job_id, job_establishment_id, job_lease_token FROM claim_due_jobs(?, ?)",
-                (rs, n) -> new Claimed(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                        rs.getObject(3, UUID.class)),
+        return jdbc.query("""
+                SELECT job_id, job_establishment_id, job_identity_id, job_lease_token FROM claim_due_jobs(?, ?)
+                """, (rs, n) -> new Claimed(rs.getObject(1, UUID.class),
+                new Scope(rs.getObject(2, UUID.class), rs.getObject(3, UUID.class)), rs.getObject(4, UUID.class)),
                 limit, Math.toIntExact(lease.toSeconds()));
     }
 
@@ -66,7 +83,7 @@ public class JdbcJobStore {
      */
     public Optional<Locked> lockOwned(UUID jobId, UUID leaseToken) {
         return jdbc.query("""
-                SELECT id, establishment_id, kind, dedup_key, payload::text, attempts, max_attempts, correlation_id
+                SELECT id, establishment_id, identity_id, kind, dedup_key, payload::text, attempts, max_attempts, correlation_id
                 FROM job WHERE id = ? AND lease_token = ? AND status = 'RUNNING'
                 FOR UPDATE
                 """, (rs, n) -> locked(rs), jobId, leaseToken).stream().findFirst();
@@ -126,7 +143,8 @@ public class JdbcJobStore {
     private static Locked locked(ResultSet rs) throws SQLException {
         int max = rs.getInt("max_attempts");
         Integer maxAttempts = rs.wasNull() ? null : max;
-        return new Locked(rs.getObject("id", UUID.class), rs.getObject("establishment_id", UUID.class),
+        return new Locked(rs.getObject("id", UUID.class),
+                new Scope(rs.getObject("establishment_id", UUID.class), rs.getObject("identity_id", UUID.class)),
                 rs.getString("kind"), rs.getString("dedup_key"), rs.getString("payload"), rs.getInt("attempts"),
                 maxAttempts, rs.getString("correlation_id"));
     }
@@ -140,10 +158,14 @@ public class JdbcJobStore {
     public record Inserted(UUID jobId, boolean created) {
     }
 
-    public record Claimed(UUID jobId, UUID establishmentId, UUID leaseToken) {
+    /** Dono do job: exatamente um entre unidade e identidade (V7). */
+    public record Scope(UUID establishmentId, UUID identityId) {
     }
 
-    public record Locked(UUID jobId, UUID establishmentId, String kind, String dedupKey, String payload,
+    public record Claimed(UUID jobId, Scope scope, UUID leaseToken) {
+    }
+
+    public record Locked(UUID jobId, Scope scope, String kind, String dedupKey, String payload,
             int attempts, Integer maxAttempts, String correlationId) {
     }
 }

@@ -32,7 +32,8 @@ public class Jobs {
 
     /**
      * Grava a intenção do efeito na transação corrente, que deve ser a do fato de negócio e ter contexto
-     * de unidade ({@link TenantTransactions}). Commit publica, rollback descarta. Pedir de novo o mesmo
+     * de unidade ou, para efeitos da conta de uma pessoa sem unidade (H12), de identidade
+     * ({@link TenantTransactions}). O job roda no mesmo escopo. Commit publica, rollback descarta. Pedir de novo o mesmo
      * efeito devolve o job existente sem criar outro.
      */
     public Enqueued enqueue(JobRequest request) {
@@ -40,12 +41,11 @@ public class Jobs {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("A intenção do job deve ser gravada na transação do fato de negócio.");
         }
-        if (store.currentEstablishment().isEmpty()) {
-            throw new IllegalStateException("Job exige contexto de estabelecimento na transação.");
-        }
+        JdbcJobStore.Scope scope = store.currentScope().orElseThrow(
+                () -> new IllegalStateException("Job exige contexto de estabelecimento ou de identidade na transação."));
         JobHandler handler = handlers.find(request.kind())
                 .orElseThrow(() -> new IllegalArgumentException("Tipo de job sem executor: " + request.kind()));
-        JdbcJobStore.Inserted inserted = store.insertIfAbsent(UUID.randomUUID(), request.kind(), request.dedupKey(),
+        JdbcJobStore.Inserted inserted = store.insertIfAbsent(scope, UUID.randomUUID(), request.kind(), request.dedupKey(),
                 request.payload(), retryPolicy.maxAttemptsFor(handler.financial()), request.correlationId());
         return new Enqueued(inserted.jobId(), inserted.created());
     }

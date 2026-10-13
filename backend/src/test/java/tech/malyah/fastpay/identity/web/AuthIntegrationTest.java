@@ -38,7 +38,8 @@ import tech.malyah.fastpay.identity.application.PasswordResets;
 import tech.malyah.fastpay.identity.application.PasswordResets.ConfirmOutcome;
 import tech.malyah.fastpay.identity.application.PasswordResets.PasswordChanged;
 import tech.malyah.fastpay.identity.infrastructure.MfaSecretCipher;
-import tech.malyah.fastpay.identity.infrastructure.TestMailbox;
+import tech.malyah.fastpay.jobs.application.JobWorker;
+import tech.malyah.fastpay.mail.infrastructure.TestMailbox;
 import tech.malyah.fastpay.testsupport.AdjustableClock;
 import tech.malyah.fastpay.testsupport.PostgresIntegrationTest;
 
@@ -74,6 +75,9 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     TestMailbox caixa;
+
+    @Autowired
+    JobWorker worker;
 
     @Autowired
     PasswordResets resets;
@@ -350,7 +354,7 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
         new Browser(mvc).post("/api/v1/auth/password-reset", "{\"email\":\"" + email + "\"}")
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.detail").value(AuthController.RESET_REQUESTED));
-        TestMailbox.Message mensagem = caixa.latestTo(email).orElseThrow();
+        TestMailbox.Message mensagem = entregues().latestTo(email).orElseThrow();
         assertThat(mensagem.body()).contains("Olá, Ana", "30 minutos", "http://127.0.0.1:8088/redefinir-senha#token=");
         assertThat(admin().queryForList("SELECT token_hash FROM fastpay.password_reset_token WHERE identity_id = ?",
                 String.class, ana)).singleElement().satisfies(hash -> assertThat(mensagem.body()).doesNotContain(hash));
@@ -369,7 +373,7 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.detail").value(AuthController.RESET_REQUESTED));
 
-        assertThat(caixa.latestTo(email)).isEmpty();
+        assertThat(entregues().latestTo(email)).isEmpty();
     }
 
     @Test
@@ -455,7 +459,7 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
         new Browser(mvc).post("/api/v1/auth/password-reset", "{\"email\":\"" + email + "\"}")
                 .andExpect(status().isAccepted());
 
-        assertThat(caixa.latestTo(email)).isEmpty();
+        assertThat(entregues().latestTo(email)).isEmpty();
         relogio.advance(Duration.ofHours(1));
         pedirLink(ana);
     }
@@ -516,7 +520,7 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
         caixa.clear();
         new Browser(mvc).post("/api/v1/auth/password-reset", "{\"email\":\"" + email + "\"}")
                 .andExpect(status().isAccepted());
-        return token(caixa.latestTo(email).orElseThrow());
+        return token(entregues().latestTo(email).orElseThrow());
     }
 
     private ResultActions confirmar(String token, String senha) throws Exception {
@@ -535,5 +539,13 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
 
     private static String confirmacao(String token, String senha) {
         return "{\"token\":\"%s\",\"newPassword\":\"%s\"}".formatted(token, senha);
+    }
+
+    /** Executa os e-mails na fila (o worker periódico fica desligado nos testes) e devolve a caixa de teste. */
+    private TestMailbox entregues() {
+        while (worker.runOnce() > 0) {
+            // até não haver mais jobs vencidos
+        }
+        return caixa;
     }
 }

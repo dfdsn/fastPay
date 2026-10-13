@@ -238,7 +238,7 @@ class JobsIntegrationTest extends PostgresIntegrationTest {
         assertThat(admin().queryForObject("SELECT count(*) FROM fastpay.audit_event WHERE establishment_id = ?",
                 Integer.class, lojaB)).isEqualTo(1);
 
-        // Sem contexto, o runtime não vê jobs; a reserva só devolve id, unidade e lease.
+        // Sem contexto, o runtime não vê jobs; a reserva só devolve id, escopo (unidade ou identidade) e lease.
         assertThat(jdbc.queryForObject("SELECT count(*) FROM job", Integer.class)).isZero();
         assertThat(tenants.inEstablishment(lojaB, () -> jdbc.queryForObject(
                 "SELECT count(*) FROM job WHERE id IN (?, ?)", Integer.class, jobA, invasor))).isZero();
@@ -246,7 +246,7 @@ class JobsIntegrationTest extends PostgresIntegrationTest {
                 SELECT count(*) FROM information_schema.routines r
                 JOIN information_schema.parameters p USING (specific_schema, specific_name)
                 WHERE r.routine_name = 'claim_due_jobs' AND p.parameter_mode = 'OUT'
-                """, Integer.class)).isEqualTo(3);
+                """, Integer.class)).isEqualTo(4);
     }
 
     @Test

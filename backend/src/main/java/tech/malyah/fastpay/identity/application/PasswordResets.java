@@ -8,7 +8,6 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.stereotype.Service;
@@ -21,12 +20,15 @@ import tech.malyah.fastpay.identity.infrastructure.JdbcAuthAttemptStore.Kind;
 import tech.malyah.fastpay.identity.infrastructure.JdbcCredentialStore;
 import tech.malyah.fastpay.identity.infrastructure.JdbcCredentialStore.Account;
 import tech.malyah.fastpay.identity.infrastructure.JdbcCredentialStore.ResetToken;
+import tech.malyah.fastpay.jobs.JobRequest;
+import tech.malyah.fastpay.jobs.Jobs;
 import tech.malyah.fastpay.tenancy.TenantTransactions;
 
 /**
  * Redefinição de senha por e-mail (H08, FR-04, especificação §5): link de 30 minutos e uso único; um
  * pedido novo invalida o link anterior; concluir troca a senha e encerra todas as sessões da pessoa.
- * MFA (H09) fica intacto. O pedido tem sempre a mesma resposta, exista a conta ou não.
+ * MFA (H09) fica intacto. O pedido tem sempre a mesma resposta, exista a conta ou não. Desde H12 o pedido
+ * grava só a intenção na fila de jobs; o link é criado e enviado por {@link PasswordResetEmailJob}.
  */
 @Service
 public class PasswordResets {
@@ -60,20 +62,20 @@ public class PasswordResets {
     private final TenantTransactions tenants;
     private final PasswordEncoder encoder;
     private final PasswordPolicy policy;
-    private final AccountMailer mailer;
+    private final Jobs jobs;
     private final FindByIndexNameSessionRepository<?> sessions;
     private final AuthProperties properties;
     private final Clock clock;
 
     PasswordResets(JdbcCredentialStore credentials, JdbcAuthAttemptStore attempts, TenantTransactions tenants,
-            PasswordEncoder encoder, PasswordPolicy policy, AccountMailer mailer,
+            PasswordEncoder encoder, PasswordPolicy policy, Jobs jobs,
             FindByIndexNameSessionRepository<?> sessions, AuthProperties properties, Clock clock) {
         this.credentials = credentials;
         this.attempts = attempts;
         this.tenants = tenants;
         this.encoder = encoder;
         this.policy = policy;
-        this.mailer = mailer;
+        this.jobs = jobs;
         this.sessions = sessions;
         this.properties = properties;
         this.clock = clock;
@@ -100,21 +102,10 @@ public class PasswordResets {
             return RequestOutcome.ACCEPTED;
         }
         UUID identityId = account.get().id();
-        String token = AuthKeys.newToken();
-        Instant expiresAt = now.plus(LINK_VALIDITY);
-        try {
-            tenants.asIdentity(identityId, () -> {
-                credentials.invalidateOpenResetTokens(identityId, now);
-                credentials.insertResetToken(identityId, AuthKeys.sha256Hex(token), now, expiresAt);
-                return null;
-            });
-        } catch (DuplicateKeyException concurrent) {
-            // Outro pedido simultâneo da mesma conta criou o link em aberto; ele é o que vale.
-            return RequestOutcome.ACCEPTED;
-        }
-        mailer.sendPasswordReset(account.get().email(), account.get().displayName(),
-                properties.resetLinkBase() + "#token=" + token, expiresAt);
-        log.info("Link de redefinição de senha criado para a identidade {}", identityId);
+        // Cada pedido aceito é um efeito próprio; repetir o mesmo pedido HTTP passa de novo pelos limites acima.
+        tenants.asIdentity(identityId, () -> jobs.enqueue(new JobRequest(PasswordResetEmailJob.KIND,
+                UUID.randomUUID().toString())));
+        log.info("Pedido de redefinição de senha da identidade {} na fila de e-mail", identityId);
         return RequestOutcome.ACCEPTED;
     }
 

@@ -17,7 +17,7 @@ class MfaSecretCipherTest {
     }
 
     static MfaSecretCipher cifra(String chave) {
-        return new MfaSecretCipher(new AuthProperties(12, 12, "http://x/redefinir-senha", 5, 20, Duration.ofMinutes(15),
+        return new MfaSecretCipher(new AuthProperties(12, 12, 5, 20, Duration.ofMinutes(15),
                 3, 10, 10, Duration.ofHours(1), true, chave, "fastPay", 5, Duration.ofMinutes(10)));
     }
 

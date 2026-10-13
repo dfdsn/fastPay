@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import tech.malyah.fastpay.identity.application.OperatorCommands;
 import tech.malyah.fastpay.identity.application.OperatorCommands.IssuedLink;
 import tech.malyah.fastpay.identity.application.OperatorCommands.Refused;
+import tech.malyah.fastpay.mail.PublicLinks;
 
 /**
  * Executa um comando de operador quando a aplicação sobe com {@code fastpay.operator.command} (H09, T-05)
@@ -42,16 +43,16 @@ class OperatorCommandRunner implements ApplicationRunner, ExitCodeGenerator {
 
     private final ConfigurableApplicationContext context;
     private final Environment environment;
-    private final AuthProperties properties;
+    private final PublicLinks links;
     private final Clock clock;
     private final PrintStream out;
     private int exitCode;
 
-    OperatorCommandRunner(ConfigurableApplicationContext context, Environment environment, AuthProperties properties,
+    OperatorCommandRunner(ConfigurableApplicationContext context, Environment environment, PublicLinks links,
             Clock clock) {
         this.context = context;
         this.environment = environment;
-        this.properties = properties;
+        this.links = links;
         this.clock = clock;
         this.out = System.out;
     }
@@ -62,7 +63,7 @@ class OperatorCommandRunner implements ApplicationRunner, ExitCodeGenerator {
         var operatorDb = new DriverManagerDataSource(environment.getRequiredProperty("spring.flyway.url"),
                 environment.getRequiredProperty("spring.flyway.user"),
                 environment.getProperty("spring.flyway.password", ""));
-        var commands = new OperatorCommands(operatorDb, properties.resetLinkBase(), clock);
+        var commands = new OperatorCommands(operatorDb, links.passwordResetBase(), clock);
         String email = environment.getProperty("fastpay.operator.email");
         String operator = environment.getProperty("fastpay.operator.operator");
         String reason = environment.getProperty("fastpay.operator.reason");

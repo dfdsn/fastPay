@@ -57,7 +57,6 @@ fastpay:
   auth:
     password-min-length: 12
     bcrypt-strength: 12
-    reset-link-base: ${PASSWORD_RESET_LINK_BASE:http://127.0.0.1:8088/redefinir-senha}
     login-failures-per-account: 5
     login-failures-per-client: 20
     login-window: 15m
@@ -67,14 +66,31 @@ fastpay:
     reset-window: 1h
     # Cookie de sessão FASTPAY_SESSION (HttpOnly, SameSite=Lax). Secure só pode ser desligado em dev sem HTTPS.
     session-cookie-secure: ${SESSION_COOKIE_SECURE:true}
-    # Caixa de teste legível pela API: só desenvolvimento local (expõe links de redefinição).
-    test-mailbox-endpoint: ${TEST_MAILBOX_ENDPOINT:false}
     # MFA (H09). Chave AES-256 do segredo TOTP, em Base64, guardada fora do banco; obrigatória, sem padrão.
     mfa-encryption-key: ${MFA_ENCRYPTION_KEY:}
     mfa-issuer: fastPay
     mfa-failures-per-account: 5
     # Prazo para digitar o código ou cadastrar o autenticador depois da senha.
     mfa-pending-timeout: 10m
+  # E-mail (H12, especificação §9). Desenvolvimento: caixa de teste em memória, sem envio real.
+  # Homologação: SMTP do Gmail dedicado com lista de destinatários permitidos. Produção: SES (H49).
+  mail:
+    transport: ${MAIL_TRANSPORT:caixa-de-teste}
+    from: ${MAIL_FROM:fastPay <nao-responda@fastpay.invalid>}
+    # Endereço público do frontend usado nos links (redefinição de senha, convites).
+    public-base-url: ${PUBLIC_BASE_URL:http://127.0.0.1:8088}
+    # Separados por vírgula: pessoa@dominio ou @dominio. Obrigatória com SMTP fora de produção.
+    allowed-recipients: ${MAIL_ALLOWED_RECIPIENTS:}
+    time-zone: America/Sao_Paulo
+    # Caixa de teste legível pela API: só desenvolvimento local (expõe links de redefinição e convites).
+    test-mailbox-endpoint: ${TEST_MAILBOX_ENDPOINT:false}
+    smtp:
+      host: ${SMTP_HOST:}
+      port: ${SMTP_PORT:587}
+      username: ${SMTP_USERNAME:}
+      password: ${SMTP_PASSWORD:}
+      start-tls: true
+      timeout: 10s
 
 server:
   port: ${SERVER_PORT:8080}
