@@ -21,7 +21,8 @@ public class JdbcAuthAttemptStore {
     public enum Kind {
         LOGIN_FALHOU,
         REDEFINICAO_PEDIDA,
-        REDEFINICAO_FALHOU
+        REDEFINICAO_FALHOU,
+        MFA_FALHOU
     }
 
     private final JdbcTemplate jdbc;

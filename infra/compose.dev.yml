@@ -40,6 +40,8 @@ services:
       PASSWORD_RESET_LINK_BASE: http://127.0.0.1:${FASTPAY_HTTP_PORT:-8088}/redefinir-senha
       TEST_MAILBOX_ENDPOINT: "true"
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      # H09: chave do segredo TOTP, fora do banco. Obrigatória; sem ela o backend não sobe.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?defina MFA_ENCRYPTION_KEY no .env}
     depends_on:
       db:
         condition: service_healthy

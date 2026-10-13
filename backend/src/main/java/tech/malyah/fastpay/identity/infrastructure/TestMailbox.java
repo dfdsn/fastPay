@@ -10,15 +10,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import tech.malyah.fastpay.identity.application.PasswordResetMailer;
+import tech.malyah.fastpay.identity.application.AccountMailer;
 
 /**
- * Remetente de teste (H08): guarda as últimas mensagens em memória, sem enviar a ninguém. Vale até o
+ * Remetente de teste (H08/H09): guarda as últimas mensagens em memória, sem enviar a ninguém. Vale até o
  * e-mail durável de H12. Em desenvolvimento, a caixa pode ser lida pela API quando
  * {@code fastpay.auth.test-mailbox-endpoint=true}; o log não leva destinatário nem link.
  */
 @Component
-public class TestMailbox implements PasswordResetMailer {
+public class TestMailbox implements AccountMailer {
 
     static final int CAPACITY = 50;
 
@@ -43,6 +43,21 @@ public class TestMailbox implements PasswordResetMailer {
                 """.formatted(displayName, link);
         store(new Message(email, "Redefinição de senha do fastPay", body, expiresAt));
         log.info("Mensagem de redefinição de senha guardada na caixa de teste (sem envio real até H12)");
+    }
+
+    @Override
+    public void sendMfaReplaced(String email, String displayName, Instant at) {
+        String body = """
+                Olá, %s.
+
+                A verificação em duas etapas da sua conta no fastPay foi configurada de novo com um código de \
+                recuperação. O autenticador e os códigos anteriores deixaram de valer e todas as sessões abertas \
+                foram encerradas.
+
+                Se não foi você, avise o administrador do fastPay imediatamente.
+                """.formatted(displayName);
+        store(new Message(email, "Verificação em duas etapas reconfigurada no fastPay", body, null));
+        log.info("Aviso de troca do autenticador guardado na caixa de teste (sem envio real até H12)");
     }
 
     /** Mais recentes primeiro. */

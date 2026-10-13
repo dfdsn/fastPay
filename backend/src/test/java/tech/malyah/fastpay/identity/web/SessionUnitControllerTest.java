@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,6 +27,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import tech.malyah.fastpay.identity.IdentityFixtures;
+import tech.malyah.fastpay.identity.MfaFixtures;
+import tech.malyah.fastpay.identity.infrastructure.MfaSecretCipher;
 import tech.malyah.fastpay.identity.MembershipRole;
 import tech.malyah.fastpay.identity.Memberships;
 import tech.malyah.fastpay.identity.SessionContext;
@@ -46,7 +49,11 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
     @Autowired
     Memberships memberships;
 
+    @Autowired
+    MfaSecretCipher cifra;
+
     IdentityFixtures fixtures = new IdentityFixtures(admin());
+    MfaFixtures mfa;
 
     UUID lojaA;
     UUID lojaB;
@@ -58,6 +65,7 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
 
     @BeforeEach
     void duasLojas() {
+        mfa = new MfaFixtures(admin(), cifra);
         lojaA = fixtures.establishment("Bar da Praia");
         lojaB = fixtures.establishment("Adega Centro");
         ana = fixtures.identity("Ana");
@@ -67,6 +75,8 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
         vinculoAnaA = fixtures.membership(ana, lojaA, MembershipRole.GERENTE);
         fixtures.membership(ana, lojaB, MembershipRole.GARCOM);
         fixtures.membership(bruno, lojaA, MembershipRole.PRODUCAO);
+        // Gerente e admin fastPay têm MFA obrigatório (H09).
+        mfa.enroll(ana);
         admin().update("INSERT INTO fastpay.audit_event (id, establishment_id, action) VALUES (?, ?, 'teste.a'), (?, ?, 'teste.b')",
                 UUID.randomUUID(), lojaA, UUID.randomUUID(), lojaB);
     }
@@ -189,6 +199,7 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
     void adminFastPaySemVinculoNaoOperaLoja() throws Exception {
         UUID adminFastPay = fixtures.identity("Admin plataforma", "ADMIN_FASTPAY");
         fixtures.credential(adminFastPay, SENHA);
+        mfa.enroll(adminFastPay);
         Browser sessao = entrar(adminFastPay);
 
         sessao.get("/api/v1/session/units")
@@ -228,6 +239,9 @@ class SessionUnitControllerTest extends PostgresIntegrationTest {
     private Browser entrar(UUID identidade) throws Exception {
         Browser browser = new Browser(mvc);
         browser.login(IdentityFixtures.email(identidade), SENHA).andExpect(status().isOk());
+        if (mfa.enrolled(identidade)) {
+            browser.verify(mfa.nextCode(identidade, Instant.now())).andExpect(status().isOk());
+        }
         return browser;
     }
 

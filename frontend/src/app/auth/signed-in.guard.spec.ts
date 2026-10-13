@@ -11,7 +11,7 @@ import {
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { AuthService } from './auth.service';
-import { SESSAO } from './auth-testing';
+import { SESSAO, sessaoNaEtapa } from './auth-testing';
 import { signedInGuard } from './signed-in.guard';
 
 describe('signedInGuard', () => {
@@ -52,5 +52,16 @@ describe('signedInGuard', () => {
 
     const destino = await resultado;
     expect(TestBed.inject(Router).serializeUrl(destino as UrlTree)).toBe('/entrar');
+  });
+
+  it('com o MFA pendente vai para a tela do MFA', async () => {
+    const resultado = firstValueFrom(executar() as Observable<boolean | UrlTree>);
+    http.expectOne('/api/v1/auth/session').flush(sessaoNaEtapa('MFA_CADASTRO_OBRIGATORIO'));
+    expect(TestBed.inject(Router).serializeUrl((await resultado) as UrlTree)).toBe(
+      '/configurar-verificacao',
+    );
+
+    TestBed.inject(AuthService).session.set(sessaoNaEtapa('MFA_PENDENTE'));
+    expect(TestBed.inject(Router).serializeUrl(executar() as UrlTree)).toBe('/verificacao');
   });
 });

@@ -77,6 +77,11 @@ public final class Browser {
         return post("/api/v1/auth/login", "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, password));
     }
 
+    /** Segundo passo do login (H09): código do autenticador ou de recuperação. */
+    public ResultActions verify(String code) throws Exception {
+        return post("/api/v1/auth/mfa/verify", "{\"code\":\"%s\"}".formatted(code));
+    }
+
     public Optional<String> cookie(String name) {
         return Optional.ofNullable(cookies.get(name)).map(Cookie::getValue);
     }

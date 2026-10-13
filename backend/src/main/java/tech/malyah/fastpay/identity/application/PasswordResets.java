@@ -60,13 +60,13 @@ public class PasswordResets {
     private final TenantTransactions tenants;
     private final PasswordEncoder encoder;
     private final PasswordPolicy policy;
-    private final PasswordResetMailer mailer;
+    private final AccountMailer mailer;
     private final FindByIndexNameSessionRepository<?> sessions;
     private final AuthProperties properties;
     private final Clock clock;
 
     PasswordResets(JdbcCredentialStore credentials, JdbcAuthAttemptStore attempts, TenantTransactions tenants,
-            PasswordEncoder encoder, PasswordPolicy policy, PasswordResetMailer mailer,
+            PasswordEncoder encoder, PasswordPolicy policy, AccountMailer mailer,
             FindByIndexNameSessionRepository<?> sessions, AuthProperties properties, Clock clock) {
         this.credentials = credentials;
         this.attempts = attempts;

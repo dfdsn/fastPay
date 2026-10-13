@@ -32,10 +32,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import tech.malyah.fastpay.identity.IdentityFixtures;
+import tech.malyah.fastpay.identity.MfaFixtures;
 import tech.malyah.fastpay.identity.MembershipRole;
 import tech.malyah.fastpay.identity.application.PasswordResets;
 import tech.malyah.fastpay.identity.application.PasswordResets.ConfirmOutcome;
 import tech.malyah.fastpay.identity.application.PasswordResets.PasswordChanged;
+import tech.malyah.fastpay.identity.infrastructure.MfaSecretCipher;
 import tech.malyah.fastpay.identity.infrastructure.TestMailbox;
 import tech.malyah.fastpay.testsupport.AdjustableClock;
 import tech.malyah.fastpay.testsupport.PostgresIntegrationTest;
@@ -76,13 +78,18 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     PasswordResets resets;
 
+    @Autowired
+    MfaSecretCipher cifra;
+
     IdentityFixtures fixtures = new IdentityFixtures(admin());
+    MfaFixtures mfa;
 
     UUID loja;
     UUID outraLoja;
 
     @BeforeEach
     void lojas() {
+        mfa = new MfaFixtures(admin(), cifra);
         loja = fixtures.establishment("Bar da Praia");
         outraLoja = fixtures.establishment("Adega Centro");
     }
@@ -216,8 +223,10 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
         admin().update("UPDATE fastpay.user_identity SET platform_role = 'ADMIN_FASTPAY' WHERE id = ?", admin);
         Instant inicio = relogio.instant();
 
+        mfa.enroll(admin);
         Browser navegador = new Browser(mvc);
-        navegador.login(IdentityFixtures.email(admin), SENHA).andExpect(status().isOk())
+        navegador.login(IdentityFixtures.email(admin), SENHA).andExpect(status().isOk());
+        navegador.verify(mfa.nextCode(admin, relogio.instant())).andExpect(status().isOk())
                 .andExpect(jsonPath("$.idleTimeoutSeconds").value(900))
                 .andExpect(jsonPath("$.absoluteExpiresAt").value(inicio.plus(Duration.ofHours(8)).toString()));
         relogio.advance(Duration.ofMinutes(15));
@@ -229,8 +238,9 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
     void perfilMaisRestritivoEntreAsUnidadesDefineOPrazo() throws Exception {
         UUID ana = pessoa("Ana", MembershipRole.GARCOM);
         fixtures.membership(ana, outraLoja, MembershipRole.ADMIN_ESTABELECIMENTO);
+        mfa.enroll(ana);
 
-        new Browser(mvc).login(IdentityFixtures.email(ana), SENHA).andExpect(jsonPath("$.idleTimeoutSeconds").value(1800));
+        entrar(ana).get("/api/v1/auth/session").andExpect(jsonPath("$.idleTimeoutSeconds").value(1800));
     }
 
     @Test
@@ -485,12 +495,19 @@ class AuthIntegrationTest extends PostgresIntegrationTest {
         UUID id = fixtures.identity(nome);
         fixtures.credential(id, SENHA);
         fixtures.membership(id, loja, papel);
+        if (papel == MembershipRole.GERENTE || papel == MembershipRole.ADMIN_ESTABELECIMENTO) {
+            // MFA obrigatório para esses papéis (H09).
+            mfa.enroll(id);
+        }
         return id;
     }
 
     private Browser entrar(UUID identidade) throws Exception {
         Browser navegador = new Browser(mvc);
         navegador.login(IdentityFixtures.email(identidade), SENHA).andExpect(status().isOk());
+        if (mfa.enrolled(identidade)) {
+            navegador.verify(mfa.nextCode(identidade, relogio.instant())).andExpect(status().isOk());
+        }
         return navegador;
     }
 

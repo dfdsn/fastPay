@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import { SESSAO, comCookieCsrf } from './auth-testing';
+import { SESSAO, comCookieCsrf, sessaoNaEtapa } from './auth-testing';
 import { LoginPage } from './login-page';
 
 describe('LoginPage', () => {
@@ -61,6 +61,17 @@ describe('LoginPage', () => {
     http.expectOne('/api/v1/auth/login').flush(SESSAO);
 
     expect(navigate).toHaveBeenCalledWith(['/unidades']);
+  });
+
+  it('senha certa com MFA vai para a verificação ou para o cadastro do autenticador', () => {
+    preencher('ana@bar.com', 'segredo longo');
+    http.expectOne('/api/v1/auth/login').flush(sessaoNaEtapa('MFA_PENDENTE'));
+    expect(navigate).toHaveBeenCalledWith(['/verificacao']);
+    fixture.detectChanges();
+
+    preencher('ana@bar.com', 'segredo longo');
+    http.expectOne('/api/v1/auth/login').flush(sessaoNaEtapa('MFA_CADASTRO_OBRIGATORIO'));
+    expect(navigate).toHaveBeenCalledWith(['/configurar-verificacao']);
   });
 
   it('credenciais erradas: mensagem que não revela a conta e senha apagada', () => {

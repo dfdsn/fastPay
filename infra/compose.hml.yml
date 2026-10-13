@@ -36,6 +36,8 @@ services:
       JDBC_MIGRATION_PASSWORD: ${FASTPAY_MIGRATION_PASSWORD}
       # H08: links de redefinição ficam só na caixa de teste em memória até H12 (sem envio real).
       PASSWORD_RESET_LINK_BASE: ${PASSWORD_RESET_LINK_BASE:-http://127.0.0.1:8089/redefinir-senha}
+      # H09: chave do segredo TOTP, fora do banco. Obrigatória; sem ela o backend não sobe.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?defina MFA_ENCRYPTION_KEY no .env.hml}
     depends_on:
       db:
         condition: service_healthy

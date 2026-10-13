@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import tech.malyah.fastpay.identity.AuthenticationRequiredException;
+import tech.malyah.fastpay.identity.MfaRequiredException;
 import tech.malyah.fastpay.identity.SessionContext;
 import tech.malyah.fastpay.identity.UnitAccessDeniedException;
 import tech.malyah.fastpay.identity.UnitNotSelectedException;
@@ -32,6 +33,17 @@ class IdentityProblems {
     @ExceptionHandler(AuthenticationRequiredException.class)
     ProblemDetail authenticationRequired() {
         return problem(HttpStatus.UNAUTHORIZED, "SESSAO_AUSENTE", "Sua sessão não está ativa. Entre novamente.");
+    }
+
+    /** Falta o segundo fator ou o cadastro do autenticador: o código diz qual tela abrir. */
+    @ExceptionHandler(MfaRequiredException.class)
+    ProblemDetail mfaRequired(MfaRequiredException required) {
+        String detail = switch (required.stage()) {
+            case MFA_PENDENTE -> "Confirme o código do aplicativo autenticador para continuar.";
+            case MFA_RECADASTRO -> "Configure um novo aplicativo autenticador para continuar.";
+            case MFA_CADASTRO_OBRIGATORIO, AUTENTICADO -> "Configure a verificação em duas etapas para continuar.";
+        };
+        return problem(HttpStatus.FORBIDDEN, required.stage().name(), detail);
     }
 
     @ExceptionHandler(UnitNotSelectedException.class)
