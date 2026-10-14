@@ -14,6 +14,8 @@ export interface UnitsResponse {
   displayName: string;
   units: UnitView[];
   currentEstablishmentId?: string | null;
+  /** Admin fastPay: mostra o caminho para a área da plataforma (H10), que não é uma unidade. */
+  platformAdmin?: boolean;
 }
 
 const ROLE_LABELS: Record<MembershipRole, string> = {

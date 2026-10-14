@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 13/10/2026 por Claude Code (H09 reconciliada; H12 em revisão).
+Atualizado em 14/10/2026 por Claude Code (H12 reconciliada; H10 em revisão).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -40,6 +40,10 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H12 (13/10/2026):** Diego pediu “proxima historia”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); H10 depende de H09 e H12; a menor elegível é a H12 (depende de H04 e H08). Feita em `feature/H12-email-duravel`, a partir de `develop` (`6a4bc0e`). **Aguardando revisão** no PR da H12; detalhes no registro da H12.
 
+**Reconciliação da H12 (14/10/2026):** Diego fez o merge do [PR #8](https://github.com/dfdsn/fastPay/pull/8) em `develop` (`21b2058`, 14/10/2026 00:54 UTC). CI do push em `develop` verde (run 38492760180). **H12 concluída** no código; o envio real pelo Gmail de homologação continua dependendo da conta de teste (T-02).
+
+**H10 (14/10/2026):** Diego pediu “proxima Historia”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); com H09 e H12 em `develop`, a menor elegível é a H10. Feita em `feature/H10-estabelecimento-convite-dono`, a partir de `develop` (`21b2058`). **Aguardando revisão** no PR da H10; detalhes no registro da H10.
+
 ## Estados
 
 Não iniciada → em andamento → aguardando validação ou revisão → concluída. Bloqueada quando falta pré-requisito concreto. Aguardando revisão inclui PR aberto; concluída só após checks e merge develop verificados. Uma release possui registro separado do estado das histórias. Progresso inicialmente sem agente/branch/commit/PR.
@@ -57,9 +61,9 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H07 | Identidade, vínculo e seleção de unidade | Concluída | [PR #5](https://github.com/dfdsn/fastPay/pull/5) (`97dde12`); CI de `develop` verde (run 38181137432) ([evidência](evidencias/H07-identidade-vinculos.md)) |
 | H08 | Login da equipe e sessões seguras | Concluída | [PR #6](https://github.com/dfdsn/fastPay/pull/6) (`85659f7`); CI de `develop` verde (run 38199173689) ([evidência](evidencias/H08-login-sessoes.md)); política de senha e limites aprovados (P-07/T-03) |
 | H09 | TOTP, códigos e bootstrap administrativo | Concluída | [PR #7](https://github.com/dfdsn/fastPay/pull/7) (`6a4bc0e`); CI de `develop` verde (run 38408452083) ([evidência](evidencias/H09-mfa-bootstrap.md)); propostas P-07 (recuperação excepcional) e T-05 (bootstrap) ainda aguardam aprovação de Diego |
-| H10 | Criar estabelecimento e convidar dono | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H10 | Criar estabelecimento e convidar dono | Aguardando revisão | PR da H10 para `develop` ([evidência](evidencias/H10-estabelecimento-convite-dono.md)); ver registro abaixo |
 | H11 | Equipe, permissões e concessão de suporte | Não iniciada | Sem evidência; ver dependências/gates no backlog |
-| H12 | Convites e e-mail durável em homologação | Aguardando revisão | PR da H12 para `develop` ([evidência](evidencias/H12-email-duravel.md)); envio pelo Gmail de homologação depende da conta de teste (T-02); ver registro abaixo |
+| H12 | Convites e e-mail durável em homologação | Concluída | [PR #8](https://github.com/dfdsn/fastPay/pull/8) (`21b2058`); CI de `develop` verde (run 38492760180) ([evidência](evidencias/H12-email-duravel.md)); envio pelo Gmail de homologação depende da conta de teste (T-02) |
 | H13 | Catálogo, setores, disponibilidade e logo | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H14 | Configurações versionadas por estabelecimento | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H15 | Comanda individual, visita e QR avulso | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -296,6 +300,28 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: nenhuma de produto. Escolhas técnicas registradas na especificação §9: jobs por identidade, token criado no envio, lista de destinatários por endereço ou domínio, destinatário bloqueado não é falha a repetir.
 - Bloqueios / quem resolve: conta Gmail de homologação com senha de app e lista de destinatários de teste (T-02, Diego). P-07, T-05 e T-06 seguem aguardando Diego.
 - Próximo passo concreto: Diego revisa e faz o merge do PR da H12; depois, reconciliar com o hash real. Com H09 e H12 em `develop`, a próxima elegível é a H10 (criar estabelecimento e convidar dono; gate T-05).
+
+### H10 — Criar estabelecimento e convidar dono
+
+- História e estado: H10, **aguardando revisão** (critérios atendidos e testados com PostgreSQL real; sem merge).
+- Data/hora e agente: 14/10/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - Admin fastPay cadastra nome, e-mail do dono e CNPJ quando informado; ID interno é um UUID gerado pelo servidor; unidade nasce em `CONFIGURACAO`. Só o admin fastPay (papel conferido no banco a cada chamada; sessão com MFA).
+  - Convite do dono (papel administrador do estabelecimento) gravado na mesma transação, com e-mail pela fila (H12); 48 h a partir do envio, uso único; token só no envio e só como hash.
+  - Aceite: sem conta, a pessoa cria nome e senha no próprio aceite; com conta, entra (com MFA quando exigido) e aceita com o e-mail do convite; aceites simultâneos têm um vencedor.
+  - Reenvio pelo admin fastPay invalida o convite anterior; recusado depois do aceite.
+  - Cadastro não ativa nem gera mensalidade: nenhum job além do e-mail do convite; nenhuma tabela de cobrança tocada.
+  - Validações exigidas: duplicidade de aceite, token vencido, tentativa por loja (admin de estabelecimento) e por garçom, ausência de CNPJ permitida e nenhum fluxo produtivo liberado. Consumidor ainda não tem sessão (H15/H27): a tentativa sem sessão de equipe cai em 401.
+  - Telas: área do admin fastPay (`/admin/estabelecimentos`, com atalho na escolha de unidade) e aceite de convite (`/convite`).
+- Critérios faltantes / motivo: nenhum do texto da H10. Fora do escopo: o dono convidar a equipe (H11), ativação e ciclo comercial (H39), validação cadastral do CNPJ/titular (P-02), envio real pelo Gmail de homologação (T-02).
+- Branch e commit reais: `feature/H10-estabelecimento-convite-dono` (a partir de `develop` `21b2058`); hash no `git log`.
+- PR, checks e merge real: PR da H10 para `develop`; CI a conferir no PR. Sem merge.
+- Arquivos/migrations/contratos: `V8__estabelecimento_e_convites.sql`; módulo `establishments` (`application/EstablishmentRegistry`, `domain/Cnpj`, `infrastructure/JdbcEstablishmentStore`, `web/EstablishmentController`); módulo `identity` (`PlatformAccess`, `PlatformAccessDeniedException`, `Invitations`, `MembershipRole.label`, `application/InvitationAcceptance`, `application/InvitationEmailJob`, `infrastructure/JdbcInvitationStore`, `web/InvitationController`, `SessionUnitController`, `IdentityProblems`); `tenancy.TenantTransactions` (contextos combinados); frontend (`invitations/`, `platform-admin/`, rotas, `AuthService.withCsrf`, seleção de unidade); especificação §5; decisões D-19/P-02/T-05; [evidência](evidencias/H10-estabelecimento-convite-dono.md).
+- Testes: backend `./mvnw clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` com Docker para o Testcontainers: **203 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. Frontend `./scripts/verify.sh frontend` no contêiner `node:24.18.0-trixie-slim`: lint ok, **83 testes**, build ok. Detalhes na evidência.
+- Testes não executados e por quê: envio real pelo Gmail de homologação (T-02); E2E Playwright (não configurado); `compose-smoke.sh` (roda na CI do PR).
+- Decisões novas/alteradas: nenhuma de produto. Escolhas técnicas registradas na especificação §5: UUID como ID interno; CNPJ numérico e alfanumérico só com verificadores, sem unicidade; conta existente precisa entrar para aceitar e o e-mail da conta tem de ser o do convite; erros de token limitados como os links de redefinição.
+- Bloqueios / quem resolve: T-02 (conta Gmail de homologação, Diego). P-07 (recuperação excepcional e limite de códigos MFA), T-05 (bootstrap) e T-06 seguem aguardando a palavra de Diego. P-02 segue parcial (não bloqueia a H10, só a ativação).
+- Próximo passo concreto: Diego revisa e faz o merge do PR da H10; depois, reconciliar com o hash real. A próxima elegível passa a ser a H11 (equipe, permissões e concessão de suporte).
 
 ## Registro de release (ainda nenhum)
 

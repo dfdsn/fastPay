@@ -164,13 +164,14 @@ class MembershipsIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void runtimeNaoCriaNemApagaVinculos() {
+    void runtimeNaoApagaVinculosNemCriaSemConvite() {
         assertThatThrownBy(() -> tenants.runInEstablishment(lojaA, () -> jdbc.update("DELETE FROM membership")))
                 .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("permission denied");
         assertThatThrownBy(() -> tenants.runInEstablishment(lojaA, () -> jdbc.update(
                 "INSERT INTO membership (id, establishment_id, identity_id, role) VALUES (?, ?, ?, 'GERENTE')",
                 UUID.randomUUID(), lojaA, bruno)))
-                .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("permission denied");
+                .as("vínculo só nasce do aceite de convite (H10)")
+                .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("row-level security");
         assertThatThrownBy(() -> tenants.runInEstablishment(lojaA, () -> jdbc.update(
                 "UPDATE membership SET role = 'ADMIN_ESTABELECIMENTO' WHERE identity_id = ?", bruno)))
                 .as("troca de papel não é concedida ao runtime nesta história")

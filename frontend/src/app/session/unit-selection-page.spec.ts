@@ -112,6 +112,18 @@ describe('UnitSelectionPage', () => {
     expect(unitButtons()).toHaveLength(0);
   });
 
+  it('admin fastPay vê o caminho para a área da plataforma', () => {
+    responder({ displayName: 'Bia', units: [], currentEstablishmentId: null, platformAdmin: true });
+    expect(element().querySelector('a[href="/admin/estabelecimentos"]')?.textContent?.trim()).toBe(
+      'Área da equipe fastPay',
+    );
+  });
+
+  it('sem papel global não mostra a área da plataforma', () => {
+    responder({ displayName: 'Ana', units: [lojaA, lojaB], currentEstablishmentId: null });
+    expect(element().querySelector('a[href="/admin/estabelecimentos"]')).toBeNull();
+  });
+
   it('sem sessão pede para entrar novamente', () => {
     http
       .expectOne(unitsUrl)

@@ -35,6 +35,18 @@ export const routes: Routes = [
     loadComponent: () => import('./auth/mfa-setup-page').then((m) => m.MfaSetupPage),
   },
   {
+    path: 'convite',
+    title: 'Convite · fastPay',
+    loadComponent: () => import('./invitations/invitation-page').then((m) => m.InvitationPage),
+  },
+  {
+    path: 'admin/estabelecimentos',
+    title: 'Estabelecimentos · fastPay',
+    canActivate: [signedInGuard],
+    loadComponent: () =>
+      import('./platform-admin/establishments-page').then((m) => m.EstablishmentsPage),
+  },
+  {
     path: 'unidades',
     title: 'Escolha a unidade · fastPay',
     canActivate: [signedInGuard],

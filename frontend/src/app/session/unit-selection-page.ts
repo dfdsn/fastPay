@@ -4,7 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import {
   UnitContextService,
@@ -23,7 +23,7 @@ type PageState =
 /** Escolha da unidade (H07, FR-03). Com um único vínculo, entra direto nele. */
 @Component({
   selector: 'fp-unit-selection-page',
-  imports: [MatCardModule, MatButtonModule, MatProgressSpinnerModule],
+  imports: [MatCardModule, MatButtonModule, MatProgressSpinnerModule, RouterLink],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -50,6 +50,11 @@ type PageState =
           }
         </div>
         @if (ready(); as data) {
+          @if (data.platformAdmin) {
+            <p>
+              <a mat-stroked-button routerLink="/admin/estabelecimentos">Área da equipe fastPay</a>
+            </p>
+          }
           @if (data.units.length === 0) {
             <p>Olá, {{ data.displayName }}. Você ainda não tem acesso a nenhuma unidade.</p>
           } @else {

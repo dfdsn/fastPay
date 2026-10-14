@@ -10,8 +10,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 /**
- * Registro de unidade (tabela global {@code establishment}). Escrito apenas pelas migrations e,
- * a partir de H10, pelo fluxo administrativo; o runtime só lê a unidade do contexto atual (RLS).
+ * Registro de unidade (tabela global {@code establishment}), mapeado só para a validação do Hibernate. O
+ * cadastro pelo admin fastPay (H10) grava por {@link JdbcEstablishmentStore}; o runtime só lê o que o
+ * contexto de RLS libera.
  */
 @Entity
 @Table(name = "establishment")
