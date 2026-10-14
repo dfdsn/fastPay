@@ -35,9 +35,10 @@ services:
       JDBC_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-fastpay}
       JDBC_APP_PASSWORD: ${FASTPAY_APP_PASSWORD}
       JDBC_MIGRATION_PASSWORD: ${FASTPAY_MIGRATION_PASSWORD}
-      # H08: link de redefinição aponta para o frontend local; a caixa de teste fica legível em
-      # /api/v1/dev/caixa-de-teste (só dev, nenhum e-mail real é enviado até H12).
-      PASSWORD_RESET_LINK_BASE: http://127.0.0.1:${FASTPAY_HTTP_PORT:-8088}/redefinir-senha
+      # H12: links dos e-mails apontam para o frontend local; e-mail só na caixa de teste em memória,
+      # legível em /api/v1/dev/caixa-de-teste (nenhum envio real em desenvolvimento).
+      PUBLIC_BASE_URL: http://127.0.0.1:${FASTPAY_HTTP_PORT:-8088}
+      MAIL_TRANSPORT: caixa-de-teste
       TEST_MAILBOX_ENDPOINT: "true"
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       # H09: chave do segredo TOTP, fora do banco. Obrigatória; sem ela o backend não sobe.

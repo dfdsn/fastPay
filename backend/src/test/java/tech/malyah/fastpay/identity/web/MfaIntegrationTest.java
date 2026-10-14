@@ -34,7 +34,8 @@ import tech.malyah.fastpay.identity.MfaFixtures;
 import tech.malyah.fastpay.identity.domain.Base32;
 import tech.malyah.fastpay.identity.domain.Totp;
 import tech.malyah.fastpay.identity.infrastructure.MfaSecretCipher;
-import tech.malyah.fastpay.identity.infrastructure.TestMailbox;
+import tech.malyah.fastpay.jobs.application.JobWorker;
+import tech.malyah.fastpay.mail.infrastructure.TestMailbox;
 import tech.malyah.fastpay.testsupport.AdjustableClock;
 import tech.malyah.fastpay.testsupport.PostgresIntegrationTest;
 
@@ -68,6 +69,9 @@ class MfaIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     TestMailbox caixa;
+
+    @Autowired
+    JobWorker worker;
 
     @Autowired
     MfaSecretCipher cifra;
@@ -284,8 +288,8 @@ class MfaIntegrationTest extends PostgresIntegrationTest {
         computador.get("/api/v1/session/units").andExpect(status().isOk());
         celular.get("/api/v1/auth/session").andExpect(status().isUnauthorized());
         assertThat(novosCodigos).doesNotContainAnyElementsOf(codigos);
-        assertThat(caixa.latestTo(IdentityFixtures.email(ana))).hasValueSatisfying(m -> {
-            assertThat(m.subject()).isEqualTo("Verificação em duas etapas reconfigurada no fastPay");
+        assertThat(entregues().latestTo(IdentityFixtures.email(ana))).hasValueSatisfying(m -> {
+            assertThat(m.subject()).isEqualTo("[Desenvolvimento] Verificação em duas etapas reconfigurada no fastPay");
             assertThat(m.body()).contains("Olá, Ana", "deixaram de valer", "sessões abertas");
         });
         assertThat(eventos(ana)).containsExactly("mfa.cadastrado", "mfa.codigo_recuperacao_usado", "mfa.recadastrado");
@@ -320,7 +324,7 @@ class MfaIntegrationTest extends PostgresIntegrationTest {
         String email = IdentityFixtures.email(ana);
         caixa.clear();
         new Browser(mvc).post("/api/v1/auth/password-reset", "{\"email\":\"" + email + "\"}");
-        String token = caixa.latestTo(email).orElseThrow().body().replaceAll("(?s).*#token=([A-Za-z0-9_-]+).*", "$1");
+        String token = entregues().latestTo(email).orElseThrow().body().replaceAll("(?s).*#token=([A-Za-z0-9_-]+).*", "$1");
         new Browser(mvc).post("/api/v1/auth/password-reset/confirm",
                 "{\"token\":\"" + token + "\",\"newPassword\":\"outra frase bem comprida\"}").andExpect(status().isNoContent());
 
@@ -433,5 +437,13 @@ class MfaIntegrationTest extends PostgresIntegrationTest {
     private List<String> eventos(UUID identidade) {
         return admin().queryForList("SELECT action FROM fastpay.security_event WHERE identity_id = ? ORDER BY occurred_at, action",
                 String.class, identidade);
+    }
+
+    /** Executa os e-mails na fila (o worker periódico fica desligado nos testes) e devolve a caixa de teste. */
+    private TestMailbox entregues() {
+        while (worker.runOnce() > 0) {
+            // até não haver mais jobs vencidos
+        }
+        return caixa;
     }
 }

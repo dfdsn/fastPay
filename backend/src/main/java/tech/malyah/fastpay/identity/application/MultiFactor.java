@@ -26,6 +26,8 @@ import tech.malyah.fastpay.identity.infrastructure.JdbcCredentialStore.Account;
 import tech.malyah.fastpay.identity.infrastructure.JdbcMfaStore;
 import tech.malyah.fastpay.identity.infrastructure.JdbcMfaStore.Authenticator;
 import tech.malyah.fastpay.identity.infrastructure.MfaSecretCipher;
+import tech.malyah.fastpay.jobs.JobRequest;
+import tech.malyah.fastpay.jobs.Jobs;
 import tech.malyah.fastpay.tenancy.TenantTransactions;
 
 /**
@@ -88,20 +90,20 @@ public class MultiFactor {
     private final JdbcAuthAttemptStore attempts;
     private final TenantTransactions tenants;
     private final MfaSecretCipher cipher;
-    private final AccountMailer mailer;
+    private final Jobs jobs;
     private final FindByIndexNameSessionRepository<?> sessions;
     private final AuthProperties properties;
     private final Clock clock;
 
     MultiFactor(JdbcMfaStore store, JdbcCredentialStore credentials, JdbcAuthAttemptStore attempts,
-            TenantTransactions tenants, MfaSecretCipher cipher, AccountMailer mailer,
+            TenantTransactions tenants, MfaSecretCipher cipher, Jobs jobs,
             FindByIndexNameSessionRepository<?> sessions, AuthProperties properties, Clock clock) {
         this.store = store;
         this.credentials = credentials;
         this.attempts = attempts;
         this.tenants = tenants;
         this.cipher = cipher;
-        this.mailer = mailer;
+        this.jobs = jobs;
         this.sessions = sessions;
         this.properties = properties;
         this.clock = clock;
@@ -194,14 +196,16 @@ public class MultiFactor {
             boolean previous = store.saveAuthenticator(identityId, secretCiphertext, step.getAsLong(), now);
             store.replaceRecoveryCodes(identityId, hashes, now);
             store.securityEvent(identityId, previous ? "mfa.recadastrado" : "mfa.cadastrado", SELF, null, now);
+            if (previous) {
+                // Aviso durável na mesma transação do recadastro (H12).
+                jobs.enqueue(new JobRequest(MfaReplacedEmailJob.KIND, now.toString()));
+            }
             return previous;
         });
         attempts.clearSubject(Kind.MFA_FALHOU, subjectKey);
         int ended = 0;
         if (replaced) {
             ended = endSessions(sessions, identityId);
-            tenants.asIdentity(identityId, () -> credentials.account(identityId))
-                    .ifPresent(a -> mailer.sendMfaReplaced(a.email(), a.displayName(), now));
         }
         log.info("Autenticador {} para a identidade {}; {} sessões encerradas", replaced ? "trocado" : "cadastrado",
                 identityId, ended);

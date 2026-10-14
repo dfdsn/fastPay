@@ -47,7 +47,7 @@ docker compose --env-file .env -f infra/compose.dev.yml run --rm backend \
   --fastpay.operator.reason="Primeiro acesso da plataforma"
 ```
 
-Equipe de loja em desenvolvimento (até convites, H10): crie a identidade e o vínculo direto no banco com o superusuário (dados sintéticos), peça "Esqueci minha senha" em `/esqueci-a-senha` com o e-mail dela e abra o link guardado na caixa de teste (`GET /api/v1/dev/caixa-de-teste`, ligado só no Compose dev). Gerente e admin do estabelecimento cadastram o autenticador no primeiro login. Nenhum e-mail real é enviado até H12.
+Equipe de loja em desenvolvimento (até convites, H10): crie a identidade e o vínculo direto no banco com o superusuário (dados sintéticos), peça "Esqueci minha senha" em `/esqueci-a-senha` com o e-mail dela e abra o link guardado na caixa de teste (`GET /api/v1/dev/caixa-de-teste`, ligado só no Compose dev). Gerente e admin do estabelecimento cadastram o autenticador no primeiro login. Em desenvolvimento nenhum e-mail real é enviado; o e-mail sai pela fila de jobs (H12), então a mensagem aparece na caixa em alguns segundos. Envio real em homologação: `MAIL_TRANSPORT=smtp`, `SMTP_*`, `MAIL_FROM` e `MAIL_ALLOWED_RECIPIENTS` no `.env.hml` (ver `.env.example`).
 
 ## Documentação
 

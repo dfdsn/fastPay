@@ -14,7 +14,6 @@ import tech.malyah.fastpay.identity.domain.AttemptLimit;
  *
  * @param passwordMinLength        comprimento mínimo da senha (8..64)
  * @param bcryptStrength           custo do bcrypt (10..16)
- * @param resetLinkBase            endereço da tela de redefinição; o token vai no fragmento ({@code #token=})
  * @param loginFailuresPerAccount  falhas de login por e-mail na janela antes de bloquear
  * @param loginFailuresPerClient   falhas de login por endereço de origem na janela antes de bloquear
  * @param loginWindow              janela das falhas de login
@@ -32,7 +31,6 @@ import tech.malyah.fastpay.identity.domain.AttemptLimit;
 public record AuthProperties(
         @DefaultValue("12") int passwordMinLength,
         @DefaultValue("12") int bcryptStrength,
-        @DefaultValue("http://127.0.0.1:8088/redefinir-senha") String resetLinkBase,
         @DefaultValue("5") int loginFailuresPerAccount,
         @DefaultValue("20") int loginFailuresPerClient,
         @DefaultValue("15m") Duration loginWindow,
@@ -49,9 +47,6 @@ public record AuthProperties(
     public AuthProperties {
         if (bcryptStrength < 10 || bcryptStrength > 16) {
             throw new IllegalArgumentException("fastpay.auth.bcrypt-strength deve estar entre 10 e 16");
-        }
-        if (resetLinkBase == null || resetLinkBase.isBlank() || resetLinkBase.contains("#")) {
-            throw new IllegalArgumentException("fastpay.auth.reset-link-base deve ser um endereço sem fragmento");
         }
         if (mfaPendingTimeout.isNegative() || mfaPendingTimeout.isZero() || mfaPendingTimeout.toMinutes() > 30) {
             throw new IllegalArgumentException("fastpay.auth.mfa-pending-timeout deve estar entre 1 s e 30 min");

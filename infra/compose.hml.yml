@@ -34,8 +34,16 @@ services:
       JDBC_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-fastpay}
       JDBC_APP_PASSWORD: ${FASTPAY_APP_PASSWORD}
       JDBC_MIGRATION_PASSWORD: ${FASTPAY_MIGRATION_PASSWORD}
-      # H08: links de redefinição ficam só na caixa de teste em memória até H12 (sem envio real).
-      PASSWORD_RESET_LINK_BASE: ${PASSWORD_RESET_LINK_BASE:-http://127.0.0.1:8089/redefinir-senha}
+      # H12: e-mail. Padrão: caixa de teste em memória (nenhum envio). Envio real pelo Gmail dedicado só com
+      # MAIL_TRANSPORT=smtp, SMTP_* e MAIL_ALLOWED_RECIPIENTS no .env.hml; sem a lista o backend não sobe.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8089}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-caixa-de-teste}
+      MAIL_FROM: ${MAIL_FROM:-fastPay <nao-responda@fastpay.invalid>}
+      MAIL_ALLOWED_RECIPIENTS: ${MAIL_ALLOWED_RECIPIENTS:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       # H09: chave do segredo TOTP, fora do banco. Obrigatória; sem ela o backend não sobe.
       MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?defina MFA_ENCRYPTION_KEY no .env.hml}
     depends_on:

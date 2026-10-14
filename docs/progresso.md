@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 13/10/2026 por Claude Code (H08 reconciliada; H09 em revisão).
+Atualizado em 13/10/2026 por Claude Code (H09 reconciliada; H12 em revisão).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -36,6 +36,10 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H09 (13/10/2026):** Diego pediu “próxima historia”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); a menor elegível é a H09 (depende só da H08). Os gates P-07 (recuperação excepcional) e T-05 (bootstrap) não tinham resposta: a H09 implementou uma proposta configurável e a registrou como pendente de aprovação. Feita em `feature/H09-totp-bootstrap-admin`, a partir de `develop` (`85659f7`). **Aguardando revisão** no PR da H09; detalhes no registro da H09.
 
+**Reconciliação da H09 (13/10/2026):** Diego fez o merge do [PR #7](https://github.com/dfdsn/fastPay/pull/7) em `develop` (`6a4bc0e`, 13/10/2026 13:51 UTC). CI do push em `develop` verde (run 38408452083). **H09 concluída.** O merge não é decisão: as propostas P-07 (recuperação excepcional de MFA e limite de códigos) e T-05 (bootstrap) continuam aguardando a palavra de Diego, assim como o aceite da T-06.
+
+**H12 (13/10/2026):** Diego pediu “proxima historia”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); H10 depende de H09 e H12; a menor elegível é a H12 (depende de H04 e H08). Feita em `feature/H12-email-duravel`, a partir de `develop` (`6a4bc0e`). **Aguardando revisão** no PR da H12; detalhes no registro da H12.
+
 ## Estados
 
 Não iniciada → em andamento → aguardando validação ou revisão → concluída. Bloqueada quando falta pré-requisito concreto. Aguardando revisão inclui PR aberto; concluída só após checks e merge develop verificados. Uma release possui registro separado do estado das histórias. Progresso inicialmente sem agente/branch/commit/PR.
@@ -52,10 +56,10 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H06 | Prova PSP: devolução, conciliação e mensalidade | Bloqueada | Depende da H05 e do acesso ao PSP (P-01) |
 | H07 | Identidade, vínculo e seleção de unidade | Concluída | [PR #5](https://github.com/dfdsn/fastPay/pull/5) (`97dde12`); CI de `develop` verde (run 38181137432) ([evidência](evidencias/H07-identidade-vinculos.md)) |
 | H08 | Login da equipe e sessões seguras | Concluída | [PR #6](https://github.com/dfdsn/fastPay/pull/6) (`85659f7`); CI de `develop` verde (run 38199173689) ([evidência](evidencias/H08-login-sessoes.md)); política de senha e limites aprovados (P-07/T-03) |
-| H09 | TOTP, códigos e bootstrap administrativo | Aguardando revisão | PR da H09 para `develop` ([evidência](evidencias/H09-mfa-bootstrap.md)); recuperação excepcional (P-07) e bootstrap (T-05) propostos, aguardam aprovação de Diego; ver registro abaixo |
+| H09 | TOTP, códigos e bootstrap administrativo | Concluída | [PR #7](https://github.com/dfdsn/fastPay/pull/7) (`6a4bc0e`); CI de `develop` verde (run 38408452083) ([evidência](evidencias/H09-mfa-bootstrap.md)); propostas P-07 (recuperação excepcional) e T-05 (bootstrap) ainda aguardam aprovação de Diego |
 | H10 | Criar estabelecimento e convidar dono | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H11 | Equipe, permissões e concessão de suporte | Não iniciada | Sem evidência; ver dependências/gates no backlog |
-| H12 | Convites e e-mail durável em homologação | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H12 | Convites e e-mail durável em homologação | Aguardando revisão | PR da H12 para `develop` ([evidência](evidencias/H12-email-duravel.md)); envio pelo Gmail de homologação depende da conta de teste (T-02); ver registro abaixo |
 | H13 | Catálogo, setores, disponibilidade e logo | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H14 | Configurações versionadas por estabelecimento | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H15 | Comanda individual, visita e QR avulso | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -269,6 +273,29 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: propostas P-07 (recuperação excepcional e limite de 5 códigos errados por identidade em 15 min) e T-05 (bootstrap), aguardando Diego. Escolhas técnicas na especificação §5: etapas de sessão, AES-256-GCM com id da identidade como dado associado, códigos de 16 caracteres, comandos de operador com a credencial de migração.
 - Bloqueios / quem resolve: aprovação de P-07/T-05 (Diego). Aceite da T-06 continua pendente desde a H04.
 - Próximo passo concreto: Diego revisa o PR, decide P-07/T-05 e faz o merge; depois, reconciliar o progresso com o hash real. A próxima elegível depois da H09 é a H12 (convites e e-mail durável; H10 depende de H09 e H12).
+- Estado após o merge: **concluída** ([PR #7](https://github.com/dfdsn/fastPay/pull/7), `6a4bc0e`, CI de `develop` run 38408452083; reconciliado em 13/10/2026 no registro da H12). P-07/T-05 continuam pendentes de aprovação.
+
+### H12 — Convites e e-mail durável em homologação
+
+- História e estado: H12, **aguardando revisão** (critérios de código atendidos e testados com PostgreSQL real e servidor SMTP de teste; sem merge). Envio real pelo Gmail de homologação depende da conta de teste (T-02).
+- Data/hora e agente: 13/10/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - EmailPort com SMTP (STARTTLS obrigatório, prazos curtos) e caixa de teste de desenvolvimento; módulo `mail` novo.
+  - Modelos de convite, redefinição de senha e aviso de MFA trocado, em português, com o ambiente marcado fora de produção.
+  - E-mail durável pela fila de jobs (H04), agora também por identidade (V7): redefinição de senha e aviso de MFA gravados na transação do fato; 5 tentativas; falha visível na fila de falhas com erro sanitizado, no log e na métrica `fastpay.email`.
+  - Links com `PUBLIC_BASE_URL` (substitui `PASSWORD_RESET_LINK_BASE`); token no fragmento; nenhum token em claro na fila: o link nasce no envio e o prazo conta dele.
+  - Destinatários de teste protegidos: lista obrigatória com SMTP fora de produção; quem está fora não recebe nem ganha link.
+  - Configuração perigosa não sobe (segredo SMTP ausente, caixa de teste em produção, caixa legível fora de dev).
+  - Reenvio: a redefinição é reenviada por um pedido novo pela mesma tela e limites (mesma autorização da origem); repetição de um envio usa o mesmo `Message-ID` e deixa só o último link valendo.
+- Critérios faltantes / motivo: envio real pelo Gmail de homologação (conta e senha de app ainda não existem, T-02). Fluxo do convite em si (token de 48 h, aceite, reenvio que invalida o anterior e quem pode reenviar) entra com a H10/H11, que criam o convite e usam o modelo, o link e o envio desta história. Tela da fila de falhas e retomada de jobs de conta com H11. Status de entrega (bounce) com o SES (H49).
+- Branch e commit reais: `feature/H12-email-duravel` (a partir de `develop` `6a4bc0e`); hash no `git log`.
+- PR, checks e merge real: PR da H12 para `develop`; CI a conferir no PR. Sem merge.
+- Arquivos/migrations/contratos: `V7__jobs_por_identidade.sql`; módulo `jobs` (`Jobs`, `JobExecution` com `identityId`, `JobWorker`, `JdbcJobStore`); módulo novo `mail` (`Emails`, `EmailTemplates`, `PublicLinks`, `EmailMessage`, `application/EmailPort`, `domain/RecipientAllowlist`, `infrastructure/MailProperties`, `MailConfiguration`, `SmtpEmailPort`, `TestMailbox`, `web/TestMailboxController`); módulo `identity` (`PasswordResets`, `MultiFactor`, `PasswordResetEmailJob`, `MfaReplacedEmailJob`, `OperatorCommandRunner`, `AuthProperties`; removidos `AccountMailer`, `TestMailbox` e `TestMailboxController` da identidade); `backend/pom.xml` (`spring-boot-starter-mail`); `application.yaml`; Compose dev/HML; `.env.example`; README; especificação §5/§9; decisões D-25/T-02; [evidência](evidencias/H12-email-duravel.md).
+- Testes: backend `./mvnw -B -ntp verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` com Docker para o Testcontainers (PostgreSQL 18.6 e Mailpit): **179 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. Detalhes na evidência.
+- Testes não executados e por quê: frontend sem mudança (roda na CI); `compose-smoke.sh` (roda na CI do PR); envio pelo Gmail real (T-02); E2E Playwright (não configurado).
+- Decisões novas/alteradas: nenhuma de produto. Escolhas técnicas registradas na especificação §9: jobs por identidade, token criado no envio, lista de destinatários por endereço ou domínio, destinatário bloqueado não é falha a repetir.
+- Bloqueios / quem resolve: conta Gmail de homologação com senha de app e lista de destinatários de teste (T-02, Diego). P-07, T-05 e T-06 seguem aguardando Diego.
+- Próximo passo concreto: Diego revisa e faz o merge do PR da H12; depois, reconciliar com o hash real. Com H09 e H12 em `develop`, a próxima elegível é a H10 (criar estabelecimento e convidar dono; gate T-05).
 
 ## Registro de release (ainda nenhum)
 

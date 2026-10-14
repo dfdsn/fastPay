@@ -52,12 +52,12 @@ public class JobWorker {
 
     private void execute(Claimed job) {
         try {
-            tenants.runInEstablishment(job.establishmentId(),
-                    () -> store.lockOwned(job.jobId(), job.leaseToken()).ifPresent(locked -> {
+            inScope(job.scope(), () -> store.lockOwned(job.jobId(), job.leaseToken()).ifPresent(locked -> {
                         withCorrelation(locked.correlationId(), () -> {
                             var handler = handlers.find(locked.kind())
                                     .orElseThrow(() -> new JobFailure("Tipo de job sem executor registrado."));
-                            handler.handle(new JobExecution(locked.jobId(), locked.establishmentId(), locked.kind(),
+                            handler.handle(new JobExecution(locked.jobId(), locked.scope().establishmentId(),
+                                    locked.scope().identityId(), locked.kind(),
                                     locked.dedupKey(), locked.payload(), locked.attempts(), locked.correlationId()));
                             store.markSucceeded(locked.jobId(), job.leaseToken());
                         });
@@ -70,7 +70,7 @@ public class JobWorker {
     private void recordFailure(Claimed job, RuntimeException failure) {
         String error = SafeError.describe(failure);
         try {
-            tenants.runInEstablishment(job.establishmentId(), () -> {
+            inScope(job.scope(), () -> {
                 Optional<JdbcJobStore.Locked> owned = store.lockOwned(job.jobId(), job.leaseToken());
                 owned.ifPresent(locked -> withCorrelation(locked.correlationId(), () -> {
                     RetryPolicy.Decision decision = retryPolicy.afterFailure(locked.attempts(), locked.maxAttempts());
@@ -88,6 +88,18 @@ public class JobWorker {
         } catch (RuntimeException unrecorded) {
             // A reserva expira e outro ciclo retoma o job; a tentativa continua contada.
             log.error("Não foi possível registrar a falha do job {}: {}", job.jobId(), SafeError.describe(unrecorded));
+        }
+    }
+
+    /** Transação com o contexto do dono do job: unidade ou identidade (jobs da conta, H12). */
+    private void inScope(JdbcJobStore.Scope scope, Runnable work) {
+        if (scope.establishmentId() != null) {
+            tenants.runInEstablishment(scope.establishmentId(), work);
+        } else {
+            tenants.asIdentity(scope.identityId(), () -> {
+                work.run();
+                return null;
+            });
         }
     }
 
