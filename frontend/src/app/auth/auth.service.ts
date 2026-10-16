@@ -152,8 +152,11 @@ export class AuthService {
     this.units.clear();
   }
 
-  /** Antes da primeira mutação o navegador ainda pode não ter o cookie CSRF: uma leitura o obtém. */
-  private withCsrf<T>(mutation: () => Observable<T>): Observable<T> {
+  /**
+   * Antes da primeira mutação o navegador ainda pode não ter o cookie CSRF: uma leitura o obtém. Usado
+   * também pelas telas fora da sessão (convite, H10).
+   */
+  withCsrf<T>(mutation: () => Observable<T>): Observable<T> {
     if (this.document.cookie.split('; ').some((cookie) => cookie.startsWith('XSRF-TOKEN='))) {
       return mutation();
     }

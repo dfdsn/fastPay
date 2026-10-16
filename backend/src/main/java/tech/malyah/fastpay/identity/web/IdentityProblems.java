@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import tech.malyah.fastpay.identity.AuthenticationRequiredException;
 import tech.malyah.fastpay.identity.MfaRequiredException;
+import tech.malyah.fastpay.identity.PlatformAccessDeniedException;
 import tech.malyah.fastpay.identity.SessionContext;
 import tech.malyah.fastpay.identity.UnitAccessDeniedException;
 import tech.malyah.fastpay.identity.UnitNotSelectedException;
@@ -44,6 +45,13 @@ class IdentityProblems {
             case MFA_CADASTRO_OBRIGATORIO, AUTENTICADO -> "Configure a verificação em duas etapas para continuar.";
         };
         return problem(HttpStatus.FORBIDDEN, required.stage().name(), detail);
+    }
+
+    /** Área do admin fastPay pedida por outra identidade (H10). */
+    @ExceptionHandler(PlatformAccessDeniedException.class)
+    ProblemDetail platformAccessDenied() {
+        return problem(HttpStatus.FORBIDDEN, "ACESSO_RESTRITO_PLATAFORMA",
+                "Esta área é exclusiva da equipe fastPay.");
     }
 
     @ExceptionHandler(UnitNotSelectedException.class)

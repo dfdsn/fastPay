@@ -35,7 +35,7 @@ Requer Docker Desktop (WSL2) com Compose v2. Copie `.env.example` para `.env` e 
 
 O banco não tem porta publicada no host. A CI (`.github/workflows/ci.yml`) testa PRs para `develop`/`main` e publica imagens privadas no GHCR apenas em push para essas branches; não faz deploy.
 
-Endpoints atuais: `GET /actuator/health` (somente status), `GET /api/v1/platform/info` (nome, versão e ambiente), login e sessão em `/api/v1/auth/*` (H08), verificação em duas etapas em `/api/v1/auth/mfa/*` (H09) e seleção de unidade em `/api/v1/session/*` (H07). Mutações exigem o header `X-XSRF-TOKEN` com o valor do cookie `XSRF-TOKEN`. Variáveis em [.env.example](.env.example).
+Endpoints atuais: `GET /actuator/health` (somente status), `GET /api/v1/platform/info` (nome, versão e ambiente), login e sessão em `/api/v1/auth/*` (H08), verificação em duas etapas em `/api/v1/auth/mfa/*` (H09) seleção de unidade em `/api/v1/session/*` (H07), cadastro de estabelecimentos pelo admin fastPay em `/api/v1/establishments` e aceite de convite em `/api/v1/invitations/*` (H10). Mutações exigem o header `X-XSRF-TOKEN` com o valor do cookie `XSRF-TOKEN`. Variáveis em [.env.example](.env.example).
 
 Primeiro admin fastPay (H09): não há cadastro público nem senha padrão. Quem opera o servidor roda o comando abaixo, que usa a credencial de migração, cria a identidade e imprime um link de uso único (30 min) para a pessoa criar a senha; no primeiro login ela cadastra o aplicativo autenticador. O mesmo comando com `--fastpay.operator.command=redefinir-mfa` (sem `display-name`) é a recuperação excepcional de MFA, ainda pendente de aprovação (P-07): tira autenticador, códigos e senha, encerra as sessões e imprime um link novo. Saída 0 = feito, 2 = recusado.
 

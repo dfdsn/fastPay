@@ -22,7 +22,8 @@ public class JdbcAuthAttemptStore {
         LOGIN_FALHOU,
         REDEFINICAO_PEDIDA,
         REDEFINICAO_FALHOU,
-        MFA_FALHOU
+        MFA_FALHOU,
+        CONVITE_FALHOU
     }
 
     private final JdbcTemplate jdbc;

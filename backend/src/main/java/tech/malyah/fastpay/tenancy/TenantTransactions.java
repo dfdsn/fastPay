@@ -1,5 +1,7 @@
 package tech.malyah.fastpay.tenancy;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -61,6 +63,34 @@ public class TenantTransactions {
         return inContext("app.reset_token_hash", tokenHash, work);
     }
 
+    /**
+     * Transação nova com a unidade e a identidade no contexto: o admin fastPay cria a unidade e grava, na
+     * mesma transação, o convite do dono, o job e a auditoria dela (H10). Quem chama confirma o papel da
+     * identidade dentro do trabalho; o contexto da unidade não é prova de vínculo.
+     */
+    public <T> T inEstablishmentAs(UUID establishmentId, UUID identityId, Supplier<T> work) {
+        Objects.requireNonNull(establishmentId, "establishmentId");
+        Objects.requireNonNull(identityId, "identityId");
+        Map<String, String> settings = new LinkedHashMap<>();
+        settings.put("app.establishment_id", establishmentId.toString());
+        settings.put("app.identity_id", identityId.toString());
+        return inContext(settings, work);
+    }
+
+    /**
+     * Transação nova em que só o convite com este hash é visível (H10). Com {@code identityId}, também a
+     * própria identidade: aceitar o convite com a conta existente ou com a conta criada nele.
+     */
+    public <T> T forInvitationToken(String tokenHash, UUID identityId, Supplier<T> work) {
+        Objects.requireNonNull(tokenHash, "tokenHash");
+        Map<String, String> settings = new LinkedHashMap<>();
+        settings.put("app.invitation_token_hash", tokenHash);
+        if (identityId != null) {
+            settings.put("app.identity_id", identityId.toString());
+        }
+        return inContext(settings, work);
+    }
+
     public void runInEstablishment(UUID establishmentId, Runnable work) {
         Objects.requireNonNull(work, "work");
         inEstablishment(establishmentId, () -> {
@@ -70,12 +100,17 @@ public class TenantTransactions {
     }
 
     private <T> T inContext(String setting, String value, Supplier<T> work) {
+        return inContext(Map.of(setting, value), work);
+    }
+
+    private <T> T inContext(Map<String, String> settings, Supplier<T> work) {
         Objects.requireNonNull(work, "work");
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException("Contexto " + setting + " exige transação própria; já existe uma ativa.");
+            throw new IllegalStateException("Contexto " + settings.keySet() + " exige transação própria; já existe uma ativa.");
         }
         return transactions.execute(status -> {
-            jdbc.queryForObject("SELECT set_config(?, ?, true)", String.class, setting, value);
+            settings.forEach((setting, value) ->
+                    jdbc.queryForObject("SELECT set_config(?, ?, true)", String.class, setting, value));
             return work.get();
         });
     }

@@ -18,6 +18,7 @@ import tech.malyah.fastpay.identity.AuthenticationRequiredException;
 import tech.malyah.fastpay.identity.IdentitySummary;
 import tech.malyah.fastpay.identity.MembershipRole;
 import tech.malyah.fastpay.identity.Memberships;
+import tech.malyah.fastpay.identity.PlatformAccess;
 import tech.malyah.fastpay.identity.SessionContext;
 import tech.malyah.fastpay.identity.UnitMembership;
 
@@ -31,13 +32,18 @@ class SessionUnitController {
 
     private final Memberships memberships;
     private final SessionContext session;
+    private final PlatformAccess platform;
 
-    SessionUnitController(Memberships memberships, SessionContext session) {
+    SessionUnitController(Memberships memberships, SessionContext session, PlatformAccess platform) {
         this.memberships = memberships;
         this.session = session;
+        this.platform = platform;
     }
 
-    /** Quem está na sessão, unidades disponíveis e a escolhida, se ainda válida. */
+    /**
+     * Quem está na sessão, unidades disponíveis e a escolhida, se ainda válida. {@code platformAdmin} mostra o
+     * caminho para a área do admin fastPay (H10), que não é uma unidade.
+     */
     @GetMapping("/units")
     UnitsResponse units(HttpServletRequest request) {
         UUID identityId = session.requireIdentity(request);
@@ -49,7 +55,8 @@ class SessionUnitController {
         if (selected == null) {
             session.clearUnit(request);
         }
-        return new UnitsResponse(identity.displayName(), units.stream().map(UnitView::of).toList(), selected);
+        return new UnitsResponse(identity.displayName(), units.stream().map(UnitView::of).toList(), selected,
+                platform.isPlatformAdmin(identityId));
     }
 
     @PutMapping("/unit")
@@ -87,6 +94,6 @@ class SessionUnitController {
         }
     }
 
-    record UnitsResponse(String displayName, List<UnitView> units, UUID currentEstablishmentId) {
+    record UnitsResponse(String displayName, List<UnitView> units, UUID currentEstablishmentId, boolean platformAdmin) {
     }
 }
