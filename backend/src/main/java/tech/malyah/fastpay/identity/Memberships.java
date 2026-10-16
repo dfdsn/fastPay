@@ -40,9 +40,9 @@ public class Memberships {
     }
 
     /**
-     * Executa o trabalho numa transação com o contexto da unidade, depois de confirmar, na mesma transação,
-     * que a identidade tem vínculo ativo nela. Desativação ou troca de papel valem já na operação seguinte
-     * (FR-06). O trabalho roda dentro dessa transação.
+     * Executa o trabalho numa transação com o contexto da unidade e da identidade, depois de confirmar, na mesma
+     * transação, que a identidade tem vínculo ativo nela. Desativação, troca de papel ou de permissões valem já
+     * na operação seguinte (FR-06). O trabalho roda dentro dessa transação.
      *
      * @throws UnitAccessDeniedException sem vínculo ativo, unidade inexistente ou de outra pessoa
      */
@@ -52,7 +52,7 @@ public class Memberships {
         if (establishmentId == null) {
             throw new UnitAccessDeniedException(null);
         }
-        return tenants.inEstablishment(establishmentId, () -> {
+        return tenants.inEstablishmentAs(establishmentId, identityId, () -> {
             UnitMembership membership = store.activeMembershipInCurrentUnit(identityId)
                     .orElseThrow(() -> new UnitAccessDeniedException(establishmentId));
             return work.apply(membership);
@@ -60,9 +60,26 @@ public class Memberships {
     }
 
     /**
+     * Como {@link #inUnit(UUID, UUID, Function)}, exigindo a permissão da ação (H11, CA-04): papel e delegações
+     * são lidos na mesma transação do trabalho.
+     *
+     * @throws UnitAccessDeniedException sem vínculo ativo na unidade
+     * @throws PermissionDeniedException com vínculo, mas sem a permissão
+     */
+    public <T> T inUnit(UUID identityId, UUID establishmentId, Permission permission,
+            Function<UnitMembership, T> work) {
+        Objects.requireNonNull(permission, "permission");
+        Objects.requireNonNull(work, "work");
+        return inUnit(identityId, establishmentId, membership -> {
+            membership.require(permission);
+            return work.apply(membership);
+        });
+    }
+
+    /**
      * Desativa o vínculo na unidade, preservando a linha (autoria histórica) e os vínculos da mesma pessoa
-     * em outras unidades, com auditoria. Quem chama já autorizou o ator para gerir equipe na unidade (a
-     * permissão por ação chega em H11).
+     * em outras unidades, com auditoria. Não confere autoridade nem a regra do último administrador: o comando
+     * da equipe é {@link Team#deactivate}.
      *
      * @return {@code false} se o vínculo não existe na unidade ou já estava inativo
      */
