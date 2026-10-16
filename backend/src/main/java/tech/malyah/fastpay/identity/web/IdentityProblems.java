@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import tech.malyah.fastpay.identity.AuthenticationRequiredException;
 import tech.malyah.fastpay.identity.MfaRequiredException;
+import tech.malyah.fastpay.identity.PermissionDeniedException;
 import tech.malyah.fastpay.identity.PlatformAccessDeniedException;
 import tech.malyah.fastpay.identity.SessionContext;
 import tech.malyah.fastpay.identity.UnitAccessDeniedException;
@@ -52,6 +53,12 @@ class IdentityProblems {
     ProblemDetail platformAccessDenied() {
         return problem(HttpStatus.FORBIDDEN, "ACESSO_RESTRITO_PLATAFORMA",
                 "Esta área é exclusiva da equipe fastPay.");
+    }
+
+    /** Vínculo válido sem a permissão da ação (H11, CA-04), mesmo por chamada direta. */
+    @ExceptionHandler(PermissionDeniedException.class)
+    ProblemDetail permissionDenied() {
+        return problem(HttpStatus.FORBIDDEN, "PERMISSAO_NEGADA", "Você não tem permissão para esta ação nesta unidade.");
     }
 
     @ExceptionHandler(UnitNotSelectedException.class)

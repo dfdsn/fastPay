@@ -65,7 +65,8 @@ public class TenantTransactions {
 
     /**
      * Transação nova com a unidade e a identidade no contexto: o admin fastPay cria a unidade e grava, na
-     * mesma transação, o convite do dono, o job e a auditoria dela (H10). Quem chama confirma o papel da
+     * mesma transação, o convite do dono, o job e a auditoria dela (H10); a operação de loja roda com a unidade
+     * e quem age ({@code identity.Memberships.inUnit}, H11). Quem chama confirma o vínculo ou o papel da
      * identidade dentro do trabalho; o contexto da unidade não é prova de vínculo.
      */
     public <T> T inEstablishmentAs(UUID establishmentId, UUID identityId, Supplier<T> work) {
@@ -75,6 +76,20 @@ public class TenantTransactions {
         settings.put("app.establishment_id", establishmentId.toString());
         settings.put("app.identity_id", identityId.toString());
         return inContext(settings, work);
+    }
+
+    /**
+     * Como {@link #inEstablishmentAs}, numa transação somente leitura no PostgreSQL ({@code SET TRANSACTION READ
+     * ONLY}, antes de qualquer consulta): qualquer escrita falha no banco, seja qual for o código chamado. Usada
+     * pela consulta do suporte autorizado (H11, FR-66).
+     */
+    public <T> T readOnlyInEstablishmentAs(UUID establishmentId, UUID identityId, Supplier<T> work) {
+        Objects.requireNonNull(establishmentId, "establishmentId");
+        Objects.requireNonNull(identityId, "identityId");
+        Map<String, String> settings = new LinkedHashMap<>();
+        settings.put("app.establishment_id", establishmentId.toString());
+        settings.put("app.identity_id", identityId.toString());
+        return inContext(settings, true, work);
     }
 
     /**
@@ -104,11 +119,18 @@ public class TenantTransactions {
     }
 
     private <T> T inContext(Map<String, String> settings, Supplier<T> work) {
+        return inContext(settings, false, work);
+    }
+
+    private <T> T inContext(Map<String, String> settings, boolean readOnly, Supplier<T> work) {
         Objects.requireNonNull(work, "work");
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Contexto " + settings.keySet() + " exige transação própria; já existe uma ativa.");
         }
         return transactions.execute(status -> {
+            if (readOnly) {
+                jdbc.execute("SET TRANSACTION READ ONLY");
+            }
             settings.forEach((setting, value) ->
                     jdbc.queryForObject("SELECT set_config(?, ?, true)", String.class, setting, value));
             return work.get();

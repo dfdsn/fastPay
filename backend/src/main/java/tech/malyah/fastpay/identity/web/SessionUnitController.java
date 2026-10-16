@@ -18,6 +18,7 @@ import tech.malyah.fastpay.identity.AuthenticationRequiredException;
 import tech.malyah.fastpay.identity.IdentitySummary;
 import tech.malyah.fastpay.identity.MembershipRole;
 import tech.malyah.fastpay.identity.Memberships;
+import tech.malyah.fastpay.identity.Permission;
 import tech.malyah.fastpay.identity.PlatformAccess;
 import tech.malyah.fastpay.identity.SessionContext;
 import tech.malyah.fastpay.identity.UnitMembership;
@@ -88,9 +89,11 @@ class SessionUnitController {
     record SelectUnitRequest(UUID establishmentId) {
     }
 
-    record UnitView(UUID establishmentId, String name, MembershipRole role) {
+    /** {@code permissions}: o que a pessoa pode fazer na unidade agora (papel e delegações), para a tela. */
+    record UnitView(UUID establishmentId, String name, MembershipRole role, List<Permission> permissions) {
         static UnitView of(UnitMembership membership) {
-            return new UnitView(membership.establishmentId(), membership.establishmentName(), membership.role());
+            return new UnitView(membership.establishmentId(), membership.establishmentName(), membership.role(),
+                    membership.permissions().stream().sorted().toList());
         }
     }
 

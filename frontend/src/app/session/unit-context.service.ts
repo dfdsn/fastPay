@@ -4,10 +4,41 @@ import { Observable, tap } from 'rxjs';
 
 export type MembershipRole = 'ADMIN_ESTABELECIMENTO' | 'GERENTE' | 'GARCOM' | 'PRODUCAO';
 
+/** Ações autorizadas no servidor (H11, PRD §4.2). A tela só usa para mostrar ou esconder caminhos. */
+export type Permission =
+  | 'OPERAR_COMANDA'
+  | 'OPERAR_PRODUCAO'
+  | 'ATENDER_PROBLEMA'
+  | 'CONCLUIR_PROBLEMA'
+  | 'CANCELAR_ITEM'
+  | 'CONCEDER_DESCONTO'
+  | 'REABRIR_COMANDA'
+  | 'TRANSFERIR_UNIDADES'
+  | 'DESFAZER_ENTREGA'
+  | 'ALTERAR_DISPONIBILIDADE'
+  | 'REGISTRAR_RECEBIMENTO_EXTERNO'
+  | 'RECUPERAR_ACESSO_CONSUMIDOR'
+  | 'VINCULAR_CONTINUACAO_VISITA'
+  | 'AUTORIZAR_DEVOLUCAO'
+  | 'ENCERRAR_COM_DEBITO'
+  | 'INICIAR_REGULARIZACAO'
+  | 'INVALIDAR_RECEBIMENTO_EXTERNO'
+  | 'VER_EQUIPE'
+  | 'DELEGAR_PERMISSOES'
+  | 'GERIR_EQUIPE'
+  | 'CONECTAR_CONTA_PSP'
+  | 'AUTORIZAR_SUPORTE';
+
 export interface UnitView {
   establishmentId: string;
   name: string;
   role: MembershipRole;
+  /** Permissões na unidade agora (papel e delegações); o servidor confere de novo em cada ação. */
+  permissions?: Permission[];
+}
+
+export function can(unit: UnitView | null, permission: Permission): boolean {
+  return unit?.permissions?.includes(permission) ?? false;
 }
 
 export interface UnitsResponse {
@@ -38,6 +69,17 @@ export function problemCode(error: unknown): string | undefined {
     return typeof code === 'string' ? code : undefined;
   }
   return undefined;
+}
+
+/** Mensagem do servidor para uma recusa conhecida; sem ela, uma orientação genérica. */
+export function failureMessage(error: unknown): string {
+  if (error instanceof HttpErrorResponse && problemCode(error)) {
+    const detail = (error.error as { detail?: unknown }).detail;
+    if (typeof detail === 'string') {
+      return detail;
+    }
+  }
+  return 'Não foi possível concluir. Verifique sua conexão e tente novamente.';
 }
 
 /**

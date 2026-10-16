@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 14/10/2026 por Claude Code (H12 reconciliada; H10 em revisão).
+Atualizado em 16/10/2026 por Claude Code (H10 reconciliada; H11 em revisão).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -44,6 +44,10 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H10 (14/10/2026):** Diego pediu “proxima Historia”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); com H09 e H12 em `develop`, a menor elegível é a H10. Feita em `feature/H10-estabelecimento-convite-dono`, a partir de `develop` (`21b2058`). **Aguardando revisão** no PR da H10; detalhes no registro da H10.
 
+**Reconciliação da H10 (16/10/2026):** Diego fez o merge do [PR #9](https://github.com/dfdsn/fastPay/pull/9) em `develop` (`9151720`, 16/10/2026 01:52 UTC). CI do push em `develop` verde (run 38837453986). **H10 concluída.** T-02 (Gmail de homologação), P-07, T-05 e T-06 seguem aguardando Diego.
+
+**H11 (16/10/2026):** Diego pediu “proxima historia”. H05 e H06 seguem bloqueadas pelo acesso ao PSP (P-01); com H10 em `develop`, a menor elegível é a H11. FR-66 não define quem é o suporte nem o prazo máximo: a H11 implementou uma proposta configurável, registrada como P-16, aguardando Diego. Feita em `feature/H11-equipe-permissoes-suporte`, a partir de `develop` (`9151720`). **Aguardando revisão** no PR da H11; detalhes no registro da H11.
+
 ## Estados
 
 Não iniciada → em andamento → aguardando validação ou revisão → concluída. Bloqueada quando falta pré-requisito concreto. Aguardando revisão inclui PR aberto; concluída só após checks e merge develop verificados. Uma release possui registro separado do estado das histórias. Progresso inicialmente sem agente/branch/commit/PR.
@@ -61,8 +65,8 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H07 | Identidade, vínculo e seleção de unidade | Concluída | [PR #5](https://github.com/dfdsn/fastPay/pull/5) (`97dde12`); CI de `develop` verde (run 38181137432) ([evidência](evidencias/H07-identidade-vinculos.md)) |
 | H08 | Login da equipe e sessões seguras | Concluída | [PR #6](https://github.com/dfdsn/fastPay/pull/6) (`85659f7`); CI de `develop` verde (run 38199173689) ([evidência](evidencias/H08-login-sessoes.md)); política de senha e limites aprovados (P-07/T-03) |
 | H09 | TOTP, códigos e bootstrap administrativo | Concluída | [PR #7](https://github.com/dfdsn/fastPay/pull/7) (`6a4bc0e`); CI de `develop` verde (run 38408452083) ([evidência](evidencias/H09-mfa-bootstrap.md)); propostas P-07 (recuperação excepcional) e T-05 (bootstrap) ainda aguardam aprovação de Diego |
-| H10 | Criar estabelecimento e convidar dono | Aguardando revisão | PR da H10 para `develop` ([evidência](evidencias/H10-estabelecimento-convite-dono.md)); ver registro abaixo |
-| H11 | Equipe, permissões e concessão de suporte | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H10 | Criar estabelecimento e convidar dono | Concluída | [PR #9](https://github.com/dfdsn/fastPay/pull/9) (`9151720`); CI de `develop` verde (run 38837453986) ([evidência](evidencias/H10-estabelecimento-convite-dono.md)); envio pelo Gmail de homologação depende da conta de teste (T-02) |
+| H11 | Equipe, permissões e concessão de suporte | Aguardando revisão | PR da H11 para `develop` ([evidência](evidencias/H11-equipe-permissoes-suporte.md)); proposta P-16 (suporte) aguarda Diego; ver registro abaixo |
 | H12 | Convites e e-mail durável em homologação | Concluída | [PR #8](https://github.com/dfdsn/fastPay/pull/8) (`21b2058`); CI de `develop` verde (run 38492760180) ([evidência](evidencias/H12-email-duravel.md)); envio pelo Gmail de homologação depende da conta de teste (T-02) |
 | H13 | Catálogo, setores, disponibilidade e logo | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H14 | Configurações versionadas por estabelecimento | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -322,6 +326,29 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: nenhuma de produto. Escolhas técnicas registradas na especificação §5: UUID como ID interno; CNPJ numérico e alfanumérico só com verificadores, sem unicidade; conta existente precisa entrar para aceitar e o e-mail da conta tem de ser o do convite; erros de token limitados como os links de redefinição.
 - Bloqueios / quem resolve: T-02 (conta Gmail de homologação, Diego). P-07 (recuperação excepcional e limite de códigos MFA), T-05 (bootstrap) e T-06 seguem aguardando a palavra de Diego. P-02 segue parcial (não bloqueia a H10, só a ativação).
 - Próximo passo concreto: Diego revisa e faz o merge do PR da H10; depois, reconciliar com o hash real. A próxima elegível passa a ser a H11 (equipe, permissões e concessão de suporte).
+
+- Estado após o merge: **concluída** ([PR #9](https://github.com/dfdsn/fastPay/pull/9), `9151720`, CI de `develop` run 38837453986; reconciliado em 16/10/2026 no registro da H11).
+
+### H11 — Equipe, permissões e concessão de suporte
+
+- História e estado: H11, **aguardando revisão** (critérios atendidos e testados com PostgreSQL real; sem merge). Proposta P-16 aguarda Diego.
+- Data/hora e agente: 16/10/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - Permissões por ação (PRD §4.2), conferidas no servidor em cada comando; matriz testada por ação, inclusive devolução, débito, regularização e invalidação externa não delegáveis.
+  - Dono (admin do estabelecimento) convida papéis, reenvia e cancela convite, troca papel e desativa; gerente vê a equipe e delega a garçons só ações delegáveis.
+  - Último admin preservado, inclusive com duas remoções ao mesmo tempo; ninguém altera o próprio vínculo.
+  - Desativação, delegação e revogação valem na sessão ativa; promoção exige MFA na próxima requisição.
+  - Suporte: o dono concede a uma pessoa da equipe fastPay acesso temporário de leitura, com motivo e prazo, e encerra quando quiser; cada consulta é auditada com a identidade do suporte, roda somente leitura no banco e não assume a identidade de ninguém da loja. Vencida, encerrada, de outra loja ou sem concessão: recusa.
+  - Telas: equipe (`/equipe`), acesso de suporte do dono (`/acesso-de-suporte`) e área de suporte (`/admin/suporte`).
+- Critérios faltantes / motivo: nenhum do texto da H11. Fora do escopo: consultas do suporte a comandas, produção e pagamentos (entram com as histórias desses dados, pelo mesmo mecanismo); tela da fila de falhas (citada na H12, fica para quando houver operação de loja a retomar).
+- Branch e commit reais: `feature/H11-equipe-permissoes-suporte` (a partir de `develop` `9151720`); hash no `git log`.
+- PR, checks e merge real: PR da H11 para `develop`; CI a conferir no PR. Sem merge.
+- Arquivos/migrations/contratos: `V9__equipe_permissoes_suporte.sql`; módulo `identity` (`Permission`, `PermissionDeniedException`, `Team`, `UnitMembership.permissions`, `Memberships.inUnit` com permissão, `domain/AccessPolicy`, `infrastructure/JdbcMembershipStore`, `JdbcInvitationStore`, `web/TeamController`, `SessionUnitController`, `IdentityProblems`); módulo `platform` (`SupportAccess`, `SupportNotAuthorizedException`, `infrastructure/JdbcSupportGrantStore`, `SupportProperties`, `SupportConfiguration`, `web/SupportController`); `tenancy.TenantTransactions.readOnlyInEstablishmentAs`; `application.yaml` (`fastpay.support.max-duration`); frontend (`team/`, `support/`, rotas, início da unidade, escolha de unidade); especificação §5; decisão P-16; [evidência](evidencias/H11-equipe-permissoes-suporte.md).
+- Testes: backend `./mvnw clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` com Docker para o Testcontainers: **243 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. Frontend `./scripts/verify.sh frontend` no contêiner `node:24.18.0-trixie-slim`: lint ok, **102 testes**, build ok. Detalhes na evidência.
+- Testes não executados e por quê: E2E Playwright (não configurado); `compose-smoke.sh` (roda na CI do PR); envio real de convite pelo Gmail de homologação (T-02).
+- Decisões novas/alteradas: P-16 (proposta, aguarda Diego): suporte = admin fastPay escolhido pelo e-mail, prazo de 1 h a 72 h configurável, consulta só leitura auditada. Escolhas técnicas na especificação §5: delegação só a garçom; admin do estabelecimento exerce as permissões do gerente; trocar papel de garçom revoga as delegações; perfil de inatividade só muda no próximo login.
+- Bloqueios / quem resolve: P-16 (Diego). T-02, P-07, T-05 e T-06 seguem aguardando Diego.
+- Próximo passo concreto: Diego revisa e faz o merge do PR da H11 e responde a P-16; depois, reconciliar com o hash real.
 
 ## Registro de release (ainda nenhum)
 
