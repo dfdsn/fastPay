@@ -157,7 +157,8 @@ class SupportAccessIntegrationTest extends PostgresIntegrationTest {
         assertThat(admin().queryForList("SELECT action FROM fastpay.audit_event WHERE establishment_id = ?",
                 String.class, loja)).contains("suporte.encerrado");
 
-        // Vencida pelo prazo.
+        // Vencida pelo prazo. O relógio anda antes, para a lista ter uma ordem (mais recente primeiro) sem empate.
+        relogio.advance(Duration.ofMinutes(1));
         donaRita.post("/api/v1/support-grants", concessao(IdentityFixtures.email(bia), 1)).andExpect(status().isOk());
         assertThat(suporte.<Boolean>consult(bia, loja, "teste", () -> true)).isTrue();
         relogio.advance(Duration.ofMinutes(61));
