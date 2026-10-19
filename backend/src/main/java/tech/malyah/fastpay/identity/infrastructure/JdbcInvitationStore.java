@@ -4,6 +4,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -74,6 +75,26 @@ public class JdbcInvitationStore {
                 FROM invitation i JOIN establishment e ON e.id = i.establishment_id
                 WHERE i.id = ? AND i.establishment_id = current_establishment_id()
                 """, JdbcInvitationStore::invitation, invitationId).stream().findFirst();
+    }
+
+    /** Contexto da unidade: convites em aberto (não aceitos nem substituídos), mais recentes primeiro, até 100. */
+    public List<Invitation> openInCurrentUnit() {
+        return jdbc.query("SELECT " + COLUMNS + """
+                FROM invitation i JOIN establishment e ON e.id = i.establishment_id
+                WHERE i.establishment_id = current_establishment_id() AND i.accepted_at IS NULL
+                  AND i.invalidated_at IS NULL
+                ORDER BY i.created_at DESC, i.id DESC
+                LIMIT 100
+                """, JdbcInvitationStore::invitation);
+    }
+
+    /** Contexto da unidade: cancela o convite, se ainda estiver em aberto. */
+    public boolean invalidate(UUID invitationId, Instant at) {
+        return jdbc.update("""
+                UPDATE invitation SET invalidated_at = ?
+                 WHERE id = ? AND establishment_id = current_establishment_id()
+                   AND accepted_at IS NULL AND invalidated_at IS NULL
+                """, Timestamp.from(at), invitationId) == 1;
     }
 
     /**

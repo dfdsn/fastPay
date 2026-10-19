@@ -53,6 +53,7 @@ type PageState =
           @if (data.platformAdmin) {
             <p>
               <a mat-stroked-button routerLink="/admin/estabelecimentos">Área da equipe fastPay</a>
+              <a mat-stroked-button routerLink="/admin/suporte">Suporte autorizado</a>
             </p>
           }
           @if (data.units.length === 0) {

@@ -173,8 +173,12 @@ class MembershipsIntegrationTest extends PostgresIntegrationTest {
                 .as("vínculo só nasce do aceite de convite (H10)")
                 .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("row-level security");
         assertThatThrownBy(() -> tenants.runInEstablishment(lojaA, () -> jdbc.update(
-                "UPDATE membership SET role = 'ADMIN_ESTABELECIMENTO' WHERE identity_id = ?", bruno)))
-                .as("troca de papel não é concedida ao runtime nesta história")
+                "UPDATE membership SET identity_id = ? WHERE id = ?", bruno, vinculoAnaA)))
+                .as("o vínculo não muda de pessoa")
                 .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("permission denied");
+        assertThat(tenants.inEstablishment(lojaA, () -> jdbc.update(
+                "UPDATE membership SET role = 'ADMIN_ESTABELECIMENTO' WHERE id = ?", vinculoAnaB)))
+                .as("troca de papel (H11) só alcança vínculos da unidade do contexto")
+                .isZero();
     }
 }

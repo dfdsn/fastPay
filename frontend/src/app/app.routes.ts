@@ -58,5 +58,24 @@ export const routes: Routes = [
     canActivate: [signedInGuard, unitSelectedGuard],
     loadComponent: () => import('./session/unit-home-page').then((m) => m.UnitHomePage),
   },
+  {
+    path: 'equipe',
+    title: 'Equipe · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () => import('./team/team-page').then((m) => m.TeamPage),
+  },
+  {
+    path: 'acesso-de-suporte',
+    title: 'Acesso de suporte · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () =>
+      import('./support/support-grants-page').then((m) => m.SupportGrantsPage),
+  },
+  {
+    path: 'admin/suporte',
+    title: 'Suporte autorizado · fastPay',
+    canActivate: [signedInGuard],
+    loadComponent: () => import('./support/support-area-page').then((m) => m.SupportAreaPage),
+  },
   { path: '**', redirectTo: '' },
 ];
