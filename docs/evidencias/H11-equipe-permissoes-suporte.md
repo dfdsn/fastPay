@@ -60,5 +60,5 @@ Admin fastPay sem vínculo não opera equipe nem loja; o suporte só lê com con
 
 - O perfil de inatividade da sessão (30 min para gerente/admin, 1 h para garçom) só muda no próximo login depois de uma troca de papel; a exigência de MFA vale na hora.
 - O suporte consulta por enquanto só a equipe e os convites; as demais consultas (comandas, produção, pagamentos) entram com as histórias que criam esses dados, pelo mesmo `SupportAccess.consult`.
-- Proposta P-16 (quem é suporte, prazo máximo de 72 h) aguarda Diego.
+- P-16 (quem é suporte, prazo máximo de 72 h) aprovada por Diego em 19/10/2026.
 - E2E Playwright (não configurado); `compose-smoke.sh` (roda na CI do PR); envio real de convite pelo Gmail de homologação (T-02).

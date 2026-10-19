@@ -72,7 +72,7 @@ fastpay:
     mfa-failures-per-account: 5
     # Prazo para digitar o código ou cadastrar o autenticador depois da senha.
     mfa-pending-timeout: 10m
-  # Suporte autorizado pelo dono (H11, FR-66): somente leitura, prazo máximo de cada concessão (proposta, P-16).
+  # Suporte autorizado pelo dono (H11, FR-66): somente leitura, prazo máximo de cada concessão (P-16, aprovada).
   support:
     max-duration: 72h
   # E-mail (H12, especificação §9). Desenvolvimento: caixa de teste em memória, sem envio real.
