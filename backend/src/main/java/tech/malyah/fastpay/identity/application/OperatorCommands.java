@@ -20,7 +20,8 @@ import tech.malyah.fastpay.identity.domain.AuthKeys;
  * o runtime. Não existe credencial padrão: cada comando gera um link de uso único (30 minutos) para a
  * pessoa criar a própria senha; depois do login ela é obrigada a cadastrar o autenticador. O link sai
  * só na saída do comando, para o operador entregar à pessoa por um canal já confirmado; nunca vai para
- * o log. Tudo fica na trilha de segurança da identidade, com operador e motivo.
+ * o log. Tudo fica na trilha de segurança da identidade, com operador e motivo. T-05 e P-07 aprovadas por
+ * Diego em 29/10/2026.
  */
 public final class OperatorCommands {
 
@@ -41,13 +42,21 @@ public final class OperatorCommands {
     private final TransactionTemplate transactions;
     private final String linkBase;
     private final Clock clock;
+    private final int emailMaxAttempts;
 
-    /** @param operatorDataSource conexão com a credencial de migração (dono do schema) */
-    public OperatorCommands(DataSource operatorDataSource, String linkBase, Clock clock) {
+    /**
+     * @param operatorDataSource conexão com a credencial de migração (dono do schema)
+     * @param emailMaxAttempts   teto de tentativas do aviso por e-mail ({@code fastpay.jobs.max-attempts})
+     */
+    public OperatorCommands(DataSource operatorDataSource, String linkBase, Clock clock, int emailMaxAttempts) {
         this.jdbc = new JdbcTemplate(operatorDataSource);
         this.transactions = new TransactionTemplate(new DataSourceTransactionManager(operatorDataSource));
         this.linkBase = Objects.requireNonNull(linkBase, "linkBase");
         this.clock = Objects.requireNonNull(clock, "clock");
+        if (emailMaxAttempts < 1) {
+            throw new IllegalArgumentException("emailMaxAttempts deve ser pelo menos 1");
+        }
+        this.emailMaxAttempts = emailMaxAttempts;
     }
 
     /**
@@ -79,10 +88,11 @@ public final class OperatorCommands {
     }
 
     /**
-     * Recuperação excepcional sem códigos (proposta P-07, aguarda aprovação de Diego): depois de o operador
-     * confirmar a identidade da pessoa fora do sistema, remove o autenticador, os códigos e a senha,
-     * encerra todas as sessões e gera o link de uso único. A pessoa cria a senha, entra e é obrigada a
-     * cadastrar um autenticador novo se o perfil exigir. Vale também para o único admin fastPay.
+     * Recuperação excepcional sem códigos (P-07, aprovada em 29/10/2026): depois de o operador confirmar a
+     * identidade da pessoa fora do sistema, remove o autenticador, os códigos e a senha, encerra todas as
+     * sessões e gera o link de uso único. A pessoa cria a senha, entra e é obrigada a cadastrar um
+     * autenticador novo se o perfil exigir. Vale também para o único admin fastPay. Na mesma transação
+     * grava o aviso por e-mail ao endereço da conta (sem o link), que o worker do backend envia.
      */
     public IssuedLink resetMfa(String email, String operator, String reason) {
         String normalized = requireEmail(email);
@@ -103,6 +113,10 @@ public final class OperatorCommands {
             jdbc.update("DELETE FROM spring_session WHERE principal_name = ?", identityId.toString());
             IssuedLink link = issueLink(identityId, now);
             event(identityId, "mfa.recuperacao_excepcional", actor, why, now);
+            jdbc.update("""
+                    INSERT INTO job (id, identity_id, kind, dedup_key, max_attempts)
+                    VALUES (?, ?, ?, ?, ?)
+                    """, UUID.randomUUID(), identityId, MfaResetEmailJob.KIND, now.toString(), emailMaxAttempts);
             return link;
         });
     }

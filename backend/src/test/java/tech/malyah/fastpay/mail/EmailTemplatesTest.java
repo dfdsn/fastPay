@@ -54,5 +54,9 @@ class EmailTemplatesTest {
                 "/redefinir-senha#token=" + TOKEN);
         assertThat(aviso.subject()).isEqualTo("Verificação em duas etapas reconfigurada no fastPay");
         assertThat(aviso.body()).contains("Em 13/10/2026 às 12:00", "deixaram de valer", "sessões abertas");
+        EmailMessage recuperacao = modelos.mfaReset("ana@exemplo.com", "Ana", Instant.parse("2026-10-13T15:00:00Z"));
+        assertThat(recuperacao.subject()).isEqualTo("Acesso à sua conta redefinido no fastPay");
+        assertThat(recuperacao.body()).contains("Olá, Ana", "Em 13/10/2026 às 12:00", "confirmar a sua identidade",
+                "deixaram de valer", "não traz link").doesNotContain("token");
     }
 }

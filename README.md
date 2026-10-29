@@ -49,6 +49,8 @@ docker compose --env-file .env -f infra/compose.dev.yml run --rm backend \
 
 Equipe de loja em desenvolvimento (até convites, H10): crie a identidade e o vínculo direto no banco com o superusuário (dados sintéticos), peça "Esqueci minha senha" em `/esqueci-a-senha` com o e-mail dela e abra o link guardado na caixa de teste (`GET /api/v1/dev/caixa-de-teste`, ligado só no Compose dev). Gerente e admin do estabelecimento cadastram o autenticador no primeiro login. Em desenvolvimento nenhum e-mail real é enviado; o e-mail sai pela fila de jobs (H12), então a mensagem aparece na caixa em alguns segundos. Envio real em homologação: `MAIL_TRANSPORT=smtp`, `SMTP_*`, `MAIL_FROM` e `MAIL_ALLOWED_RECIPIENTS` no `.env.hml` (ver `.env.example`).
 
+Homologação local com envio real pelo Gmail de teste (T-02): `./scripts/gerar-env-hml.sh conta@gmail.com` cria o `.env.hml` (senhas aleatórias, chave MFA, imagens `develop` do GHCR; pede a senha de app do Gmail sem mostrá-la e não sobrescreve um arquivo existente). Depois: `docker compose --env-file .env.hml -f infra/compose.hml.yml up -d` (com imagens privadas, antes `docker login ghcr.io` com token `read:packages`), crie o admin com o comando acima trocando para `--env-file .env.hml -f infra/compose.hml.yml`, peça "Esqueci minha senha" em `http://127.0.0.1:8089/esqueci-a-senha` e confira a caixa do Gmail. A recuperação excepcional (`redefinir-mfa`) também avisa a pessoa por e-mail, sem o link.
+
 ## Documentação
 
 | Arquivo | Finalidade |

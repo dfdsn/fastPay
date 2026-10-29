@@ -63,7 +63,8 @@ class OperatorCommandRunner implements ApplicationRunner, ExitCodeGenerator {
         var operatorDb = new DriverManagerDataSource(environment.getRequiredProperty("spring.flyway.url"),
                 environment.getRequiredProperty("spring.flyway.user"),
                 environment.getProperty("spring.flyway.password", ""));
-        var commands = new OperatorCommands(operatorDb, links.passwordResetBase(), clock);
+        var commands = new OperatorCommands(operatorDb, links.passwordResetBase(), clock,
+                environment.getProperty("fastpay.jobs.max-attempts", Integer.class, 5));
         String email = environment.getProperty("fastpay.operator.email");
         String operator = environment.getProperty("fastpay.operator.operator");
         String reason = environment.getProperty("fastpay.operator.reason");
@@ -79,6 +80,9 @@ class OperatorCommandRunner implements ApplicationRunner, ExitCodeGenerator {
                     + " (UTC) e só pode ser usado uma vez:");
             out.println(link.link());
             out.println("Depois de criar a senha e entrar, a pessoa cadastra o aplicativo autenticador.");
+            if (RESET_MFA.equals(command)) {
+                out.println("O aviso por e-mail (sem o link) sai pela fila quando o backend estiver no ar.");
+            }
             exitCode = 0;
         } catch (Refused refused) {
             out.println("Comando recusado: " + refused.getMessage());
