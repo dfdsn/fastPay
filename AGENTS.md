@@ -62,6 +62,7 @@ Comandos validados em H01 (07/10/2026, ver `docs/evidencias/H01-build.md`) e pla
 | `./scripts/verify.sh backend` / `frontend` | Metade da verificação, usada pelos jobs da CI | Criado em H02; validado só o modo completo e a recusa de argumento inválido |
 | `docker compose --env-file .env -f infra/compose.dev.yml up -d --build` | Banco/backend/frontend locais em `127.0.0.1:8088`; não produção | Criado em H02; não executado (Docker Desktop falhando) |
 | `./scripts/compose-smoke.sh` | Smoke Compose: saúde, `/api`, banco sem porta, volume após `down`/`up` | Criado em H02; não executado localmente; roda na CI |
+| `./scripts/gerar-env-hml.sh conta@gmail.com` | Gera o `.env.hml` local com senhas aleatórias e o Gmail de teste (T-02) | Criado em 29/10/2026; testado com senha fictícia, sem Compose |
 | `docker compose --env-file .env.hml -f infra/compose.hml.yml up -d` | Homologação com imagens do GHCR por tag | Criado em H02; depende de remoto/GHCR |
 
 Executar no WSL2 para manter paridade com Linux; Docker Desktop deve estar acessível. Na máquina de Diego o WSL2 estava sem rede durante H01 e a validação foi no Windows (Git Bash/PowerShell); registrar sempre onde rodou. Usar JDK 25 e o npm que acompanha o Node 24.18.0. Conferir scripts reais antes de usar. CI e local precisam mesmas ferramentas/lockfiles. Se nome real divergir, atualizar docs sem deixar comando fictício.

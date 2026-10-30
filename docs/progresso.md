@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 16/10/2026 por Claude Code (H10 reconciliada; H11 em revisão).
+Atualizado em 29/10/2026 por Claude Code (H11 reconciliada; P-07, T-05 e T-06 aprovadas; T-02 com conta Gmail, envio real a validar).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -50,6 +50,10 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **Merge da H11 (19/10/2026):** Diego fez o merge do [PR #10](https://github.com/dfdsn/fastPay/pull/10) em `develop` (`54728ce`, 19/10/2026 00:56 UTC). A CI do push em `develop` **falhou** (run 39183045432): `SupportAccessIntegrationTest.semConcessaoVigenteNaUnidadeOSuporteERecusado` dependia da ordem de duas concessões com o mesmo horário (relógio de teste parado; desempate pelo id aleatório). Falha do teste, não do código; corrigida em `feature/H11-corrige-teste-suporte`. A H11 só fica concluída com a CI de `develop` verde depois desse PR.
 
+**Reconciliação da H11 (29/10/2026):** Diego fez o merge do [PR #11](https://github.com/dfdsn/fastPay/pull/11) em `develop` (`32c78a6`, 19/10/2026 01:15 UTC). CI do push em `develop` verde (run 39184491303). **H11 concluída.**
+
+**Decisões de 29/10/2026:** Diego aprovou P-07 (recuperação excepcional de MFA), T-05 (bootstrap do primeiro admin fastPay) e T-06 (fila de jobs própria) como implementadas, com os detalhes de P-07 registrados em `decisoes-pendentes.md`. O aviso por e-mail após `redefinir-mfa`, parte da aprovação de P-07, entrou em `feature/H09-aprova-mfa-bootstrap-eventos`. Diego criou a conta Gmail de homologação com senha de app (T-02); o envio real não pôde ser testado da sessão em nuvem (sem saída SMTP) e fica para o fim, na máquina dele, com `scripts/gerar-env-hml.sh` e o Compose de homologação. Senha só no `.env.hml` local, nunca no Git.
+
 ## Estados
 
 Não iniciada → em andamento → aguardando validação ou revisão → concluída. Bloqueada quando falta pré-requisito concreto. Aguardando revisão inclui PR aberto; concluída só após checks e merge develop verificados. Uma release possui registro separado do estado das histórias. Progresso inicialmente sem agente/branch/commit/PR.
@@ -61,14 +65,14 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H01 | Bootstrap reproduzível e contratos de qualidade | Concluída | Merge em `develop` pelo [PR #1](https://github.com/dfdsn/fastPay/pull/1) (`216002c`) e correção da CI no [PR #2](https://github.com/dfdsn/fastPay/pull/2) (`33dfc80`); CI de `develop` verde (run 38166528466) ([evidência](evidencias/H01-build.md)) |
 | H02 | Ambientes Docker e pipeline GitHub | Concluída | [PR #1](https://github.com/dfdsn/fastPay/pull/1) + [PR #2](https://github.com/dfdsn/fastPay/pull/2) (`33dfc80`); CI de `develop` verde com imagens e smoke (run 38166528466) ([evidência](evidencias/H02-ambientes.md)); visibilidade do GHCR a conferir (T-02) |
 | H03 | Migrations e fundação de isolamento RLS | Concluída | [PR #3](https://github.com/dfdsn/fastPay/pull/3) (`96ac6bf`); CI de `develop` verde (run 38167523089) ([evidência](evidencias/H03-migrations-rls.md)) |
-| H04 | Eventos duráveis, idempotência e jobs | Concluída | [PR #4](https://github.com/dfdsn/fastPay/pull/4) (`4bed847`); CI de `develop` verde (run 38174306620) ([evidência](evidencias/H04-eventos-jobs.md)); aceite explícito da T-06 pendente |
+| H04 | Eventos duráveis, idempotência e jobs | Concluída | [PR #4](https://github.com/dfdsn/fastPay/pull/4) (`4bed847`); CI de `develop` verde (run 38174306620) ([evidência](evidencias/H04-eventos-jobs.md)); T-06 aprovada por Diego em 29/10/2026 |
 | H05 | Prova PSP: recebedor, cobrança e split | Bloqueada | Falta acesso ao PSP (P-01); Diego providencia |
 | H06 | Prova PSP: devolução, conciliação e mensalidade | Bloqueada | Depende da H05 e do acesso ao PSP (P-01) |
 | H07 | Identidade, vínculo e seleção de unidade | Concluída | [PR #5](https://github.com/dfdsn/fastPay/pull/5) (`97dde12`); CI de `develop` verde (run 38181137432) ([evidência](evidencias/H07-identidade-vinculos.md)) |
 | H08 | Login da equipe e sessões seguras | Concluída | [PR #6](https://github.com/dfdsn/fastPay/pull/6) (`85659f7`); CI de `develop` verde (run 38199173689) ([evidência](evidencias/H08-login-sessoes.md)); política de senha e limites aprovados (P-07/T-03) |
-| H09 | TOTP, códigos e bootstrap administrativo | Concluída | [PR #7](https://github.com/dfdsn/fastPay/pull/7) (`6a4bc0e`); CI de `develop` verde (run 38408452083) ([evidência](evidencias/H09-mfa-bootstrap.md)); propostas P-07 (recuperação excepcional) e T-05 (bootstrap) ainda aguardam aprovação de Diego |
+| H09 | TOTP, códigos e bootstrap administrativo | Concluída | [PR #7](https://github.com/dfdsn/fastPay/pull/7) (`6a4bc0e`); CI de `develop` verde (run 38408452083) ([evidência](evidencias/H09-mfa-bootstrap.md)); P-07 (recuperação excepcional) e T-05 (bootstrap) aprovadas por Diego em 29/10/2026; aviso por e-mail da recuperação no PR das aprovações |
 | H10 | Criar estabelecimento e convidar dono | Concluída | [PR #9](https://github.com/dfdsn/fastPay/pull/9) (`9151720`); CI de `develop` verde (run 38837453986) ([evidência](evidencias/H10-estabelecimento-convite-dono.md)); envio pelo Gmail de homologação depende da conta de teste (T-02) |
-| H11 | Equipe, permissões e concessão de suporte | Aguardando revisão | Merge do [PR #10](https://github.com/dfdsn/fastPay/pull/10) (`54728ce`) com CI de `develop` vermelha por teste dependente de ordem; correção no PR seguinte ([evidência](evidencias/H11-equipe-permissoes-suporte.md)); P-16 (suporte) aprovada por Diego em 19/10/2026; ver registro abaixo |
+| H11 | Equipe, permissões e concessão de suporte | Concluída | [PR #10](https://github.com/dfdsn/fastPay/pull/10) (`54728ce`) + correção do teste no [PR #11](https://github.com/dfdsn/fastPay/pull/11) (`32c78a6`); CI de `develop` verde (run 39184491303) ([evidência](evidencias/H11-equipe-permissoes-suporte.md)); P-16 (suporte) aprovada por Diego em 19/10/2026; ver registro abaixo |
 | H12 | Convites e e-mail durável em homologação | Concluída | [PR #8](https://github.com/dfdsn/fastPay/pull/8) (`21b2058`); CI de `develop` verde (run 38492760180) ([evidência](evidencias/H12-email-duravel.md)); envio pelo Gmail de homologação depende da conta de teste (T-02) |
 | H13 | Catálogo, setores, disponibilidade e logo | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H14 | Configurações versionadas por estabelecimento | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -351,6 +355,20 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: P-16 (aprovada por Diego em 19/10/2026, cartão de decisão no thread da H11): suporte = admin fastPay escolhido pelo e-mail, prazo de 1 h a 72 h configurável, consulta só leitura auditada. Escolhas técnicas na especificação §5: delegação só a garçom; admin do estabelecimento exerce as permissões do gerente; trocar papel de garçom revoga as delegações; perfil de inatividade só muda no próximo login.
 - Bloqueios / quem resolve: nenhum da H11. T-02, P-07, T-05 e T-06 seguem aguardando Diego.
 - Próximo passo concreto: merge feito em 19/10/2026 (`54728ce`), CI de `develop` vermelha (run 39183045432) por teste dependente de ordem. Diego faz o merge do PR de correção; com a CI de `develop` verde, registrar a H11 como concluída.
+
+- Estado após o merge: **concluída** ([PR #10](https://github.com/dfdsn/fastPay/pull/10) `54728ce` + [PR #11](https://github.com/dfdsn/fastPay/pull/11) `32c78a6`, CI de `develop` run 39184491303; reconciliado em 29/10/2026).
+
+### Aprovações P-07, T-05, T-06 e homologação com Gmail (29/10/2026)
+
+- História e estado: sem história nova; fecha decisões da H04 (T-06) e da H09 (P-07, T-05) e prepara a T-02. **Aguardando revisão** no PR de `feature/H09-aprova-mfa-bootstrap-eventos`.
+- Data/hora e agente: 29/10/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Decisões: Diego aprovou P-07, T-05 e T-06 no thread do projeto (29/10/2026). P-07: só o operador da plataforma (hoje Diego) executa `redefinir-mfa`; equipe de loja é recuperada pelo dono ou admin do estabelecimento, nunca direto pela fastPay; dono/admin passa por chamada de vídeo com documento que confira com o nome cadastrado e confirmação por um contato registrado antes do pedido; pedido só por e-mail nunca basta; aviso por e-mail ao endereço da conta; limite de 5 códigos MFA errados em 15 min mantido; cadastrar um segundo admin fastPay quando houver pessoa de confiança.
+- Mudança de código: `OperatorCommands.resetMfa` grava, na mesma transação, o job `identity.email_acesso_redefinido` (escopo da identidade, teto `fastpay.jobs.max-attempts`); `MfaResetEmailJob` envia `EmailTemplates.mfaReset`, sem link. O comando roda sem worker, então o e-mail sai quando o backend estiver no ar. Sem migration nova (a policy `job_dispatch` já cobre o papel de migração).
+- Homologação: `scripts/gerar-env-hml.sh` cria o `.env.hml` com senhas aleatórias do banco, chave MFA, imagens `develop` do GHCR e Gmail (senha de app pedida no terminal, sem eco); não sobrescreve um `.env.hml` existente. Testado com senha fictícia; o Compose de homologação não foi executado.
+- Testes: backend `./mvnw clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` com Docker para o Testcontainers (sessão em nuvem, 29/10/2026): **243 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. `scripts/gerar-env-hml.sh` testado com senha fictícia (arquivo criado com permissão 600, chave MFA de 32 bytes, recusa sobrescrever). Frontend sem mudança (roda na CI).
+- Testes não executados e por quê: envio real pelo Gmail (T-02; a sessão em nuvem não tem saída SMTP, Diego testa por último na máquina dele); Compose de homologação; E2E Playwright (não configurado).
+- Bloqueios / quem resolve: T-02, Diego roda a homologação local e confirma a chegada do e-mail. H05/H06 seguem bloqueadas pelo PSP (P-01).
+- Próximo passo concreto: Diego revisa e faz o merge; depois, escolhe a próxima história.
 
 ## Registro de release (ainda nenhum)
 

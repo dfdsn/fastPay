@@ -32,6 +32,8 @@ import tech.malyah.fastpay.identity.application.OperatorCommands.Refused;
 import tech.malyah.fastpay.identity.domain.Base32;
 import tech.malyah.fastpay.identity.domain.Totp;
 import tech.malyah.fastpay.identity.infrastructure.MfaSecretCipher;
+import tech.malyah.fastpay.jobs.application.JobWorker;
+import tech.malyah.fastpay.mail.infrastructure.TestMailbox;
 import tech.malyah.fastpay.testsupport.AdjustableClock;
 import tech.malyah.fastpay.testsupport.PostgresIntegrationTest;
 
@@ -70,13 +72,19 @@ class OperatorCommandsIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     JdbcTemplate runtime;
 
+    @Autowired
+    TestMailbox caixa;
+
+    @Autowired
+    JobWorker worker;
+
     OperatorCommands operador;
     MfaFixtures mfa;
 
     @BeforeEach
     void semAdminFastPay() {
         operador = new OperatorCommands(dataSource(POSTGRES.getJdbcUrl(), "fastpay_migration", migrationPassword()),
-                LINK_BASE, relogio);
+                LINK_BASE, relogio, 5);
         mfa = new MfaFixtures(admin(), cifra);
         // O banco de teste é compartilhado: admins criados por outras classes deixam de ser admin aqui.
         admin().update("UPDATE fastpay.user_identity SET platform_role = NULL WHERE platform_role = 'ADMIN_FASTPAY'");
@@ -146,9 +154,20 @@ class OperatorCommandsIntegrationTest extends PostgresIntegrationTest {
         sessaoAntiga.login(email, SENHA);
         cadastrarAutenticador(sessaoAntiga).andExpect(status().isOk());
         relogio.advance(Duration.ofMinutes(1));
+        caixa.clear();
 
         // Celular e códigos perdidos; identidade confirmada fora do sistema.
         IssuedLink link = operador.resetMfa(email, "Diego", "Celular roubado, sem códigos; identidade confirmada");
+
+        // Aviso durável ao e-mail da conta, gravado junto com a recuperação; o link nunca vai nele.
+        while (worker.runOnce() > 0) {
+            // até não haver mais jobs vencidos
+        }
+        assertThat(caixa.messages()).filteredOn(m -> m.to().equals(email)).singleElement().satisfies(aviso -> {
+            assertThat(aviso.subject()).endsWith("Acesso à sua conta redefinido no fastPay");
+            assertThat(aviso.body()).contains("Olá, Admin", "deixaram de valer", "este e-mail não traz link")
+                    .doesNotContain("#token=");
+        });
 
         sessaoAntiga.get("/api/v1/auth/session").andExpect(status().isUnauthorized());
         new Browser(mvc).login(email, SENHA).andExpect(status().isUnauthorized());

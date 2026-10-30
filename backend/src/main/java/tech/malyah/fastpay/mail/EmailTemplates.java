@@ -71,6 +71,21 @@ public class EmailTemplates {
         return new EmailMessage(to, "Verificação em duas etapas reconfigurada no fastPay", body);
     }
 
+    /** Aviso da recuperação excepcional feita pelo operador (P-07); o link vai por outro canal, nunca aqui. */
+    public EmailMessage mfaReset(String to, String displayName, Instant at) {
+        String body = """
+                Olá, %s.
+
+                Em %s a equipe do fastPay redefiniu o acesso à sua conta a pedido, depois de confirmar a sua \
+                identidade. A senha, o autenticador e os códigos de recuperação anteriores deixaram de valer e \
+                todas as sessões abertas foram encerradas. O link para criar a nova senha foi entregue pelo canal \
+                combinado com você; este e-mail não traz link.
+
+                Se não foi você quem pediu, avise o administrador do fastPay imediatamente.
+                """.formatted(displayName, when(at));
+        return new EmailMessage(to, "Acesso à sua conta redefinido no fastPay", body);
+    }
+
     private String when(Instant instant) {
         String suffix = "America/Sao_Paulo".equals(zone.getId()) ? " (horário de Brasília)" : " (" + zone.getId() + ")";
         return WHEN.format(instant.atZone(zone)) + suffix;
