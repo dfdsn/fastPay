@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 29/10/2026 por Claude Code (H11 reconciliada; P-07, T-05 e T-06 aprovadas; T-02 com conta Gmail, envio real a validar).
+Atualizado em 31/10/2026 por Claude Code (PR #12 reconciliado; T-02 em teste local na máquina de Diego).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -369,6 +369,17 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Testes não executados e por quê: envio real pelo Gmail (T-02; a sessão em nuvem não tem saída SMTP, Diego testa por último na máquina dele); Compose de homologação; E2E Playwright (não configurado).
 - Bloqueios / quem resolve: T-02, Diego roda a homologação local e confirma a chegada do e-mail. H05/H06 seguem bloqueadas pelo PSP (P-01).
 - Próximo passo concreto: Diego revisa e faz o merge; depois, escolhe a próxima história.
+
+- Estado após o merge: [PR #12](https://github.com/dfdsn/fastPay/pull/12) mergeado em `develop` (`91bd5f7`, 30/10/2026 19:15 UTC); CI do push em `develop` verde. Aprovações registradas; T-02 segue aberta.
+
+### T-02 — Primeiro teste local do Gmail de homologação (31/10/2026)
+
+- Estado: T-02 **aguardando validação** (envio real ainda não confirmado).
+- Onde rodou: máquina de Diego (Windows, Docker Desktop 28.5.1, PowerShell), `develop` `91bd5f7`, `.env.hml` gerado por `scripts/gerar-env-hml.sh`.
+- O que aconteceu: o Docker Desktop não conseguiu baixar camadas do GHCR nem do Docker Hub (`EOF` ao abrir o download no CDN; `curl` do Windows alcança o mesmo endereço). Contorno: imagens de backend e frontend construídas localmente a partir de `develop` com as tags do GHCR e `up -d --pull never`; Postgres baixou depois de `max-concurrent-downloads: 1`. Ambiente saudável, migrations V1–V9 aplicadas, `criar-admin-fastpay` ok, pedido de redefinição entrou na fila. O envio falhou em todas as tentativas com `MailSendException` (falha de conexão/TLS antes do login; senha recusada apareceria como `MailAuthenticationException`).
+- Mudança: `Emails` passa a registrar o motivo da falha por tipo de exceção (sem conexão, DNS, tempo esgotado, TLS, conexão encerrada, usuário/senha, destinatário), sem o texto do servidor, em `feature/T02-motivo-falha-smtp`.
+- Testes: backend `./mvnw clean verify` no contêiner da CI: **244 testes, 0 falhas**.
+- Próximo passo concreto: Diego confere `Test-NetConnection smtp.gmail.com -Port 587` e, se a rede alcança, testa a senha de app com `Send-MailMessage`; com o envio confirmado, fechar a T-02.
 
 ## Registro de release (ainda nenhum)
 

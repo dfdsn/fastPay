@@ -1,13 +1,30 @@
 package tech.malyah.fastpay.mail;
 
+import java.io.EOFException;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+
+import javax.net.ssl.SSLException;
+
+import jakarta.mail.AuthenticationFailedException;
+import jakarta.mail.SendFailedException;
 
 import io.micrometer.core.instrument.MeterRegistry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailSendException;
 import org.springframework.stereotype.Service;
 
 import tech.malyah.fastpay.jobs.JobFailure;
@@ -69,11 +86,65 @@ public class Emails {
         } catch (RuntimeException failure) {
             count("falhou");
             throw new JobFailure("Servidor de e-mail não aceitou a mensagem (" + failure.getClass().getSimpleName()
-                    + ").", failure);
+                    + ")" + reason(failure) + ".", failure);
         }
         count("enviado");
         log.info("E-mail {} aceito pelo transporte", effectId);
         return Delivery.SENT;
+    }
+
+    /**
+     * Motivo da falha por tipo de exceção, sem o texto do servidor (que pode trazer endereços). O Spring
+     * guarda as falhas de conexão e envio em {@link MailSendException#getMessageExceptions()}, fora da
+     * cadeia de causas, por isso as duas são percorridas. Vazio quando o tipo não é reconhecido.
+     */
+    static String reason(Throwable failure) {
+        Deque<Throwable> pending = new ArrayDeque<>();
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        pending.add(failure);
+        while (!pending.isEmpty()) {
+            Throwable current = pending.poll();
+            if (!seen.add(current)) {
+                continue;
+            }
+            String label = label(current);
+            if (label != null) {
+                return ": " + label + " (" + current.getClass().getSimpleName() + ")";
+            }
+            if (current instanceof MailSendException send) {
+                Collections.addAll(pending, send.getMessageExceptions());
+            }
+            if (current.getCause() != null) {
+                pending.add(current.getCause());
+            }
+        }
+        return "";
+    }
+
+    private static String label(Throwable error) {
+        if (error instanceof AuthenticationFailedException || error instanceof MailAuthenticationException) {
+            return "usuário ou senha recusados";
+        }
+        if (error instanceof UnknownHostException) {
+            return "servidor não encontrado (DNS)";
+        }
+        if (error instanceof ConnectException || error instanceof NoRouteToHostException
+                || "MailConnectException".equals(error.getClass().getSimpleName())) {
+            return "sem conexão com o servidor";
+        }
+        if (error instanceof SocketTimeoutException) {
+            return "tempo esgotado na conexão";
+        }
+        if (error instanceof SSLException) {
+            return "falha de TLS (certificado não confiável ou conexão interceptada)";
+        }
+        if (error instanceof EOFException) {
+            return "conexão encerrada no meio do caminho";
+        }
+        if (error instanceof SendFailedException) {
+            return "remetente ou destinatário recusado";
+        }
+        return null;
     }
 
     private EmailMessage tagged(EmailMessage message) {
