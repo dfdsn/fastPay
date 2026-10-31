@@ -379,7 +379,8 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - O que aconteceu: o Docker Desktop não conseguiu baixar camadas do GHCR nem do Docker Hub (`EOF` ao abrir o download no CDN; `curl` do Windows alcança o mesmo endereço). Contorno: imagens de backend e frontend construídas localmente a partir de `develop` com as tags do GHCR e `up -d --pull never`; Postgres baixou depois de `max-concurrent-downloads: 1`. Ambiente saudável, migrations V1–V9 aplicadas, `criar-admin-fastpay` ok, pedido de redefinição entrou na fila. O envio falhou em todas as tentativas com `MailSendException` (falha de conexão/TLS antes do login; senha recusada apareceria como `MailAuthenticationException`).
 - Mudança: `Emails` passa a registrar o motivo da falha por tipo de exceção (sem conexão, DNS, tempo esgotado, TLS, conexão encerrada, usuário/senha, destinatário), sem o texto do servidor, em `feature/T02-motivo-falha-smtp`.
 - Testes: backend `./mvnw clean verify` no contêiner da CI: **244 testes, 0 falhas**.
-- Próximo passo concreto: Diego confere `Test-NetConnection smtp.gmail.com -Port 587` e, se a rede alcança, testa a senha de app com `Send-MailMessage`; com o envio confirmado, fechar a T-02.
+- Diagnóstico (31/10/2026): da máquina de Diego, `Test-NetConnection` até `smtp.gmail.com:587` deu certo por IPv6 e IPv4, e `Send-MailMessage` com a senha de app entregou o e-mail: conta e senha valem. Causa da falha no Compose: em `compose.hml.yml` o backend estava só na rede `internal` (`internal: true`, sem saída), então nunca alcançava o SMTP. Correção: rede `egress` para o backend, sem porta publicada.
+- Próximo passo concreto: Diego atualiza o branch (ou `develop` depois do merge), roda `up -d --pull never` para recriar o backend na rede nova, pede "Esqueci minha senha" e confirma a chegada; com isso, fechar a T-02.
 
 ## Registro de release (ainda nenhum)
 
