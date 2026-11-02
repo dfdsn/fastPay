@@ -43,6 +43,7 @@ Dependência nova: `spring-boot-starter-mail` (Jakarta Mail/Angus pelo BOM do Bo
 ## 3. Não executado e por quê
 
 - Envio pelo Gmail de homologação: a conta dedicada e a senha de app não existem ainda (T-02, Diego). O caminho SMTP foi provado contra o Mailpit; o primeiro envio real deve ir só para endereços da lista permitida.
+  - **Atualização 02/11/2026:** envio real validado por Diego com o Compose de homologação na máquina dele (ver `progresso.md`, registro da T-02).
 - Status de entrega separado (bounce/complaint): SMTP do Gmail não informa; fica para o SES (H49).
 - Fluxo do convite (token de 48 h, aceite, reenvio que invalida o anterior, autorização de quem reenvia): pertence à H10/H11, que criam o convite. A H12 entrega o modelo, o link e o envio durável que elas usam; o reenvio de convite deve passar pela mesma autorização de quem convidou e gerar efeito novo na fila.
 - Aviso por e-mail no `redefinir-mfa` do operador: depende da aprovação da proposta P-07.

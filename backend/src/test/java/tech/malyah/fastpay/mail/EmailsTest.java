@@ -81,6 +81,27 @@ class EmailsTest {
         assertThat(metricas.counter("fastpay.email", "resultado", "falhou").count()).isEqualTo(1);
     }
 
+    @Test
+    void falhaDeConexaoOuDeLoginDizOMotivoSemOTextoDoServidor() {
+        falha = new MailSendException(java.util.Map.of(new Object(), new jakarta.mail.MessagingException(
+                "Could not connect to SMTP host: smtp.gmail.com", new java.net.ConnectException("Connection refused"))));
+        assertThatThrownBy(() -> emails("homologation", List.of("@permitido.test")).send(convite, UUID.randomUUID()))
+                .hasMessage("Servidor de e-mail não aceitou a mensagem (MailSendException): sem conexão com o "
+                        + "servidor (ConnectException).");
+
+        falha = new MailSendException(java.util.Map.of(new Object(), new jakarta.mail.MessagingException("STARTTLS",
+                new javax.net.ssl.SSLHandshakeException("PKIX path building failed"))));
+        assertThatThrownBy(() -> emails("homologation", List.of("@permitido.test")).send(convite, UUID.randomUUID()))
+                .hasMessageContaining("falha de TLS").hasMessageNotContaining("PKIX");
+
+        falha = new org.springframework.mail.MailAuthenticationException(
+                new jakarta.mail.AuthenticationFailedException("535 5.7.8 fastpay.hml@gmail.com"));
+        assertThatThrownBy(() -> emails("homologation", List.of("@permitido.test")).send(convite, UUID.randomUUID()))
+                .hasMessage("Servidor de e-mail não aceitou a mensagem (MailAuthenticationException): usuário ou "
+                        + "senha recusados (MailAuthenticationException).")
+                .hasMessageNotContaining("gmail");
+    }
+
     private Emails emails(String ambiente, List<String> permitidos) {
         MailProperties props = new MailProperties(MailProperties.Transport.SMTP, "fastPay <fastpay@fastpay.hml.test>",
                 "https://hml.exemplo.com", permitidos, ZoneId.of("America/Sao_Paulo"), false,
