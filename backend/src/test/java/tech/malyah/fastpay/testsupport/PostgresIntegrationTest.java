@@ -32,6 +32,9 @@ public abstract class PostgresIntegrationTest {
     public static final String MFA_KEY = java.util.Base64.getEncoder().encodeToString(
             java.security.SecureRandom.getSeed(32));
 
+    /** Pasta do storage local de arquivos nos testes (H13). */
+    public static final Path STORAGE_DIR = temporaryStorage();
+
     protected static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
             DockerImageName.parse(IMAGE).asCompatibleSubstituteFor("postgres"))
             .withDatabaseName("fastpay")
@@ -54,12 +57,26 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
         registry.add("spring.flyway.password", () -> MIGRATION_PASSWORD);
         registry.add("fastpay.auth.mfa-encryption-key", () -> MFA_KEY);
+        // Storage local de imagens (H13) numa pasta temporária da execução.
+        registry.add("fastpay.storage.local-dir", () -> STORAGE_DIR.toString());
         // Fixtures de teste (versões 1000+) aplicadas depois das migrations reais.
         registry.add("spring.flyway.locations", () -> "classpath:db/migration,classpath:db/testfixture");
         // Contextos de teste ficam em cache e compartilham o banco: sem worker periódico, cada teste
         // executa jobs explicitamente e um contexto não consome jobs de outro. Um teste do próprio
         // worker liga com fastpay.test.jobs-worker=true.
         registry.add("fastpay.jobs.worker-enabled", () -> "${fastpay.test.jobs-worker:false}");
+    }
+
+    private static Path temporaryStorage() {
+        try {
+            return java.nio.file.Files.createTempDirectory("fastpay-arquivos-");
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    protected static String appPassword() {
+        return APP_PASSWORD;
     }
 
     protected static String migrationPassword() {

@@ -21,7 +21,7 @@ import tech.malyah.fastpay.identity.Permission;
  * <li>Gerente: toda a operação, inclusive devolução, débito, regularização e invalidação de recebimento externo
  * (não delegáveis); vê a equipe e delega a garçons.
  * <li>Administrador do estabelecimento: tudo do gerente (exerce gerente) e o que é exclusivo dele: equipe,
- * conta PSP e autorização de suporte.
+ * conta PSP, autorização de suporte, catálogo e setores (H13) e configuração da unidade, como o logo (FR-67).
  * </ul>
  */
 public final class AccessPolicy {
@@ -37,7 +37,8 @@ public final class AccessPolicy {
     }
 
     private static final Set<Permission> MANAGER = EnumSet.complementOf(
-            EnumSet.of(GERIR_EQUIPE, CONECTAR_CONTA_PSP, AUTORIZAR_SUPORTE));
+            EnumSet.of(GERIR_EQUIPE, CONECTAR_CONTA_PSP, AUTORIZAR_SUPORTE, GERIR_CATALOGO,
+                    CONFIGURAR_ESTABELECIMENTO));
 
     private static final Map<MembershipRole, Set<Permission>> BY_ROLE = Map.of(
             MembershipRole.GARCOM, EnumSet.of(OPERAR_COMANDA, ATENDER_PROBLEMA),

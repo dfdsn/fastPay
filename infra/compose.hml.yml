@@ -45,7 +45,11 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       # H09: chave do segredo TOTP, fora do banco. Obrigatória; sem ela o backend não sobe.
+      # H13: imagens (fotos de produto e logo) no volume files-data; sobrevive a down/up sem -v.
+      STORAGE_LOCAL_DIR: /var/lib/fastpay/arquivos
       MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?defina MFA_ENCRYPTION_KEY no .env.hml}
+    volumes:
+      - files-data:/var/lib/fastpay/arquivos
     depends_on:
       db:
         condition: service_healthy
@@ -73,3 +77,4 @@ networks:
 
 volumes:
   db-data:
+  files-data:
