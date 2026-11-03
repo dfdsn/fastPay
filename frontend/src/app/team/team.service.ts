@@ -16,6 +16,8 @@ export interface TeamMember {
   since: string;
   deactivatedAt: string | null;
   delegated: Permission[];
+  /** Limite de desconto efetivo, em % do consumo ("12.5000"); administrador sempre 100 (H14). */
+  discountLimitPercent: string;
 }
 
 export interface PendingInvitation {
@@ -77,6 +79,12 @@ export class TeamService {
   deactivate(membershipId: string): Observable<TeamView> {
     return this.auth.withCsrf(() =>
       this.http.post<TeamView>(`/api/v1/team/members/${membershipId}/deactivate`, null),
+    );
+  }
+
+  setDiscountLimit(membershipId: string, percent: string): Observable<TeamView> {
+    return this.auth.withCsrf(() =>
+      this.http.put<TeamView>(`/api/v1/team/members/${membershipId}/discount-limit`, { percent }),
     );
   }
 
