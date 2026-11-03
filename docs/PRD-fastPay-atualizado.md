@@ -230,7 +230,7 @@ Admin fastPay consulta demanda agregada e classificação → identifica produto
 
 **FR-29 — Couvert.** Valor por pessoa, automático ou manual. Automático captura na abertura; manual na inclusão. Uma cobrança válida por comanda, sem repetição na mesma visita. Mudança de configuração não altera existente. Contestação pelo cliente; autorizado cancela com motivo. Devoluções seguem motivo e vínculo de FR-12/FR-71; valor livre não presume estorno de couvert.
 
-**FR-30 — Desconto.** Um por comanda, fixo em reais ou percentual sobre consumo, nunca sobre couvert. Estabelecimento escolhe formatos e limite por funcionário (percentual do subtotal, inclusive para desconto em reais). Alteração substitui anterior. Não superar consumo; motivo e autoria obrigatórios. Comanda em fechamento requer reabertura. Sem desconto por item/promoções automáticas.
+**FR-30 — Desconto.** Um por comanda, fixo em reais ou percentual sobre consumo, nunca sobre couvert. Estabelecimento escolhe formatos e limite por funcionário (percentual do subtotal, inclusive para desconto em reais). Limite por pessoa (P-17, 03/11/2026): administrador sempre 100%; gerente 100% até o administrador mudar; garçom 0% até gerente ou administrador mudar, o gerente no máximo até o próprio limite; vale na operação seguinte. Alteração substitui anterior. Não superar consumo; motivo e autoria obrigatórios. Comanda em fechamento requer reabertura. Sem desconto por item/promoções automáticas.
 
 ### 10.2 Fórmula e apresentação
 

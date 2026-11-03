@@ -12,7 +12,7 @@ Registro sanitizado. Claude Code, 03/11/2026, sessão em nuvem (Linux) com Docke
 | Limite de desconto (P-17) | `identity.domain.AccessPolicy`, `identity.Team.setDiscountLimit`, `identity.web.TeamController` (`/api/v1/team/members/{id}/discount-limit`), `UnitMembership.discountLimitPercent` | Por pessoa, padrão por papel, gerente até o próprio limite, efeito na operação seguinte |
 | Frontend | `settings/settings-page.ts`, `settings/settings.service.ts`, rota `/configuracao`, link no início; `team/team-page.ts` | Admin edita, gerente consulta; recusa do servidor no campo; conflito de versão com "Recarregar"; mudança de corte agendada visível; dia operacional na hora local da unidade; limite por pessoa na Equipe |
 
-## 2. Propostas aguardando Diego
+## 2. Propostas aprovadas por Diego em 03/11/2026 (thread da H14, depois do merge do PR #17)
 
 | Proposta | Conteúdo |
 |---|---|
