@@ -21,13 +21,13 @@ Registro sanitizado. Claude Code, 03/11/2026, sessão em nuvem (Linux) com Docke
 | P-07, recuperação avulsa | Quem tem `RECUPERAR_ACESSO_CONSUMIDOR` (gerente, admin ou garçom com a delegação) vê a pessoa; ela diz o nome/apelido da comanda e um item pedido (ou, sem pedidos, a hora da abertura); motivo escrito (5–300); auditado; o acesso anterior é revogado e um QR novo é gerado. Alternativas oferecidas: só gerente/admin; só presencial + motivo |
 | Abertura antes da ativação | Unidade em configuração abre comanda só em desenvolvimento e homologação (`fastpay.environment`); em produção só unidade ativa (H39). Alternativa oferecida: comandas de teste também em produção |
 
-## 3. Propostas aguardando Diego
+## 3. Propostas aprovadas por Diego em 03/11/2026 (cartão no thread da H15, depois do merge do PR #19)
 
 | Proposta | Conteúdo |
 |---|---|
 | T-01 | `io.nayuki:qrcodegen` 1.8.0 para desenhar o QR no servidor (alternativa: biblioteca JavaScript no frontend) |
 | T-03 (H15) | Nome/apelido até 60 caracteres; mesa até 20; números de 1 a 9999 (menor livre entre as ativas); motivo da recuperação de 5 a 300; cookie do acesso `FASTPAY_ACESSO` (caminho `/api/v1/guest`, `HttpOnly`, `SameSite=Lax`, `Secure` fora do dev) guardado por 180 dias com até 10 comandas por navegador. Sem limite de tentativas no QR: o token tem 256 bits e vale 2 minutos |
-| Momento da revogação na recuperação | O acesso anterior cai quando a recuperação é registrada (antes de o cliente ler o QR novo). Se o QR novo vencer, qualquer pessoa com `OPERAR_COMANDA` gera outro, porque a comanda já está sem acesso |
+| Momento da revogação na recuperação (registrado; não fazia parte do cartão) | O acesso anterior cai quando a recuperação é registrada (antes de o cliente ler o QR novo). Se o QR novo vencer, qualquer pessoa com `OPERAR_COMANDA` gera outro, porque a comanda já está sem acesso |
 
 ## 4. Testes
 
@@ -59,5 +59,7 @@ Fora do escopo e não simulado: "fixture ativa de teste não substitui H39" — 
 |---|---|---|
 | `./mvnw -B -ntp clean verify` (backend) | contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble`, Docker para o Testcontainers (PostgreSQL 18.6 da imagem fixada), sessão em nuvem, 03/11/2026 | **346 testes, 0 falhas**; enforcer, Modulith e JaCoCo ok |
 | `./scripts/verify.sh frontend` (`npm ci`, lint, `test:ci`, build) | contêiner `node:24.18.0-trixie-slim`, sessão em nuvem, 03/11/2026 | lint ok; **137 testes**, 0 falhas; build ok (aviso NG8102 já existente em `team-page.ts`) |
+| CI do PR #19 (commit `26edaa7`) | GitHub Actions, 03/11/2026 | backend, frontend, imagens e smoke Compose: sucesso |
+| CI de `develop` após o merge (`d3ec085`) | GitHub Actions, run 41672570090, 03/11/2026 | sucesso |
 
 Não executados: `scripts/compose-smoke.sh` e build das imagens (rodam na CI do PR; sem mudança de Dockerfile/Compose); E2E Playwright (não configurado); leitura do QR com a câmera de um celular real e teste manual na homologação da máquina de Diego.
