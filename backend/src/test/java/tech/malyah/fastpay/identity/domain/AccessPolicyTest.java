@@ -51,6 +51,8 @@ class AccessPolicyTest {
             Map.entry(Permission.AUTORIZAR_SUPORTE, List.of(false, false, false, true)),
             // PRD §3: catálogo, setores e configurações são do administrador do estabelecimento (H13).
             Map.entry(Permission.GERIR_CATALOGO, List.of(false, false, false, true)),
+            // H14: gerente consulta a configuração da unidade, só o administrador altera.
+            Map.entry(Permission.VER_CONFIGURACAO, List.of(false, false, true, true)),
             Map.entry(Permission.CONFIGURAR_ESTABELECIMENTO, List.of(false, false, false, true)));
 
     // "Permissão específica" na coluna do garçom (PRD §4.2): o que gerente e administrador podem delegar.
@@ -115,5 +117,31 @@ class AccessPolicyTest {
                 .contains(DelegationRefusal.SEM_AUTORIDADE);
         assertThat(AccessPolicy.delegation(PRODUCAO, false, GARCOM, Set.of()))
                 .contains(DelegationRefusal.SEM_AUTORIDADE);
+    }
+
+    @Test
+    void limiteDeDescontoPorPapelEQuemPodeMudar() {
+        java.math.BigDecimal cem = new java.math.BigDecimal("100");
+        java.math.BigDecimal vinte = new java.math.BigDecimal("20");
+        assertThat(AccessPolicy.discountLimit(MembershipRole.ADMIN_ESTABELECIMENTO, vinte)).isEqualByComparingTo(cem);
+        assertThat(AccessPolicy.discountLimit(MembershipRole.GERENTE, null)).isEqualByComparingTo(cem);
+        assertThat(AccessPolicy.discountLimit(MembershipRole.GERENTE, vinte)).isEqualByComparingTo(vinte);
+        assertThat(AccessPolicy.discountLimit(MembershipRole.GARCOM, null)).isZero();
+        assertThat(AccessPolicy.discountLimit(MembershipRole.PRODUCAO, vinte)).isZero();
+
+        assertThat(AccessPolicy.discountLimitChange(MembershipRole.ADMIN_ESTABELECIMENTO, cem, false,
+                MembershipRole.GERENTE, vinte)).isEmpty();
+        assertThat(AccessPolicy.discountLimitChange(MembershipRole.GERENTE, vinte, false, MembershipRole.GARCOM,
+                vinte)).isEmpty();
+        assertThat(AccessPolicy.discountLimitChange(MembershipRole.GERENTE, vinte, false, MembershipRole.GARCOM,
+                new java.math.BigDecimal("20.0001"))).contains(AccessPolicy.DiscountLimitRefusal.ACIMA_DA_AUTORIDADE);
+        assertThat(AccessPolicy.discountLimitChange(MembershipRole.GERENTE, cem, false, MembershipRole.GERENTE,
+                vinte)).contains(AccessPolicy.DiscountLimitRefusal.SEM_AUTORIDADE);
+        assertThat(AccessPolicy.discountLimitChange(MembershipRole.GARCOM, cem, false, MembershipRole.GARCOM,
+                vinte)).contains(AccessPolicy.DiscountLimitRefusal.SEM_AUTORIDADE);
+        assertThat(AccessPolicy.discountLimitChange(MembershipRole.ADMIN_ESTABELECIMENTO, cem, true,
+                MembershipRole.GERENTE, vinte)).contains(AccessPolicy.DiscountLimitRefusal.PROPRIO_VINCULO);
+        assertThat(AccessPolicy.discountLimitChange(MembershipRole.ADMIN_ESTABELECIMENTO, cem, false,
+                MembershipRole.PRODUCAO, vinte)).contains(AccessPolicy.DiscountLimitRefusal.PAPEL_NAO_RECEBE);
     }
 }

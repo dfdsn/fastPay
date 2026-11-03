@@ -1,5 +1,6 @@
 package tech.malyah.fastpay.identity.web;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
@@ -101,6 +102,32 @@ class TeamController {
         return respond(team.setPermissions(actorId, unit, id, wanted, correlationId()));
     }
 
+    /** Limite de desconto, em percentual do consumo, de 0 a 100 com até 4 casas (H14). */
+    @PutMapping("/members/{id}/discount-limit")
+    TeamView discountLimit(@PathVariable UUID id, @RequestBody DiscountLimitRequest body, HttpServletRequest request) {
+        UUID actorId = session.requireIdentity(request);
+        UUID unit = session.requireSelectedUnit(request);
+        BigDecimal percent = discountPercent(body.percent());
+        return respond(team.setDiscountLimit(actorId, unit, id, percent, correlationId()));
+    }
+
+    private static BigDecimal discountPercent(String raw) {
+        String s = raw == null ? "" : raw.strip();
+        if (s.endsWith("%")) {
+            s = s.substring(0, s.length() - 1).strip();
+        }
+        if (s.matches("\\d{1,3}([.,]\\d{1,4})?")) {
+            BigDecimal value = new BigDecimal(s.replace(',', '.')).setScale(4);
+            if (value.compareTo(AccessPolicy.FULL_DISCOUNT) <= 0) {
+                return value;
+            }
+        }
+        ErrorResponseException e = IdentityProblems.error(HttpStatus.BAD_REQUEST, "DADOS_INVALIDOS",
+                "Informe o limite de desconto entre 0 e 100%, com até quatro casas (ex.: 10 ou 12,5).");
+        e.getBody().setProperty("field", "percent");
+        throw e;
+    }
+
     private static TeamView respond(Outcome outcome) {
         return switch (outcome) {
             case Done done -> TeamView.of(done.overview());
@@ -126,6 +153,10 @@ class TeamController {
                     "Esta ação não pode ser delegada.");
             case EMAIL_INVALIDO -> IdentityProblems.error(HttpStatus.BAD_REQUEST, refusal.name(),
                     "Informe um e-mail válido.");
+            case LIMITE_NAO_SE_APLICA -> IdentityProblems.error(HttpStatus.UNPROCESSABLE_CONTENT, refusal.name(),
+                    "Limite de desconto é só para gerentes e garçons. O administrador pode sempre até 100%.");
+            case LIMITE_ACIMA_DA_AUTORIDADE -> IdentityProblems.error(HttpStatus.UNPROCESSABLE_CONTENT,
+                    refusal.name(), "Você não pode dar um limite de desconto maior que o seu.");
         };
     }
 
@@ -150,6 +181,10 @@ class TeamController {
     record PermissionsRequest(List<String> permissions) {
     }
 
+    /** Texto ou número JSON. */
+    record DiscountLimitRequest(String percent) {
+    }
+
     record PermissionView(Permission code, String label) {
         static PermissionView of(Permission permission) {
             return new PermissionView(permission, permission.label());
@@ -157,7 +192,7 @@ class TeamController {
     }
 
     record MemberView(UUID membershipId, String displayName, String email, MembershipRole role, boolean active,
-            Instant since, Instant deactivatedAt, List<Permission> delegated) {
+            Instant since, Instant deactivatedAt, List<Permission> delegated, String discountLimitPercent) {
     }
 
     record InvitationView(UUID id, String email, MembershipRole role, Invitations.Status status, Instant createdAt,
@@ -173,7 +208,8 @@ class TeamController {
         static TeamView of(Team.Overview overview) {
             return new TeamView(
                     overview.members().stream().map(m -> new MemberView(m.membershipId(), m.displayName(), m.email(),
-                            m.role(), m.active(), m.since(), m.deactivatedAt(), m.delegated())).toList(),
+                            m.role(), m.active(), m.since(), m.deactivatedAt(), m.delegated(),
+                            m.discountLimitPercent().toPlainString())).toList(),
                     overview.pendingInvitations().stream().map(i -> new InvitationView(i.id(), i.email(), i.role(),
                             i.status(), i.createdAt(), i.sentAt(), i.expiresAt())).toList(),
                     AccessPolicy.delegable().stream().map(PermissionView::of).toList(),

@@ -18,6 +18,7 @@ const EQUIPE: TeamView = {
       since: '2026-10-10T12:00:00Z',
       deactivatedAt: null,
       delegated: [],
+      discountLimitPercent: '100.0000',
     },
     {
       membershipId: 'v-garcom',
@@ -28,6 +29,7 @@ const EQUIPE: TeamView = {
       since: '2026-10-11T12:00:00Z',
       deactivatedAt: null,
       delegated: ['CANCELAR_ITEM'],
+      discountLimitPercent: '0.0000',
     },
   ],
   pendingInvitations: [
@@ -186,6 +188,47 @@ describe('TeamPage', () => {
     pedido.flush(EQUIPE);
     fixture.detectChanges();
     expect(status()).toContain('Permissões de Gabriel salvas.');
+  });
+
+  it('o gerente define o limite de desconto do garçom e vê a recusa acima do dele', () => {
+    abrir(GERENTE, { ...EQUIPE, currentMembershipId: 'v-gerente' });
+    expect(element().textContent).toContain('Desconto até 100% do consumo');
+    expect(element().textContent).toContain('Desconto até 0% do consumo');
+    expect(botao('Salvar limite de Diana')).toBeUndefined();
+    expect(botao('Salvar limite de Gabriel')!.disabled).toBe(true);
+
+    const campo = Array.from(element().querySelectorAll<HTMLInputElement>('input')).find(
+      (i) => i.closest('mat-form-field')?.textContent?.includes('Limite de desconto de Gabriel'),
+    )!;
+    campo.value = '30';
+    campo.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    botao('Salvar limite de Gabriel')!.click();
+    const recusa = http.expectOne('/api/v1/team/members/v-garcom/discount-limit');
+    expect(recusa.request.method).toBe('PUT');
+    expect(recusa.request.body).toEqual({ percent: '30' });
+    recusa.flush(
+      { code: 'LIMITE_ACIMA_DA_AUTORIDADE', detail: 'Você não pode dar um limite de desconto maior que o seu.' },
+      { status: 422, statusText: 'Unprocessable Content' },
+    );
+    fixture.detectChanges();
+    expect(alerta()).toContain('maior que o seu');
+
+    campo.value = '12,5';
+    campo.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    botao('Salvar limite de Gabriel')!.click();
+    const pedido = http.expectOne('/api/v1/team/members/v-garcom/discount-limit');
+    expect(pedido.request.body).toEqual({ percent: '12,5' });
+    pedido.flush({
+      ...EQUIPE,
+      members: EQUIPE.members.map((m) =>
+        m.membershipId === 'v-garcom' ? { ...m, discountLimitPercent: '12.5000' } : m,
+      ),
+    });
+    fixture.detectChanges();
+    expect(status()).toContain('Limite de desconto de Gabriel salvo.');
+    expect(element().textContent).toContain('Desconto até 12,5% do consumo');
   });
 
   it('sem permissão mostra o aviso; falha de rede permite tentar de novo', () => {

@@ -1,5 +1,6 @@
 package tech.malyah.fastpay.identity.infrastructure;
 
+import java.math.BigDecimal;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -34,6 +35,7 @@ public class JdbcMembershipStore {
 
     private static final String UNIT_COLUMNS = """
             m.id AS membership_id, m.identity_id, m.establishment_id, e.name AS establishment_name, m.role,
+            m.discount_limit_percent,
             """ + DELEGATED;
 
     private final JdbcTemplate jdbc;
@@ -44,7 +46,8 @@ public class JdbcMembershipStore {
 
     /** Pessoa da equipe da unidade, com o vínculo (ativo ou desativado) e as delegações vigentes. */
     public record MemberRow(UUID membershipId, UUID identityId, String displayName, String email, MembershipRole role,
-            boolean active, Instant createdAt, Instant deactivatedAt, List<Permission> delegated) {
+            boolean active, Instant createdAt, Instant deactivatedAt, List<Permission> delegated,
+            BigDecimal discountLimitPercent) {
     }
 
     /** Vínculo travado para uma mudança de equipe, lido depois do lock. */
@@ -78,7 +81,7 @@ public class JdbcMembershipStore {
     public List<MemberRow> members() {
         return jdbc.query("""
                 SELECT m.id AS membership_id, m.identity_id, u.display_name, u.email, m.role, m.status, m.created_at,
-                       m.deactivated_at,
+                       m.deactivated_at, m.discount_limit_percent,
                 """ + DELEGATED + """
                 FROM membership m JOIN user_identity u ON u.id = m.identity_id
                 WHERE m.establishment_id = current_establishment_id()
@@ -86,7 +89,9 @@ public class JdbcMembershipStore {
                 """, (rs, n) -> new MemberRow(rs.getObject("membership_id", UUID.class),
                 rs.getObject("identity_id", UUID.class), rs.getString("display_name"), rs.getString("email"),
                 MembershipRole.valueOf(rs.getString("role")), "ACTIVE".equals(rs.getString("status")),
-                instant(rs, "created_at"), instant(rs, "deactivated_at"), permissions(rs.getArray("delegated"))));
+                instant(rs, "created_at"), instant(rs, "deactivated_at"), permissions(rs.getArray("delegated")),
+                AccessPolicy.discountLimit(MembershipRole.valueOf(rs.getString("role")),
+                        rs.getBigDecimal("discount_limit_percent"))));
     }
 
     /** Contexto de unidade: alguém com este e-mail já participa da unidade? */
@@ -128,6 +133,23 @@ public class JdbcMembershipStore {
                 UPDATE membership SET role = ?, version = version + 1
                  WHERE id = ? AND establishment_id = current_establishment_id() AND status = 'ACTIVE'
                 """, role.name(), membershipId) == 1;
+    }
+
+    /** Contexto de unidade: limite de desconto da pessoa; nulo volta ao padrão do papel (H14). */
+    public boolean setDiscountLimit(UUID membershipId, BigDecimal percent) {
+        return jdbc.update("""
+                UPDATE membership SET discount_limit_percent = ?, version = version + 1
+                 WHERE id = ? AND establishment_id = current_establishment_id() AND status = 'ACTIVE'
+                """, percent, membershipId) == 1;
+    }
+
+    /** Contexto de unidade: limite gravado (nulo = padrão do papel). */
+    public BigDecimal storedDiscountLimit(UUID membershipId) {
+        return jdbc.queryForList("""
+                SELECT discount_limit_percent FROM membership
+                 WHERE id = ? AND establishment_id = current_establishment_id()
+                """, BigDecimal.class, membershipId).stream().filter(java.util.Objects::nonNull).findFirst()
+                .orElse(null);
     }
 
     /** Contexto de unidade com a identidade de quem concede. */
@@ -172,7 +194,8 @@ public class JdbcMembershipStore {
         MembershipRole role = MembershipRole.valueOf(rs.getString("role"));
         return new UnitMembership(rs.getObject("membership_id", UUID.class), rs.getObject("identity_id", UUID.class),
                 rs.getObject("establishment_id", UUID.class), rs.getString("establishment_name"), role,
-                AccessPolicy.effective(role, permissions(rs.getArray("delegated"))));
+                AccessPolicy.effective(role, permissions(rs.getArray("delegated"))),
+                AccessPolicy.discountLimit(role, rs.getBigDecimal("discount_limit_percent")));
     }
 
     private static List<Permission> permissions(Array array) throws SQLException {

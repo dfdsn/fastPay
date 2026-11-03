@@ -129,6 +129,31 @@ const INVITATION_LABELS: Record<PendingInvitation['status'], string> = {
                   @if (member.active && member.role === 'GARCOM' && member.delegated.length > 0) {
                     <p>Pode também: {{ delegatedLabels(member) }}</p>
                   }
+                  @if (member.active && member.role !== 'PRODUCAO') {
+                    <p>Desconto até {{ percent(member.discountLimitPercent) }}% do consumo</p>
+                  }
+                  @if (member.active && !isMe(member) && limitEditable(member)) {
+                    <div class="row">
+                      <mat-form-field appearance="outline">
+                        <mat-label>Limite de desconto de {{ member.displayName }} (%)</mat-label>
+                        <input
+                          matInput
+                          inputmode="decimal"
+                          autocomplete="off"
+                          [value]="percent(member.discountLimitPercent)"
+                          (input)="pickLimit(member, $any($event.target).value)"
+                        />
+                      </mat-form-field>
+                      <button
+                        mat-stroked-button
+                        type="button"
+                        [disabled]="busy() || limitChoice()[member.membershipId] === undefined"
+                        (click)="saveLimit(member)"
+                      >
+                        Salvar limite de {{ member.displayName }}
+                      </button>
+                    </div>
+                  }
 
                   @if (member.active && !isMe(member) && manage()) {
                     <div class="row">
@@ -299,6 +324,7 @@ export class TeamPage {
   protected readonly failure = signal<string | null>(null);
   protected readonly roleChoice = signal<Record<string, MembershipRole>>({});
   private readonly permissionChoice = signal<Record<string, Permission[]>>({});
+  protected readonly limitChoice = signal<Record<string, string>>({});
 
   protected readonly manage = computed(() => can(this.unit(), 'GERIR_EQUIPE'));
   protected readonly delegate = computed(() => can(this.unit(), 'DELEGAR_PERMISSOES'));
@@ -334,6 +360,35 @@ export class TeamPage {
       ...all,
       [member.membershipId]: checked ? [...current, code] : current,
     }));
+  }
+
+  /** "12.5000" como "12,5". */
+  protected percent(value: string): string {
+    const [whole, fraction = ''] = value.split('.');
+    const trimmed = fraction.replace(/0+$/, '');
+    return trimmed ? `${whole},${trimmed}` : whole;
+  }
+
+  /** Gerente: só o administrador define; garçom: quem delega (H14). */
+  protected limitEditable(member: TeamMember): boolean {
+    return (
+      (member.role === 'GERENTE' && this.manage()) || (member.role === 'GARCOM' && this.delegate())
+    );
+  }
+
+  protected pickLimit(member: TeamMember, value: string): void {
+    this.limitChoice.update((all) => ({ ...all, [member.membershipId]: value.trim() }));
+  }
+
+  protected saveLimit(member: TeamMember): void {
+    const value = this.limitChoice()[member.membershipId];
+    if (value === undefined) {
+      return;
+    }
+    this.run(
+      this.service.setDiscountLimit(member.membershipId, value),
+      `Limite de desconto de ${member.displayName} salvo.`,
+    );
   }
 
   protected pickRole(member: TeamMember, role: MembershipRole): void {
@@ -418,6 +473,7 @@ export class TeamPage {
     this.team.set(team);
     this.roleChoice.set({});
     this.permissionChoice.set({});
+    this.limitChoice.set({});
     this.state.set('ready');
   }
 }

@@ -25,8 +25,8 @@ class MigrationsIntegrationTest extends PostgresIntegrationTest {
         MigrateResult resultado = flyway.migrate();
 
         assertThat(resultado.success).isTrue();
-        assertThat(resultado.migrationsExecuted).isEqualTo(10);
-        assertThat(resultado.targetSchemaVersion).isEqualTo("10");
+        assertThat(resultado.migrationsExecuted).isEqualTo(11);
+        assertThat(resultado.targetSchemaVersion).isEqualTo("11");
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
@@ -40,11 +40,34 @@ class MigrationsIntegrationTest extends PostgresIntegrationTest {
 
         MigrateResult resultado = flywayPara(banco, null).migrate();
 
-        assertThat(resultado.migrationsExecuted).isEqualTo(9);
-        assertThat(resultado.targetSchemaVersion).isEqualTo("10");
+        assertThat(resultado.migrationsExecuted).isEqualTo(10);
+        assertThat(resultado.targetSchemaVersion).isEqualTo("11");
         assertThat(admin.queryForObject(
                 "SELECT tableowner FROM pg_tables WHERE schemaname = 'fastpay' AND tablename = 'audit_event'", String.class))
                 .isEqualTo("fastpay_migration");
+    }
+
+    @Test
+    void unidadeCadastradaAntesDaV11GanhaAConfiguracaoPadrao() {
+        String banco = novoBanco();
+        flywayPara(banco, "10").migrate();
+        JdbcTemplate admin = new JdbcTemplate(dataSource(urlDo(banco), POSTGRES.getUsername(), POSTGRES.getPassword()));
+        UUID loja = UUID.randomUUID();
+        admin.update("INSERT INTO fastpay.establishment (id, name) VALUES (?, 'Bar Antigo')", loja);
+
+        assertThat(flywayPara(banco, null).migrate().targetSchemaVersion).isEqualTo("11");
+
+        assertThat(admin.queryForObject("""
+                SELECT service_percent || ' ' || attendance_mode || ' ' || exit_mode FROM fastpay.unit_settings_version
+                 WHERE establishment_id = ? AND number = 1
+                """, String.class, loja)).isEqualTo("10.0000 GARCOM_RESPONSAVEL AUTOMATICA");
+        assertThat(admin.queryForObject(
+                "SELECT time_zone || ' ' || cutoff FROM fastpay.operational_calendar WHERE establishment_id = ?",
+                String.class, loja)).isEqualTo("America/Sao_Paulo 06:00:00");
+        // O FORCE de establishment volta depois da cópia.
+        assertThat(admin.queryForObject(
+                "SELECT relforcerowsecurity FROM pg_class WHERE oid = 'fastpay.establishment'::regclass",
+                Boolean.class)).isTrue();
     }
 
     private String novoBanco() {

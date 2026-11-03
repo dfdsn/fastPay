@@ -126,6 +126,14 @@ class EstablishmentOnboardingIntegrationTest extends PostgresIntegrationTest {
         assertThat(admin().queryForObject("SELECT created_by FROM fastpay.establishment WHERE id = ?", UUID.class, loja))
                 .isEqualTo(adminId);
         assertThat(auditoria(loja)).containsExactly("convite.criado", "estabelecimento.criado");
+        // H14: a unidade nasce com a versão 1 da configuração e o calendário padrão, gravados pelo runtime.
+        assertThat(admin().queryForObject("""
+                SELECT count(*) FROM fastpay.unit_settings_version
+                 WHERE establishment_id = ? AND number = 1 AND created_by IS NULL
+                """, Integer.class, loja)).isOne();
+        assertThat(admin().queryForObject("""
+                SELECT time_zone || ' ' || cutoff FROM fastpay.operational_calendar WHERE establishment_id = ?
+                """, String.class, loja)).isEqualTo("America/Sao_Paulo 06:00:00");
 
         Instant envio = relogio.instant();
         TestMailbox.Message convite = entregues().latestTo(dono).orElseThrow();

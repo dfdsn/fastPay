@@ -1,5 +1,6 @@
 package tech.malyah.fastpay.identity;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,7 +39,8 @@ public class Team {
     private static final Logger log = LoggerFactory.getLogger(Team.class);
 
     public record Member(UUID membershipId, UUID identityId, String displayName, String email, MembershipRole role,
-            boolean active, Instant since, Instant deactivatedAt, List<Permission> delegated) {
+            boolean active, Instant since, Instant deactivatedAt, List<Permission> delegated,
+            BigDecimal discountLimitPercent) {
     }
 
     /** {@code currentMembershipId}: vínculo de quem pediu (vazio na consulta do suporte, que não tem vínculo). */
@@ -60,7 +62,11 @@ public class Team {
         PAPEL_NAO_RECEBE,
         /** Ação exclusiva de papel, nunca delegável. */
         NAO_DELEGAVEL,
-        EMAIL_INVALIDO
+        EMAIL_INVALIDO,
+        /** Administrador tem sempre 100%; produção não concede desconto (H14). */
+        LIMITE_NAO_SE_APLICA,
+        /** Gerente não dá a um garçom limite de desconto maior que o dele (H14). */
+        LIMITE_ACIMA_DA_AUTORIDADE
     }
 
     public sealed interface Outcome {
@@ -176,6 +182,11 @@ public class Team {
             }
             store.changeRole(membershipId, role);
             store.audit("vinculo.papel_alterado", membershipId, actorId, previous + ">" + role, correlationId);
+            // Limite de desconto volta ao padrão do novo papel (H14).
+            if (store.storedDiscountLimit(membershipId) != null) {
+                store.setDiscountLimit(membershipId, null);
+                store.audit("desconto.limite_alterado", membershipId, actorId, "padrao do papel", correlationId);
+            }
             if (role != MembershipRole.GARCOM) {
                 Instant now = clock.instant();
                 for (Permission p : store.delegations(membershipId)) {
@@ -245,6 +256,42 @@ public class Team {
         });
     }
 
+    /**
+     * Limite de desconto da pessoa, em percentual do consumo (H14, FR-30): o administrador define o de gerentes e
+     * garçons; o gerente, o de garçons e no máximo o próprio. Vale na operação seguinte da pessoa.
+     */
+    public Outcome setDiscountLimit(UUID actorId, UUID establishmentId, UUID membershipId, BigDecimal percent,
+            String correlationId) {
+        Objects.requireNonNull(percent, "percent");
+        return manage(actorId, establishmentId, Permission.DELEGAR_PERMISSOES, membershipId, (me, locked) -> {
+            Optional<LockedMembership> member = activeTarget(locked, membershipId);
+            if (member.isEmpty()) {
+                return new Refused(Refusal.VINCULO_NAO_ENCONTRADO);
+            }
+            MembershipRole granter = lockedRole(locked, me);
+            BigDecimal granterLimit = AccessPolicy.discountLimit(granter,
+                    store.storedDiscountLimit(me.membershipId()));
+            Optional<AccessPolicy.DiscountLimitRefusal> refusal = AccessPolicy.discountLimitChange(granter,
+                    granterLimit, false, member.get().role(), percent);
+            if (refusal.isPresent()) {
+                return new Refused(switch (refusal.get()) {
+                    case SEM_AUTORIDADE -> throw new PermissionDeniedException(Permission.GERIR_EQUIPE);
+                    case PROPRIO_VINCULO -> Refusal.PROPRIO_VINCULO;
+                    case PAPEL_NAO_RECEBE -> Refusal.LIMITE_NAO_SE_APLICA;
+                    case ACIMA_DA_AUTORIDADE -> Refusal.LIMITE_ACIMA_DA_AUTORIDADE;
+                });
+            }
+            BigDecimal before = AccessPolicy.discountLimit(member.get().role(),
+                    store.storedDiscountLimit(membershipId));
+            if (before.compareTo(percent) != 0) {
+                store.setDiscountLimit(membershipId, percent);
+                store.audit("desconto.limite_alterado", membershipId, actorId,
+                        before.toPlainString() + ">" + percent.toPlainString(), correlationId);
+            }
+            return done(me);
+        });
+    }
+
     private interface Change {
         Outcome apply(UnitMembership me, List<LockedMembership> locked);
     }
@@ -294,6 +341,6 @@ public class Team {
 
     private static Member member(MemberRow row) {
         return new Member(row.membershipId(), row.identityId(), row.displayName(), row.email(), row.role(),
-                row.active(), row.createdAt(), row.deactivatedAt(), row.delegated());
+                row.active(), row.createdAt(), row.deactivatedAt(), row.delegated(), row.discountLimitPercent());
     }
 }

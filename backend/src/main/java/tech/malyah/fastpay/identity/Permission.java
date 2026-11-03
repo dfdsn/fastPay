@@ -30,6 +30,7 @@ public enum Permission {
     CONECTAR_CONTA_PSP("Conectar ou substituir a conta de pagamentos", false),
     AUTORIZAR_SUPORTE("Autorizar acesso temporário do suporte", false),
     GERIR_CATALOGO("Cadastrar produtos, categorias, setores e fotos", false),
+    VER_CONFIGURACAO("Ver a configuração da unidade (serviço, couvert, desconto, atendimento, saída e dia)", false),
     CONFIGURAR_ESTABELECIMENTO("Configurar o estabelecimento, inclusive o logo", false);
 
     private final String label;

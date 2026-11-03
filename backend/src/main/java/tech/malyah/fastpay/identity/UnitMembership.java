@@ -1,14 +1,16 @@
 package tech.malyah.fastpay.identity;
 
+import java.math.BigDecimal;
 import java.util.Set;
 import java.util.UUID;
 
 /**
  * Vínculo ativo de uma identidade numa unidade, já validado no banco, com as permissões efetivas (papel mais
- * delegações vigentes, H11) lidas na mesma transação.
+ * delegações vigentes, H11) e o limite de desconto efetivo (percentual do consumo, H14, FR-30) lidos na mesma
+ * transação.
  */
 public record UnitMembership(UUID membershipId, UUID identityId, UUID establishmentId, String establishmentName,
-                             MembershipRole role, Set<Permission> permissions) {
+                             MembershipRole role, Set<Permission> permissions, BigDecimal discountLimitPercent) {
 
     public UnitMembership {
         permissions = Set.copyOf(permissions);

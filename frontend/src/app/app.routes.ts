@@ -71,6 +71,12 @@ export const routes: Routes = [
     loadComponent: () => import('./catalog/catalog-page').then((m) => m.CatalogPage),
   },
   {
+    path: 'configuracao',
+    title: 'Configuração da unidade · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () => import('./settings/settings-page').then((m) => m.SettingsPage),
+  },
+  {
     path: 'logo',
     title: 'Logo da unidade · fastPay',
     canActivate: [signedInGuard, unitSelectedGuard],
