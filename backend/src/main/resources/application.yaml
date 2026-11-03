@@ -81,6 +81,12 @@ fastpay:
   # Suporte autorizado pelo dono (H11, FR-66): somente leitura, prazo máximo de cada concessão (P-16, aprovada).
   support:
     max-duration: 72h
+  # Comandas e acesso do consumidor avulso (H15). QR de vínculo de 2 min e uso único (D-17). O cookie só guarda o
+  # acesso; a validade (até 7 dias depois da resolução final, FR-11) é sempre conferida no servidor.
+  tabs:
+    binding-qr-ttl: 2m
+    guest-cookie-max-age: 180d
+    guest-cookie-max-tabs: 10
   # Arquivos (H13, especificação §10). Storage local em dev/HML; S3 privado em produção chega na H49.
   storage:
     local-dir: ${STORAGE_LOCAL_DIR:./var/arquivos}

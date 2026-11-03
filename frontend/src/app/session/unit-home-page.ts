@@ -12,7 +12,7 @@ import { UnitContextService, can, roleLabel } from './unit-context.service';
 /**
  * Início dentro da unidade escolhida. Ao abrir, confere no servidor o papel e as permissões atuais (H11), que
  * podem ter mudado durante a sessão; os caminhos aparecem conforme elas. Mostra o logo da unidade ou as iniciais
- * (H13). As funções de operação chegam nas próximas histórias.
+ * (H13). Comandas desde H15; as demais funções de operação chegam nas próximas histórias.
  */
 @Component({
   selector: 'fp-unit-home-page',
@@ -29,6 +29,9 @@ import { UnitContextService, can, roleLabel } from './unit-context.service';
             <p>Você está em {{ current.name }} como {{ role() }}.</p>
           </div>
           <nav aria-label="Administração da unidade" class="row">
+            @if (canOperateTabs()) {
+              <a mat-stroked-button routerLink="/comandas">Comandas</a>
+            }
             <a mat-stroked-button routerLink="/catalogo">Catálogo</a>
             @if (canSeeSettings()) {
               <a mat-stroked-button routerLink="/configuracao">Configuração</a>
@@ -75,6 +78,7 @@ export class UnitHomePage {
     const current = this.unit();
     return current ? roleLabel(current.role) : '';
   });
+  protected readonly canOperateTabs = computed(() => can(this.unit(), 'OPERAR_COMANDA'));
   protected readonly canSeeTeam = computed(() => can(this.unit(), 'VER_EQUIPE'));
   protected readonly canAuthorizeSupport = computed(() => can(this.unit(), 'AUTORIZAR_SUPORTE'));
   protected readonly canSeeSettings = computed(() => can(this.unit(), 'VER_CONFIGURACAO'));

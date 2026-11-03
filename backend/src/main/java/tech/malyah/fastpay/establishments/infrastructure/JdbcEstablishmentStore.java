@@ -62,6 +62,16 @@ public class JdbcEstablishmentStore {
                 rs.getString("name"), rs.getObject("logo_file_id", UUID.class))).stream().findFirst();
     }
 
+    /** Nome, situação e logo da unidade do contexto (H15: abertura de comanda e tela do consumidor). */
+    public record Profile(UUID id, String name, String status, UUID logoFileId) {
+    }
+
+    public Optional<Profile> profile() {
+        return jdbc.query("SELECT id, name, status, logo_file_id FROM establishment WHERE id = current_establishment_id()",
+                (rs, n) -> new Profile(rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("status"),
+                        rs.getObject("logo_file_id", UUID.class))).stream().findFirst();
+    }
+
     public void setLogo(UUID fileId) {
         jdbc.update("""
                 UPDATE establishment SET logo_file_id = ?, version = version + 1 WHERE id = current_establishment_id()

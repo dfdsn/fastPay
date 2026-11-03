@@ -106,6 +106,21 @@ public class TenantTransactions {
         return inContext(settings, work);
     }
 
+    /**
+     * Transação nova em que só o QR de vínculo com este hash é visível (H15): o consumidor que abriu o link, sem
+     * sessão, descobre a unidade e a comanda do QR. O resto do trabalho roda depois em {@link #inEstablishment}.
+     */
+    public <T> T forBindingToken(String tokenHash, Supplier<T> work) {
+        Objects.requireNonNull(tokenHash, "tokenHash");
+        return inContext("app.binding_token_hash", tokenHash, work);
+    }
+
+    /** Transação nova em que só o acesso de consumidor com este hash é visível (H15), como {@link #forBindingToken}. */
+    public <T> T forGuestGrant(String tokenHash, Supplier<T> work) {
+        Objects.requireNonNull(tokenHash, "tokenHash");
+        return inContext("app.guest_grant_hash", tokenHash, work);
+    }
+
     public void runInEstablishment(UUID establishmentId, Runnable work) {
         Objects.requireNonNull(work, "work");
         inEstablishment(establishmentId, () -> {

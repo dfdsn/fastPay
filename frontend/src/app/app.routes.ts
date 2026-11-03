@@ -40,6 +40,21 @@ export const routes: Routes = [
     loadComponent: () => import('./invitations/invitation-page').then((m) => m.InvitationPage),
   },
   {
+    path: 'c',
+    title: 'Sua comanda · fastPay',
+    loadComponent: () => import('./guest/binding-page').then((m) => m.BindingPage),
+  },
+  {
+    path: 'minhas-comandas',
+    title: 'Minhas comandas · fastPay',
+    loadComponent: () => import('./guest/guest-tabs-page').then((m) => m.GuestTabsPage),
+  },
+  {
+    path: 'minha-comanda/:id',
+    title: 'Sua comanda · fastPay',
+    loadComponent: () => import('./guest/guest-tab-page').then((m) => m.GuestTabPage),
+  },
+  {
     path: 'admin/estabelecimentos',
     title: 'Estabelecimentos · fastPay',
     canActivate: [signedInGuard],
@@ -63,6 +78,12 @@ export const routes: Routes = [
     title: 'Equipe · fastPay',
     canActivate: [signedInGuard, unitSelectedGuard],
     loadComponent: () => import('./team/team-page').then((m) => m.TeamPage),
+  },
+  {
+    path: 'comandas',
+    title: 'Comandas · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () => import('./tabs/tabs-page').then((m) => m.TabsPage),
   },
   {
     path: 'catalogo',

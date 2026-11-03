@@ -23,6 +23,7 @@
         <!-- Spring Modulith não é gerenciado pelo BOM do Boot 4.1.1; versão explícita (T-01). -->
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <twelvemonkeys.version>3.12.0</twelvemonkeys.version>
+        <qrcodegen.version>1.8.0</qrcodegen.version>
         <jacoco-plugin.version>0.8.15</jacoco-plugin.version>
         <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
         <!-- Gate de cobertura (AGENTS/especificação §14): domain/application. -->
@@ -74,6 +75,13 @@
             <groupId>com.twelvemonkeys.imageio</groupId>
             <artifactId>imageio-webp</artifactId>
             <version>${twelvemonkeys.version}</version>
+        </dependency>
+        <dependency>
+            <!-- H15: QR de vínculo da comanda desenhado no servidor (matriz do QR; o SVG é montado pelo fastPay).
+                 Puro Java, sem dependências, licença MIT. -->
+            <groupId>io.nayuki</groupId>
+            <artifactId>qrcodegen</artifactId>
+            <version>${qrcodegen.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
