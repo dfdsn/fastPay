@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import tech.malyah.fastpay.identity.IdentityFixtures;
 import tech.malyah.fastpay.identity.MembershipRole;
 import tech.malyah.fastpay.identity.Memberships;
+import tech.malyah.fastpay.identity.UnitMembership;
 import tech.malyah.fastpay.identity.MfaFixtures;
 import tech.malyah.fastpay.identity.Permission;
 import tech.malyah.fastpay.identity.PermissionDeniedException;
@@ -368,6 +369,65 @@ class TeamIntegrationTest extends PostgresIntegrationTest {
     private List<String> auditoria() {
         return admin().queryForList("SELECT action FROM fastpay.audit_event WHERE establishment_id = ?", String.class,
                 loja);
+    }
+
+    @Test
+    void limiteDeDescontoPorPessoaValeNaOperacaoSeguinte() throws Exception {
+        Browser donaRita = login.inUnit(dono, loja);
+        Browser gil = login.inUnit(gerente, loja);
+        // Padrões por papel: administrador e gerente 100%, garçom 0%, produção 0%.
+        donaRita.get("/api/v1/team").andExpect(status().isOk())
+                .andExpect(jsonPath("$.members[?(@.membershipId == '%s')].discountLimitPercent".formatted(vinculoDono))
+                        .value("100.0000"))
+                .andExpect(jsonPath("$.members[?(@.membershipId == '%s')].discountLimitPercent"
+                        .formatted(vinculoGerente)).value("100.0000"))
+                .andExpect(jsonPath("$.members[?(@.membershipId == '%s')].discountLimitPercent"
+                        .formatted(vinculoGarcom)).value("0.0000"));
+        assertThat(memberships.inUnit(garcom, loja, UnitMembership::discountLimitPercent))
+                .isEqualByComparingTo("0");
+
+        // Dono limita o gerente a 20%; gerente dá até 20% ao garçom, não mais.
+        donaRita.put(limite(vinculoGerente), "{\"percent\":\"20\"}").andExpect(status().isOk());
+        assertThat(memberships.inUnit(gerente, loja, UnitMembership::discountLimitPercent))
+                .isEqualByComparingTo("20");
+        gil.put(limite(vinculoGarcom), "{\"percent\":\"20,5\"}").andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("LIMITE_ACIMA_DA_AUTORIDADE"));
+        gil.put(limite(vinculoGarcom), "{\"percent\":\"12,5\"}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.members[?(@.membershipId == '%s')].discountLimitPercent"
+                        .formatted(vinculoGarcom)).value("12.5000"));
+        assertThat(memberships.inUnit(garcom, loja, UnitMembership::discountLimitPercent))
+                .isEqualByComparingTo("12.5");
+
+        // Gerente não altera gerente nem a si; ninguém mexe no do administrador nem no da produção.
+        gil.put(limite(vinculoGerente), "{\"percent\":\"10\"}").andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("PROPRIO_VINCULO"));
+        gil.put(limite(vinculoDono), "{\"percent\":\"10\"}").andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("LIMITE_NAO_SE_APLICA"));
+        donaRita.put(limite(vinculoProducao), "{\"percent\":\"10\"}").andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("LIMITE_NAO_SE_APLICA"));
+        login.inUnit(garcom, loja).put(limite(vinculoGarcom), "{\"percent\":\"10\"}")
+                .andExpect(status().isForbidden());
+        // Limite percentual fora de 0–100 ou com mais de 4 casas é recusado.
+        for (String invalido : List.of("100.0001", "-1", "12,34567", "abc", "1000")) {
+            donaRita.put(limite(vinculoGarcom), "{\"percent\":\"" + invalido + "\"}")
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.field").value("percent"));
+        }
+        assertThat(memberships.inUnit(garcom, loja, UnitMembership::discountLimitPercent))
+                .isEqualByComparingTo("12.5");
+
+        // Promovido a gerente, volta ao padrão do novo papel.
+        donaRita.put("/api/v1/team/members/" + vinculoGarcom + "/role", "{\"role\":\"GERENTE\"}")
+                .andExpect(status().isOk());
+        assertThat(admin().queryForObject("SELECT discount_limit_percent FROM fastpay.membership WHERE id = ?",
+                java.math.BigDecimal.class, vinculoGarcom)).isNull();
+        assertThat(admin().queryForList("""
+                SELECT detail FROM fastpay.audit_event WHERE establishment_id = ? AND action = 'desconto.limite_alterado'
+                 ORDER BY occurred_at
+                """, String.class, loja)).containsExactly("100.0000>20.0000", "0.0000>12.5000", "padrao do papel");
+    }
+
+    private static String limite(UUID vinculo) {
+        return "/api/v1/team/members/" + vinculo + "/discount-limit";
     }
 
     private static String permissoes(UUID vinculo) {

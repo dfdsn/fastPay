@@ -10,7 +10,14 @@
 --     fica mais longo ou mais curto, sem repetir nem pular data e sem reclassificar o que já passou.
 --   * Toda unidade nasce com a versão 1 e o calendário padrão (gatilho abaixo); as já cadastradas recebem os
 --     mesmos padrões. created_by nulo = padrão inicial do sistema.
+--   * membership ganha o limite de desconto da pessoa (FR-30, FR-68): percentual máximo do consumo da comanda,
+--     inclusive para desconto em reais. Nulo = padrão do papel (gerente 100%, garçom 0%); administrador sempre
+--     100%. Vale na operação seguinte, como as permissões; trocar o papel volta ao padrão do novo papel.
 --   * Quem pode ver e alterar é conferido na aplicação (identity.Permission), como nas demais tabelas.
+
+ALTER TABLE membership ADD COLUMN discount_limit_percent numeric(7, 4)
+    CHECK (discount_limit_percent BETWEEN 0 AND 100);
+GRANT UPDATE (discount_limit_percent) ON membership TO ${app_role};
 
 CREATE TABLE unit_settings_version (
     id                       uuid         PRIMARY KEY,

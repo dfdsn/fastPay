@@ -2,6 +2,7 @@ package tech.malyah.fastpay.identity.domain;
 
 import static tech.malyah.fastpay.identity.Permission.*;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.Map;
@@ -58,7 +59,60 @@ public final class AccessPolicy {
         NAO_DELEGAVEL
     }
 
+    /** Desconto até todo o consumo. */
+    public static final BigDecimal FULL_DISCOUNT = new BigDecimal("100.0000");
+    private static final BigDecimal NO_DISCOUNT = new BigDecimal("0.0000");
+
+    /** Motivo de um limite de desconto recusado (H14). */
+    public enum DiscountLimitRefusal {
+        /** Quem muda não tem autoridade sobre o papel da pessoa. */
+        SEM_AUTORIDADE,
+        /** Ninguém altera o próprio limite. */
+        PROPRIO_VINCULO,
+        /** Administrador tem sempre 100%; produção não concede desconto. */
+        PAPEL_NAO_RECEBE,
+        /** O gerente não dá a um garçom limite maior que o dele. */
+        ACIMA_DA_AUTORIDADE
+    }
+
     private AccessPolicy() {
+    }
+
+    /**
+     * Limite de desconto efetivo, em percentual do consumo (FR-30): administrador sempre 100%; gerente o gravado ou
+     * 100%; garçom o gravado ou 0% (só vale com {@link Permission#CONCEDER_DESCONTO} delegada); produção 0%.
+     */
+    public static BigDecimal discountLimit(MembershipRole role, BigDecimal stored) {
+        return switch (role) {
+            case ADMIN_ESTABELECIMENTO -> FULL_DISCOUNT;
+            case GERENTE -> stored == null ? FULL_DISCOUNT : stored.setScale(4);
+            case GARCOM -> stored == null ? NO_DISCOUNT : stored.setScale(4);
+            case PRODUCAO -> NO_DISCOUNT;
+        };
+    }
+
+    /**
+     * Pode quem tem o papel {@code granterRole} e o limite {@code granterLimit} dar o limite {@code limit} ao vínculo
+     * {@code targetRole}? Administrador define o de gerentes e garçons; gerente só o de garçons e até o próprio.
+     */
+    public static Optional<DiscountLimitRefusal> discountLimitChange(MembershipRole granterRole,
+            BigDecimal granterLimit, boolean sameMembership, MembershipRole targetRole, BigDecimal limit) {
+        if (!byRole(granterRole).contains(DELEGAR_PERMISSOES)) {
+            return Optional.of(DiscountLimitRefusal.SEM_AUTORIDADE);
+        }
+        if (sameMembership) {
+            return Optional.of(DiscountLimitRefusal.PROPRIO_VINCULO);
+        }
+        if (targetRole == MembershipRole.ADMIN_ESTABELECIMENTO || targetRole == MembershipRole.PRODUCAO) {
+            return Optional.of(DiscountLimitRefusal.PAPEL_NAO_RECEBE);
+        }
+        if (targetRole == MembershipRole.GERENTE && granterRole != MembershipRole.ADMIN_ESTABELECIMENTO) {
+            return Optional.of(DiscountLimitRefusal.SEM_AUTORIDADE);
+        }
+        if (limit.compareTo(granterLimit) > 0) {
+            return Optional.of(DiscountLimitRefusal.ACIMA_DA_AUTORIDADE);
+        }
+        return Optional.empty();
     }
 
     /** Permissões do papel, sem delegações. */
