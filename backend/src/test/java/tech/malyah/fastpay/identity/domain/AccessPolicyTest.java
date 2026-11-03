@@ -51,6 +51,8 @@ class AccessPolicyTest {
             Map.entry(Permission.AUTORIZAR_SUPORTE, List.of(false, false, false, true)),
             // PRD §3: catálogo, setores e configurações são do administrador do estabelecimento (H13).
             Map.entry(Permission.GERIR_CATALOGO, List.of(false, false, false, true)),
+            // H14: gerente consulta a configuração da unidade, só o administrador altera.
+            Map.entry(Permission.VER_CONFIGURACAO, List.of(false, false, true, true)),
             Map.entry(Permission.CONFIGURAR_ESTABELECIMENTO, List.of(false, false, false, true)));
 
     // "Permissão específica" na coluna do garçom (PRD §4.2): o que gerente e administrador podem delegar.

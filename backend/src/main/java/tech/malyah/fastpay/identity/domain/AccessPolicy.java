@@ -19,7 +19,7 @@ import tech.malyah.fastpay.identity.Permission;
  * <li>Garçom: operação de salão e atendimento; o resto só por permissão específica delegada, sempre delegável.
  * <li>Produção: só a fila do setor, sem visão financeira; não recebe delegação.
  * <li>Gerente: toda a operação, inclusive devolução, débito, regularização e invalidação de recebimento externo
- * (não delegáveis); vê a equipe e delega a garçons.
+ * (não delegáveis); vê a equipe e delega a garçons; vê a configuração da unidade sem alterá-la (H14).
  * <li>Administrador do estabelecimento: tudo do gerente (exerce gerente) e o que é exclusivo dele: equipe,
  * conta PSP, autorização de suporte, catálogo e setores (H13) e configuração da unidade, como o logo (FR-67).
  * </ul>
