@@ -14,7 +14,7 @@ Registro sanitizado. Claude Code, 02/11/2026, sessão em nuvem (Linux) com Docke
 | Frontend | `catalog/catalog-page.ts`, `catalog/catalog.service.ts`, `branding/branding-page.ts`, `branding/unit-logo.ts`, `branding/branding.service.ts`; rotas `/catalogo` e `/logo`; logo/iniciais e links no início da unidade | Estados de carregando/erro/vazio, mensagens do servidor, rótulos acessíveis em cada botão, aviso local de 5 MB antes de enviar, recarga ao detectar versão desatualizada |
 | Infra | `infra/backend.Dockerfile`, `infra/compose.dev.yml`, `infra/compose.hml.yml`, `frontend/nginx/default.conf.template`, `.env.example` | Pasta `/var/lib/fastpay/arquivos` do usuário `fastpay` com volume `files-data`; `client_max_body_size 6m` no `/api/` |
 
-**Dependência nova:** `com.twelvemonkeys.imageio:imageio-webp:3.12.0` (traz `imageio-core`, `imageio-metadata`, `common-lang`, `common-io`, `common-image` da mesma família). Motivo: FR-67 exige WebP e o ImageIO do JDK só lê JPEG/PNG. Só decodifica; a gravação é feita pelo JDK. Licença BSD-3, puro Java, sem serviço externo nem custo. Enforcer (`dependencyConvergence`) passou. Registrada em T-01, aguardando aceite.
+**Dependência nova:** `com.twelvemonkeys.imageio:imageio-webp:3.12.0` (traz `imageio-core`, `imageio-metadata`, `common-lang`, `common-io`, `common-image` da mesma família). Motivo: FR-67 exige WebP e o ImageIO do JDK só lê JPEG/PNG. Só decodifica; a gravação é feita pelo JDK. Licença BSD-3, puro Java, sem serviço externo nem custo. Enforcer (`dependencyConvergence`) passou. Registrada em T-01; aceita por Diego em 03/11/2026, junto com as propostas T-03 e T-04 da H13.
 
 ## 2. Verificação de imagem (propostas T-03/T-04)
 
