@@ -30,6 +30,9 @@ import { UnitContextService, can, roleLabel } from './unit-context.service';
           </div>
           <nav aria-label="Administração da unidade" class="row">
             <a mat-stroked-button routerLink="/catalogo">Catálogo</a>
+            @if (canSeeSettings()) {
+              <a mat-stroked-button routerLink="/configuracao">Configuração</a>
+            }
             @if (canConfigure()) {
               <a mat-stroked-button routerLink="/logo">Logo da unidade</a>
             }
@@ -74,6 +77,7 @@ export class UnitHomePage {
   });
   protected readonly canSeeTeam = computed(() => can(this.unit(), 'VER_EQUIPE'));
   protected readonly canAuthorizeSupport = computed(() => can(this.unit(), 'AUTORIZAR_SUPORTE'));
+  protected readonly canSeeSettings = computed(() => can(this.unit(), 'VER_CONFIGURACAO'));
   protected readonly canConfigure = computed(() => can(this.unit(), 'CONFIGURAR_ESTABELECIMENTO'));
   protected readonly branding = signal<BrandingView | null>(null);
 

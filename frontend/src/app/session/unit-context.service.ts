@@ -29,6 +29,7 @@ export type Permission =
   | 'CONECTAR_CONTA_PSP'
   | 'AUTORIZAR_SUPORTE'
   | 'GERIR_CATALOGO'
+  | 'VER_CONFIGURACAO'
   | 'CONFIGURAR_ESTABELECIMENTO';
 
 export interface UnitView {
