@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 03/11/2026 por Claude Code (H16 aguardando revisão: envio atômico de pedido, preço capturado e encaminhamento à produção; T-03 da H16 aguardando Diego; H15 reconciliada: PR #19 mergeado em `develop` `d3ec085`, CI de `develop` verde; P-07 recuperação avulsa, P-18, T-01 `qrcodegen` e T-03 da H15 aprovadas por Diego; H14 reconciliada: PR #17 mergeado em `develop` `cf1fccb`, CI de `develop` verde; T-03 da H14 e P-17 aprovadas por Diego; H13 reconciliada: PR #15 mergeado em `develop` `6dbf324`, CI de `develop` verde; T-03/T-04 de imagens e `imageio-webp` aprovados por Diego).
+Atualizado em 03/11/2026 por Claude Code (H16 reconciliada: PR #21 mergeado em `develop` `da4e270`, CI de `develop` verde; T-03 da H16 aprovada por Diego; H15 reconciliada: PR #19 mergeado em `develop` `d3ec085`, CI de `develop` verde; P-07 recuperação avulsa, P-18, T-01 `qrcodegen` e T-03 da H15 aprovadas por Diego; H14 reconciliada: PR #17 mergeado em `develop` `cf1fccb`, CI de `develop` verde; T-03 da H14 e P-17 aprovadas por Diego; H13 reconciliada: PR #15 mergeado em `develop` `6dbf324`, CI de `develop` verde; T-03/T-04 de imagens e `imageio-webp` aprovados por Diego).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -62,7 +62,7 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H15 (03/11/2026):** Diego pediu "pode começar" no thread do projeto (H15 era a próxima elegível: H13 e H14 concluídas). Antes de implementar, Diego decidiu nos cartões do thread a prova da recuperação avulsa (P-07: presencial + nome + item da conta) e a abertura de comanda antes da ativação (P-18: só em desenvolvimento e homologação). Feita em `feature/H15-comanda-visita-qr`, a partir de `develop` (`33bca8c`). Diego fez o merge do PR #19 em 03/11/2026 (`d3ec085`) e aprovou, na mesma data, a dependência `qrcodegen` (T-01) e os limites da H15 (T-03). **Concluída.** Detalhes no registro da H15.
 
-**H16 (03/11/2026):** Diego pediu "pode começar" no thread do projeto (H16 era a próxima elegível: H04 e H15 concluídas; PR #20 da reconciliação da H15 mergeado). Feita em `feature/H16-rascunho-envio-preco`, a partir de `develop` (`4e2423a`). **Aguardando revisão**; detalhes no registro da H16.
+**H16 (03/11/2026):** Diego pediu "pode começar" no thread do projeto (H16 era a próxima elegível: H04 e H15 concluídas; PR #20 da reconciliação da H15 mergeado). Feita em `feature/H16-rascunho-envio-preco`, a partir de `develop` (`4e2423a`). Diego fez o merge do PR #21 em 03/11/2026 (`da4e270`) e aprovou, na mesma data, os limites da H16 (T-03). **Concluída.** Detalhes no registro da H16.
 
 ## Estados
 
@@ -87,7 +87,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H13 | Catálogo, setores, disponibilidade e logo | Concluída | PR #15, merge `6dbf324` em `develop`, CI de `develop` run 41643198934 verde ([evidência](evidencias/H13-catalogo-setores-logo.md)); T-03/T-04 de imagens e `imageio-webp` aprovados por Diego em 03/11/2026 |
 | H14 | Configurações versionadas por estabelecimento | Concluída | PR #17, merge `cf1fccb` em `develop`, CI de `develop` run 41659354531 verde ([evidência](evidencias/H14-configuracoes-versionadas.md)); T-03 da H14 e P-17 aprovadas por Diego em 03/11/2026 |
 | H15 | Comanda individual, visita e QR avulso | Concluída | PR #19, merge `d3ec085` em `develop`, CI de `develop` run 41672570090 verde ([evidência](evidencias/H15-comanda-visita-qr.md)); P-07 recuperação avulsa, P-18, T-01 (`qrcodegen`) e T-03 da H15 aprovadas por Diego em 03/11/2026 |
-| H16 | Rascunho, envio atômico e preço capturado | Aguardando revisão | Branch `feature/H16-rascunho-envio-preco`, PR para `develop` ([evidência](evidencias/H16-rascunho-envio-preco.md)); T-03 da H16 aguardando Diego |
+| H16 | Rascunho, envio atômico e preço capturado | Concluída | PR #21, merge `da4e270` em `develop`, CI de `develop` run 41715851513 verde ([evidência](evidencias/H16-rascunho-envio-preco.md)); T-03 da H16 aprovada por Diego em 03/11/2026 |
 | H17 | Sincronização operacional SSE e reconexão | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H18 | Fila de produção e entrega por linha | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H19 | Operações em lote de produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -461,7 +461,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H16 — Rascunho, envio atômico e preço capturado
 
-- História e estado: H16, **aguardando revisão** (PR aberto para `develop`). T-03 da H16 (observação até 140 caracteres e tempo de espera do envio) aguardando Diego.
+- História e estado: H16, **concluída** (critérios atendidos e testados com PostgreSQL real; merge em `develop` verificado em 03/11/2026). T-03 da H16 aprovada por Diego em 03/11/2026.
 - Data/hora e agente: 03/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Garçom (quem tem `OPERAR_COMANDA`) monta o rascunho só no aparelho, guardado por pessoa na unidade e comanda (`membershipId`), com até 50 linhas e 1–99 unidades por linha e observação; antes de "Enviar pedido" nada vai ao servidor (FR-15, NFR-11).
@@ -472,14 +472,14 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Encaminhamento durável: a produção (módulo novo `production`) recebe uma sequência por linha (aguardando preparo no setor; sem setor, pronta); restart entre o commit e o job só atrasa; reprocessar não duplica; falha esgotada aparece no pedido e é reenviada sem outro lançamento (FR-15).
   - Tela `/comandas/:id` (pedido da comanda) e botão "Pedido" na lista de comandas.
 - Critérios faltantes / motivo: nenhum do texto da H16. Fora do escopo: fila e etapas da produção (H18), SSE e aviso de rascunho após reautenticar (H17), itens e conta na tela do consumidor (H22, composição da conta), estado "em fechamento" da comanda (H28; o contrato da trava já está pronto), cancelamento (H23) e transferência (H25).
-- Branch e commit reais: `feature/H16-rascunho-envio-preco` (a partir de `develop` `4e2423a`); commit no PR.
-- PR, checks e merge real: PR para `develop` aberto; merge ainda não feito.
+- Branch e commit reais: `feature/H16-rascunho-envio-preco` (a partir de `develop` `4e2423a`), commit `454b80a`.
+- PR, checks e merge real: [PR #21](https://github.com/dfdsn/fastPay/pull/21), checks verdes no PR (backend, frontend, imagens e smoke Compose); merge por Diego em 03/11/2026, commit `da4e270`; CI de `develop` após o merge: run 41715851513, sucesso.
 - Arquivos/migrations/contratos: `V13__pedido_envio_e_producao.sql`; módulo novo `orders` (`Orders`, `domain.OrderRules`, `infrastructure.JdbcOrderStore`, `web.OrderController`); módulo novo `production` (`ProductionIntake`, `infrastructure.JdbcProductionStore`); `Tabs.lockForOrderInCurrentUnit/existsInCurrentUnit`; `Catalog.forOrderInCurrentUnit`; `Jobs.statesInCurrentTransaction/retryExhaustedInCurrentTransaction`; `membershipId` em `GET /api/v1/session/unit`; frontend (`orders/`, rota, link na lista de comandas, `TabsService.find`); especificação §6; decisões T-03; [evidência](evidencias/H16-rascunho-envio-preco.md).
 - Testes: ver a evidência (backend no contêiner Temurin 25 com PostgreSQL real; frontend no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e build das imagens (rodam na CI do PR); E2E Playwright (não configurado); queda real de rede no celular e teste manual na homologação de Diego.
-- Decisões novas/alteradas: proposta T-03 da H16 aguardando Diego.
+- Decisões novas/alteradas: T-03 da H16 (observação até 140 caracteres numa linha, produto repetido em linhas, espera de 20 s, sem limite de envios) aprovada por Diego em 03/11/2026 (cartão no thread, depois do merge do PR #21).
 - Bloqueios / quem resolve: nenhum da H16. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego revisa o PR e decide a proposta T-03 da H16; depois do merge, reconciliar progresso com o hash real.
+- Próximo passo concreto: nenhum na H16. Próxima candidata elegível: H17, só quando Diego pedir.
 
 ## Registro de release (ainda nenhum)
 

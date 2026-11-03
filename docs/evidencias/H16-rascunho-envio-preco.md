@@ -16,7 +16,7 @@ Registro sanitizado. Claude Code, 03/11/2026, sessão em nuvem (Linux) com Docke
 
 Nenhuma dependência nova.
 
-## 2. Proposta para Diego (T-03 da H16, aguardando)
+## 2. Proposta aprovada por Diego em 03/11/2026 (T-03 da H16, cartão no thread da H16, depois do merge do PR #21)
 
 | Proposta | Conteúdo |
 |---|---|
@@ -50,6 +50,7 @@ Já fechados em D-13 e aplicados: 50 linhas por envio e 99 unidades por linha.
 |---|---|---|
 | `./mvnw -B clean verify` (backend) | contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble`, Docker para o Testcontainers (PostgreSQL 18.6 da imagem fixada), sessão em nuvem, 03/11/2026 | **356 testes, 0 falhas** (eram 346 na H15); enforcer, Modulith e JaCoCo ok |
 | `./scripts/verify.sh frontend` (`npm ci`, lint, `test:ci`, build) | contêiner `node:24.18.0-trixie-slim`, sessão em nuvem, 03/11/2026 | lint ok; **147 testes em 29 arquivos, 0 falhas** (10 novos); build ok |
-| CI do PR | GitHub Actions | ver o PR |
+| CI do PR #21 (commit `454b80a`) | GitHub Actions | backend, frontend, imagens e smoke Compose verdes |
+| CI de `develop` após o merge (`da4e270`) | GitHub Actions, run 41715851513 | sucesso |
 
 Não executados: `compose-smoke.sh` e build das imagens localmente (rodam na CI do PR); E2E Playwright (não configurado); queda real de rede no celular e teste manual na homologação.
