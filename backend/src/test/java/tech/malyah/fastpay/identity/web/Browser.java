@@ -92,6 +92,11 @@ public final class Browser {
         return Optional.ofNullable(cookies.get(name)).map(Cookie::getValue);
     }
 
+    /** Cookie guardado, com os atributos recebidos (prazo, caminho, HttpOnly). */
+    public Optional<Cookie> storedCookie(String name) {
+        return Optional.ofNullable(cookies.get(name));
+    }
+
     /** Leva os cookies de sessão deste navegador para outro (outra aba, ou um atacante com o cookie). */
     public void copyCookiesTo(Browser other) {
         other.cookies.putAll(cookies);

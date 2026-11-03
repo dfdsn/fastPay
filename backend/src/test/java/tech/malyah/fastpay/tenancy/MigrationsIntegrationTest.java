@@ -25,8 +25,8 @@ class MigrationsIntegrationTest extends PostgresIntegrationTest {
         MigrateResult resultado = flyway.migrate();
 
         assertThat(resultado.success).isTrue();
-        assertThat(resultado.migrationsExecuted).isEqualTo(11);
-        assertThat(resultado.targetSchemaVersion).isEqualTo("11");
+        assertThat(resultado.migrationsExecuted).isEqualTo(12);
+        assertThat(resultado.targetSchemaVersion).isEqualTo("12");
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
@@ -40,8 +40,8 @@ class MigrationsIntegrationTest extends PostgresIntegrationTest {
 
         MigrateResult resultado = flywayPara(banco, null).migrate();
 
-        assertThat(resultado.migrationsExecuted).isEqualTo(10);
-        assertThat(resultado.targetSchemaVersion).isEqualTo("11");
+        assertThat(resultado.migrationsExecuted).isEqualTo(11);
+        assertThat(resultado.targetSchemaVersion).isEqualTo("12");
         assertThat(admin.queryForObject(
                 "SELECT tableowner FROM pg_tables WHERE schemaname = 'fastpay' AND tablename = 'audit_event'", String.class))
                 .isEqualTo("fastpay_migration");
@@ -55,7 +55,7 @@ class MigrationsIntegrationTest extends PostgresIntegrationTest {
         UUID loja = UUID.randomUUID();
         admin.update("INSERT INTO fastpay.establishment (id, name) VALUES (?, 'Bar Antigo')", loja);
 
-        assertThat(flywayPara(banco, null).migrate().targetSchemaVersion).isEqualTo("11");
+        assertThat(flywayPara(banco, null).migrate().targetSchemaVersion).isEqualTo("12");
 
         assertThat(admin.queryForObject("""
                 SELECT service_percent || ' ' || attendance_mode || ' ' || exit_mode FROM fastpay.unit_settings_version

@@ -176,7 +176,7 @@ Admin fastPay consulta demanda agregada e classificação → identifica produto
 
 **FR-08 — Acesso QR.** Funcionário exibe QR exclusivo na tela, sem cartão físico reutilizável. Validade de 2 minutos e uso único; gerar novo invalida anterior. Abrir/visualizar o link não consome; confirmar vínculo consome atomicamente. Nome/número não concedem acesso. QR de vínculo é distinto do QR de saída.
 
-**FR-09 — Sessão e recuperação.** Um único acesso ativo de consumidor por comanda. Funcionário autorizado confere presencialmente o vínculo, gera novo QR e revoga acesso anterior. Recuperação preserva consumo, chamados e pagamentos; não cancela cobranças. Procedimento objetivo de verificação em P-07.
+**FR-09 — Sessão e recuperação.** Um único acesso ativo de consumidor por comanda. Funcionário autorizado confere presencialmente o vínculo, gera novo QR e revoga acesso anterior. Recuperação preserva consumo, chamados e pagamentos; não cancela cobranças. Verificação (P-07, aprovada por Diego em 03/11/2026): quem tem a permissão de recuperar vê a pessoa, que diz o nome/apelido da comanda e um item pedido (ou, sem pedidos, a hora da abertura), sem que o funcionário revele a resposta; motivo escrito, auditado; o acesso anterior é revogado. Nome, mesa ou e-mail sozinhos nunca bastam.
 
 **FR-10 — Cadastro/histórico.** Cadastro opcional via Google, válido na rede. Vincular comanda requer acesso válido e confirmação do consumidor, inclusive no final do atendimento. Não associar históricos por coincidência de nome/número. Cada estabelecimento só acessa suas operações.
 
