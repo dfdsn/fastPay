@@ -18,7 +18,10 @@ FROM eclipse-temurin:25.0.4.1_1-jre-noble@sha256:d9a39a23634650173f1e2bbc176227a
 ARG FASTPAY_REVISION=unknown
 LABEL org.opencontainers.image.title="fastpay-backend" \
       org.opencontainers.image.revision="${FASTPAY_REVISION}"
-RUN groupadd --system fastpay && useradd --system --gid fastpay --no-create-home fastpay
+RUN groupadd --system fastpay && useradd --system --gid fastpay --no-create-home fastpay \
+    && mkdir -p /var/lib/fastpay/arquivos && chown fastpay:fastpay /var/lib/fastpay/arquivos
+# H13: storage local de imagens (dev/HML). O Compose monta um volume aqui; produção usa S3 (H49).
+ENV STORAGE_LOCAL_DIR=/var/lib/fastpay/arquivos
 WORKDIR /app
 COPY --from=build /workspace/app.jar app.jar
 USER fastpay

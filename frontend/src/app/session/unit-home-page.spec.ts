@@ -7,7 +7,11 @@ import { UnitContextService, UnitView } from './unit-context.service';
 import { UnitHomePage } from './unit-home-page';
 
 describe('UnitHomePage', () => {
-  function abrir(antes: UnitView, servidor: UnitView): HTMLElement {
+  function abrir(
+    antes: UnitView,
+    servidor: UnitView,
+    logoFileId: string | null = null,
+  ): HTMLElement {
     TestBed.configureTestingModule({
       imports: [UnitHomePage],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
@@ -15,7 +19,11 @@ describe('UnitHomePage', () => {
     TestBed.inject(UnitContextService).current.set(antes);
     const fixture = TestBed.createComponent(UnitHomePage);
     fixture.detectChanges();
-    TestBed.inject(HttpTestingController).expectOne('/api/v1/session/unit').flush(servidor);
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/session/unit').flush(servidor);
+    http
+      .expectOne('/api/v1/establishment')
+      .flush({ establishmentId: servidor.establishmentId, name: servidor.name, logoFileId });
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -29,7 +37,9 @@ describe('UnitHomePage', () => {
       { establishmentId: 'b', name: 'Adega Centro', role: 'GERENTE', permissions: ['VER_EQUIPE'] },
     );
     expect(element.textContent).toContain('Você está em Adega Centro como Gerente.');
-    expect(links(element)).toEqual(['Equipe']);
+    expect(links(element)).toEqual(['Catálogo', 'Equipe']);
+    // Sem logo: iniciais do nome.
+    expect(element.querySelector('fp-unit-logo')?.textContent?.trim()).toBe('AC');
   });
 
   it('o dono vê equipe e acesso de suporte', () => {
@@ -37,18 +47,27 @@ describe('UnitHomePage', () => {
       establishmentId: 'a',
       name: 'Bar da Praia',
       role: 'ADMIN_ESTABELECIMENTO',
-      permissions: ['VER_EQUIPE', 'GERIR_EQUIPE', 'AUTORIZAR_SUPORTE'],
+      permissions: [
+        'VER_EQUIPE',
+        'GERIR_EQUIPE',
+        'AUTORIZAR_SUPORTE',
+        'CONFIGURAR_ESTABELECIMENTO',
+      ],
     };
-    expect(links(abrir(dono, dono))).toEqual(['Equipe', 'Acesso de suporte']);
+    const element = abrir(dono, dono, 'logo-1');
+    expect(links(element)).toEqual(['Catálogo', 'Logo da unidade', 'Equipe', 'Acesso de suporte']);
+    const logo = element.querySelector<HTMLImageElement>('fp-unit-logo img');
+    expect(logo?.getAttribute('src')).toBe('/api/v1/files/logo-1');
+    expect(logo?.alt).toBe('Logo de Bar da Praia');
   });
 
-  it('garçom não vê caminhos de administração', () => {
+  it('garçom vê só o catálogo', () => {
     const garcom: UnitView = {
       establishmentId: 'a',
       name: 'Bar da Praia',
       role: 'GARCOM',
       permissions: ['OPERAR_COMANDA', 'ATENDER_PROBLEMA', 'CANCELAR_ITEM'],
     };
-    expect(links(abrir(garcom, garcom))).toEqual([]);
+    expect(links(abrir(garcom, garcom))).toEqual(['Catálogo']);
   });
 });

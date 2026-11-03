@@ -27,7 +27,9 @@ export type Permission =
   | 'DELEGAR_PERMISSOES'
   | 'GERIR_EQUIPE'
   | 'CONECTAR_CONTA_PSP'
-  | 'AUTORIZAR_SUPORTE';
+  | 'AUTORIZAR_SUPORTE'
+  | 'GERIR_CATALOGO'
+  | 'CONFIGURAR_ESTABELECIMENTO';
 
 export interface UnitView {
   establishmentId: string;

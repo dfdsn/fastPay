@@ -52,6 +52,22 @@ public class JdbcEstablishmentStore {
                 .stream().findFirst();
     }
 
+    /** Nome e logo da unidade do contexto (H13); trava a linha para trocar o logo. */
+    public record Branding(UUID id, String name, UUID logoFileId) {
+    }
+
+    public Optional<Branding> branding(boolean lock) {
+        return jdbc.query("SELECT id, name, logo_file_id FROM establishment WHERE id = current_establishment_id()"
+                + (lock ? " FOR UPDATE" : ""), (rs, n) -> new Branding(rs.getObject("id", UUID.class),
+                rs.getString("name"), rs.getObject("logo_file_id", UUID.class))).stream().findFirst();
+    }
+
+    public void setLogo(UUID fileId) {
+        jdbc.update("""
+                UPDATE establishment SET logo_file_id = ?, version = version + 1 WHERE id = current_establishment_id()
+                """, fileId);
+    }
+
     public void audit(String action, UUID subjectId, UUID actorId, String correlationId) {
         jdbc.update("""
                 INSERT INTO audit_event (id, establishment_id, action, subject_id, actor_id, correlation_id)

@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 02/11/2026 por Claude Code (PR #12 reconciliado; envio real pelo Gmail de homologação validado por Diego, parte de e-mail da T-02 encerrada).
+Atualizado em 02/11/2026 por Claude Code (PR #12 e PR #13 reconciliados; envio real pelo Gmail de homologação validado por Diego, parte de e-mail da T-02 encerrada; H13 aguardando revisão).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -54,6 +54,10 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **Decisões de 29/10/2026:** Diego aprovou P-07 (recuperação excepcional de MFA), T-05 (bootstrap do primeiro admin fastPay) e T-06 (fila de jobs própria) como implementadas, com os detalhes de P-07 registrados em `decisoes-pendentes.md`. O aviso por e-mail após `redefinir-mfa`, parte da aprovação de P-07, entrou em `feature/H09-aprova-mfa-bootstrap-eventos`. Diego criou a conta Gmail de homologação com senha de app (T-02); o envio real não pôde ser testado da sessão em nuvem (sem saída SMTP) e fica para o fim, na máquina dele, com `scripts/gerar-env-hml.sh` e o Compose de homologação. Senha só no `.env.hml` local, nunca no Git.
 
+**Reconciliação do PR #13 (02/11/2026):** Diego fez o merge do [PR #13](https://github.com/dfdsn/fastPay/pull/13) (T-02: saída de rede do backend de homologação e motivo da falha SMTP no log) em `develop` (`5f841fe`, 02/11/2026 20:52 UTC). CI do push em `develop` verde (run 41523156399). O PR #14 (`develop` → `main`, aberto por engano) foi fechado por Diego sem merge; release para `main` só por branch `release/x.y.z`.
+
+**H13 (02/11/2026):** Diego pediu a próxima história e escolheu a H13 no cartão de decisão do thread do projeto. H05 e H06 seguem bloqueadas pelo PSP (Mercado Pago escolhido; credenciais de teste ainda em criação); H13 e H14 estavam elegíveis (dependem só da H11). Feita em `feature/H13-catalogo-setores-logo`, a partir de `develop` (`5f841fe`). **Aguardando revisão** no PR da H13; propostas T-03 (limites de imagem e catálogo), T-04 (tratamento de imagens) e a dependência `imageio-webp` (T-01) aguardam Diego. Detalhes no registro da H13.
+
 ## Estados
 
 Não iniciada → em andamento → aguardando validação ou revisão → concluída. Bloqueada quando falta pré-requisito concreto. Aguardando revisão inclui PR aberto; concluída só após checks e merge develop verificados. Uma release possui registro separado do estado das histórias. Progresso inicialmente sem agente/branch/commit/PR.
@@ -74,7 +78,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H10 | Criar estabelecimento e convidar dono | Concluída | [PR #9](https://github.com/dfdsn/fastPay/pull/9) (`9151720`); CI de `develop` verde (run 38837453986) ([evidência](evidencias/H10-estabelecimento-convite-dono.md)); envio pelo Gmail de homologação depende da conta de teste (T-02) |
 | H11 | Equipe, permissões e concessão de suporte | Concluída | [PR #10](https://github.com/dfdsn/fastPay/pull/10) (`54728ce`) + correção do teste no [PR #11](https://github.com/dfdsn/fastPay/pull/11) (`32c78a6`); CI de `develop` verde (run 39184491303) ([evidência](evidencias/H11-equipe-permissoes-suporte.md)); P-16 (suporte) aprovada por Diego em 19/10/2026; ver registro abaixo |
 | H12 | Convites e e-mail durável em homologação | Concluída | [PR #8](https://github.com/dfdsn/fastPay/pull/8) (`21b2058`); CI de `develop` verde (run 38492760180) ([evidência](evidencias/H12-email-duravel.md)); envio pelo Gmail de homologação depende da conta de teste (T-02) |
-| H13 | Catálogo, setores, disponibilidade e logo | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H13 | Catálogo, setores, disponibilidade e logo | Aguardando revisão | PR da H13 para `develop` ([evidência](evidencias/H13-catalogo-setores-logo.md)); propostas T-03/T-04 e dependência `imageio-webp` aguardam Diego |
 | H14 | Configurações versionadas por estabelecimento | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H15 | Comanda individual, visita e QR avulso | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H16 | Rascunho, envio atômico e preço capturado | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -383,6 +387,27 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Próximo passo concreto: Diego atualiza o branch (ou `develop` depois do merge), roda `up -d --pull never` para recriar o backend na rede nova, pede "Esqueci minha senha" e confirma a chegada; com isso, fechar a T-02.
 - Validação (02/11/2026): na máquina de Diego, Avast Web/Mail Shield interceptava o TLS (STARTTLS em `smtp.gmail.com:587` com emissor "Avast Web/Mail Shield Root"); o Java do contêiner recusava (`SSLHandshakeException`, visível com o log novo). Com a verificação de e-mail/SSL do Avast desligada, `up -d --pull never` com o backend na rede `egress` e novo pedido em `/esqueci-a-senha`, **o e-mail de redefinição chegou à caixa do Gmail**. Diego confirmou no thread do projeto. Ambiente: Windows, Docker Desktop 28.5.1, imagens construídas a partir de `feature/T02-motivo-falha-smtp`.
 - Pendências fora do código: Diego troca a senha de app (ficou visível em um print) e decide se mantém o Avast sem a verificação de e-mail/SSL para a homologação local.
+
+### H13 — Catálogo, setores, disponibilidade e logo
+
+- História e estado: H13, **aguardando revisão** (critérios atendidos e testados com PostgreSQL real; sem merge). Propostas T-03, T-04 e a dependência nova aguardam Diego.
+- Data/hora e agente: 02/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - CRUD autorizado de produto (nome, categoria, preço, descrição opcional, setor de preparo ou sem preparo) e de setor, com versão esperada, nome único entre ativos e arquivamento que preserva a linha; só o administrador do estabelecimento altera (PRD §3), toda a equipe consulta.
+  - Disponibilidade (disponível/esgotado) por quem tem `ALTERAR_DISPONIBILIDADE`, idempotente; esgotado continua listado e marcado.
+  - Uma foto opcional por produto e logo opcional com inclusão, substituição e remoção; sem logo, iniciais do nome nas telas.
+  - Storage local por interface (`StoragePort`); verificação real de formato pelo conteúdo, tamanho e dimensões antes de decodificar, decodificação completa e regravação sem metadados.
+  - Produção consulta o catálogo sem preços.
+  - Telas `/catalogo` e `/logo`, logo/iniciais e links no início da unidade.
+- Critérios faltantes / motivo: nenhum do texto da H13. Fora do escopo: preço capturado e disponibilidade conferida no envio (H16), fila por setor (H18), catálogo de referência (H44), S3 (H49).
+- Branch e commit reais: `feature/H13-catalogo-setores-logo` (a partir de `develop` `5f841fe`); hash no `git log`.
+- PR, checks e merge real: PR da H13 para `develop`; CI a conferir no PR. Sem merge.
+- Arquivos/migrations/contratos: `V10__catalogo_setores_e_imagens.sql`; módulos novos `files` e `catalog`; `establishments` (`Branding`, `BrandingController`, `JdbcEstablishmentStore.branding/setLogo`); `identity.Permission` e `AccessPolicy`; `application.yaml` (`fastpay.storage.*`, multipart 6 MB); `pom.xml` (`imageio-webp`); infra (Dockerfile, Compose, nginx, `.env.example`); frontend (`catalog/`, `branding/`, rotas, início da unidade); especificação §6 e §10; decisões T-01, T-03, T-04; [evidência](evidencias/H13-catalogo-setores-logo.md).
+- Testes: backend `./mvnw -B -ntp verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` com Docker para o Testcontainers: **301 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. Frontend no contêiner `node:24.18.0-trixie-slim`: lint ok, **118 testes**, build ok. Detalhes na evidência.
+- Testes não executados e por quê: `compose-smoke.sh` e build das imagens (rodam na CI do PR); E2E Playwright (não configurado); teste manual na homologação de Diego.
+- Decisões novas/alteradas: T-03 (limites de imagem e de catálogo) e T-04 (tratamento de imagens) propostas e configuráveis, aguardando Diego; T-01 ganha `imageio-webp` 3.12.0, aguardando aceite. Permissões novas `GERIR_CATALOGO` e `CONFIGURAR_ESTABELECIMENTO` só para administrador do estabelecimento, conforme PRD §3 (sem mudança de regra).
+- Bloqueios / quem resolve: nenhum da H13. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego revisa o PR, responde às propostas T-03/T-04 e à dependência e faz o merge; depois, reconciliar a H13 com hash e CI de `develop`.
 
 ## Registro de release (ainda nenhum)
 

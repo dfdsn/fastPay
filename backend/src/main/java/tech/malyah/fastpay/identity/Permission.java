@@ -28,7 +28,9 @@ public enum Permission {
     DELEGAR_PERMISSOES("Delegar permissões a garçons", false),
     GERIR_EQUIPE("Convidar, trocar papel e desativar pessoas da equipe", false),
     CONECTAR_CONTA_PSP("Conectar ou substituir a conta de pagamentos", false),
-    AUTORIZAR_SUPORTE("Autorizar acesso temporário do suporte", false);
+    AUTORIZAR_SUPORTE("Autorizar acesso temporário do suporte", false),
+    GERIR_CATALOGO("Cadastrar produtos, categorias, setores e fotos", false),
+    CONFIGURAR_ESTABELECIMENTO("Configurar o estabelecimento, inclusive o logo", false);
 
     private final String label;
     private final boolean delegable;

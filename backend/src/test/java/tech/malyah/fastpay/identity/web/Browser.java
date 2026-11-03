@@ -10,7 +10,7 @@ import jakarta.servlet.http.Cookie;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /**
@@ -49,12 +49,18 @@ public final class Browser {
         return mutate(MockMvcRequestBuilders.put(url).contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
+    /** Envio de arquivo como o navegador faz num formulário (multipart), no campo {@code file}. */
+    public ResultActions upload(String url, byte[] content, String filename, String contentType) throws Exception {
+        return mutate(MockMvcRequestBuilders.multipart(org.springframework.http.HttpMethod.PUT, url)
+                .file(new org.springframework.mock.web.MockMultipartFile("file", filename, contentType, content)));
+    }
+
     public ResultActions delete(String url) throws Exception {
         return mutate(MockMvcRequestBuilders.delete(url));
     }
 
     /** Envia como está, sem buscar nem mandar o token CSRF. */
-    public ResultActions send(MockHttpServletRequestBuilder request) throws Exception {
+    public ResultActions send(AbstractMockHttpServletRequestBuilder<?> request) throws Exception {
         request.with(r -> {
             r.setRemoteAddr(address);
             return r;
@@ -91,7 +97,7 @@ public final class Browser {
         other.cookies.putAll(cookies);
     }
 
-    private ResultActions mutate(MockHttpServletRequestBuilder request) throws Exception {
+    private ResultActions mutate(AbstractMockHttpServletRequestBuilder<?> request) throws Exception {
         if (!cookies.containsKey("XSRF-TOKEN")) {
             send(MockMvcRequestBuilders.get("/api/v1/platform/info"));
         }

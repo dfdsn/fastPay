@@ -25,6 +25,8 @@ server {
         # SSE (H17) precisa de resposta sem buffer.
         proxy_buffering off;
         proxy_read_timeout 120s;
+        # H13: envio de imagem até 5 MB (o backend recusa acima disso com mensagem própria).
+        client_max_body_size 6m;
     }
 
     location = /index.html {

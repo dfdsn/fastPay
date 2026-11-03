@@ -24,6 +24,12 @@ spring:
     placeholders:
       # Nome fixo: o papel é criado por infra/postgres/init/01-roles.sh.
       app_role: fastpay_app
+  # Envio de imagem (H13): o servidor recusa corpo acima disto antes de ler; o limite de 5 MB da imagem é conferido
+  # depois, com mensagem própria (fastpay.storage.image.max-bytes).
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 6MB
   # Spring Session JDBC (H08): schema pelo Flyway (V5); limpeza de sessões vencidas pelo próprio Spring Session.
   session:
     jdbc:
@@ -75,6 +81,17 @@ fastpay:
   # Suporte autorizado pelo dono (H11, FR-66): somente leitura, prazo máximo de cada concessão (P-16, aprovada).
   support:
     max-duration: 72h
+  # Arquivos (H13, especificação §10). Storage local em dev/HML; S3 privado em produção chega na H49.
+  storage:
+    local-dir: ${STORAGE_LOCAL_DIR:./var/arquivos}
+    # Limites técnicos de imagem (proposta T-03): arquivo, lados e pixels da imagem enviada; maior lado guardado.
+    image:
+      max-bytes: 5242880
+      min-side: 64
+      max-side: 8000
+      max-pixels: 40000000
+      output-max-side: 1600
+      jpeg-quality: 0.85
   # E-mail (H12, especificação §9). Desenvolvimento: caixa de teste em memória, sem envio real.
   # Homologação: SMTP do Gmail dedicado com lista de destinatários permitidos. Produção: SES (H49).
   mail:

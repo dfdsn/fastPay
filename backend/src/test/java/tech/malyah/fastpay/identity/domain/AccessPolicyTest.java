@@ -48,7 +48,10 @@ class AccessPolicyTest {
             Map.entry(Permission.DELEGAR_PERMISSOES, List.of(false, false, true, true)),
             Map.entry(Permission.GERIR_EQUIPE, List.of(false, false, false, true)),
             Map.entry(Permission.CONECTAR_CONTA_PSP, List.of(false, false, false, true)),
-            Map.entry(Permission.AUTORIZAR_SUPORTE, List.of(false, false, false, true)));
+            Map.entry(Permission.AUTORIZAR_SUPORTE, List.of(false, false, false, true)),
+            // PRD §3: catálogo, setores e configurações são do administrador do estabelecimento (H13).
+            Map.entry(Permission.GERIR_CATALOGO, List.of(false, false, false, true)),
+            Map.entry(Permission.CONFIGURAR_ESTABELECIMENTO, List.of(false, false, false, true)));
 
     // "Permissão específica" na coluna do garçom (PRD §4.2): o que gerente e administrador podem delegar.
     private static final Set<Permission> DELEGAVEIS = EnumSet.of(Permission.CONCLUIR_PROBLEMA, Permission.CANCELAR_ITEM,

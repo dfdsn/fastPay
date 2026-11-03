@@ -42,7 +42,11 @@ services:
       TEST_MAILBOX_ENDPOINT: "true"
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       # H09: chave do segredo TOTP, fora do banco. Obrigatória; sem ela o backend não sobe.
+      # H13: imagens (fotos de produto e logo) no volume files-data; sobrevive a down/up sem -v.
+      STORAGE_LOCAL_DIR: /var/lib/fastpay/arquivos
       MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?defina MFA_ENCRYPTION_KEY no .env}
+    volumes:
+      - files-data:/var/lib/fastpay/arquivos
     depends_on:
       db:
         condition: service_healthy
@@ -69,3 +73,4 @@ networks:
 
 volumes:
   db-data:
+  files-data:

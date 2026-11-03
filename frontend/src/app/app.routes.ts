@@ -65,11 +65,22 @@ export const routes: Routes = [
     loadComponent: () => import('./team/team-page').then((m) => m.TeamPage),
   },
   {
+    path: 'catalogo',
+    title: 'Catálogo · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () => import('./catalog/catalog-page').then((m) => m.CatalogPage),
+  },
+  {
+    path: 'logo',
+    title: 'Logo da unidade · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () => import('./branding/branding-page').then((m) => m.BrandingPage),
+  },
+  {
     path: 'acesso-de-suporte',
     title: 'Acesso de suporte · fastPay',
     canActivate: [signedInGuard, unitSelectedGuard],
-    loadComponent: () =>
-      import('./support/support-grants-page').then((m) => m.SupportGrantsPage),
+    loadComponent: () => import('./support/support-grants-page').then((m) => m.SupportGrantsPage),
   },
   {
     path: 'admin/suporte',

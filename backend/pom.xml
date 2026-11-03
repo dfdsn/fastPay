@@ -22,6 +22,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Spring Modulith não é gerenciado pelo BOM do Boot 4.1.1; versão explícita (T-01). -->
         <spring-modulith.version>2.1.1</spring-modulith.version>
+        <twelvemonkeys.version>3.12.0</twelvemonkeys.version>
         <jacoco-plugin.version>0.8.15</jacoco-plugin.version>
         <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
         <!-- Gate de cobertura (AGENTS/especificação §14): domain/application. -->
@@ -66,6 +67,13 @@
             <!-- H12: SMTP (Gmail de homologação; SES por SMTP em H49). Versão pelo BOM do Boot. -->
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <dependency>
+            <!-- H13: leitura de WebP pelo ImageIO (o JDK só lê JPEG/PNG). Só decodifica; a imagem é regravada
+                 em JPEG/PNG pelo próprio JDK. Puro Java, licença BSD-3. -->
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>${twelvemonkeys.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
