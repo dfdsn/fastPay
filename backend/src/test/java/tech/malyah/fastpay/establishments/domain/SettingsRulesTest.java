@@ -45,7 +45,7 @@ class SettingsRulesTest {
         Valid valid = (Valid) SettingsRules.check(padrao());
         SettingsValues v = valid.values();
         assertThat(v.servicePercent()).isEqualByComparingTo("10.00");
-        assertThat(v.servicePercent().scale()).isEqualTo(2);
+        assertThat(v.servicePercent().scale()).isEqualTo(4);
         assertThat(v.serviceBase()).isEqualTo(ServiceBase.APOS_DESCONTO);
         assertThat(v.couvertAmount()).isNull();
         assertThat(v.attendanceMode()).isEqualTo(AttendanceMode.GARCOM_RESPONSAVEL);
@@ -54,9 +54,11 @@ class SettingsRulesTest {
     }
 
     @Test
-    void percentualDoServicoDeZeroAVinteComDuasCasas() {
+    void percentualDoServicoDeZeroAVinteComQuatroCasas() {
         assertThat(((Valid) SettingsRules.check(comServico("12,5", true))).values().servicePercent())
-                .isEqualByComparingTo("12.50");
+                .isEqualByComparingTo("12.5");
+        assertThat(((Valid) SettingsRules.check(comServico("12,3456", true))).values().servicePercent())
+                .isEqualByComparingTo("12.3456");
         assertThat(((Valid) SettingsRules.check(comServico("20.00", true))).values().servicePercent())
                 .isEqualByComparingTo("20");
         // Desabilitado pode ficar em zero; habilitado não.
@@ -64,7 +66,7 @@ class SettingsRulesTest {
         assertThat(campoRecusado(comServico("0", true))).isEqualTo("servicePercent");
         assertThat(campoRecusado(comServico("20.01", true))).isEqualTo("servicePercent");
         assertThat(campoRecusado(comServico("-1", true))).isEqualTo("servicePercent");
-        assertThat(campoRecusado(comServico("10.005", true))).isEqualTo("servicePercent");
+        assertThat(campoRecusado(comServico("10.00005", true))).isEqualTo("servicePercent");
         assertThat(campoRecusado(comServico("dez", true))).isEqualTo("servicePercent");
         assertThat(campoRecusado(comServico(null, true))).isEqualTo("servicePercent");
     }
@@ -78,6 +80,7 @@ class SettingsRulesTest {
         assertThat(campoRecusado(comCouvert(true, "0"))).isEqualTo("couvertAmount");
         assertThat(campoRecusado(comCouvert(true, "200.01"))).isEqualTo("couvertAmount");
         assertThat(campoRecusado(comCouvert(true, "1.000,00"))).isEqualTo("couvertAmount");
+        assertThat(campoRecusado(comCouvert(true, "10,005"))).isEqualTo("couvertAmount");
         // Desligado, o valor anterior pode ficar guardado, mas precisa ser válido.
         assertThat(((Valid) SettingsRules.check(comCouvert(false, "12"))).values().couvertAmount())
                 .isEqualByComparingTo("12");

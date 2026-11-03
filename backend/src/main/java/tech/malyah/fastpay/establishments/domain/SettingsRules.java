@@ -18,17 +18,19 @@ import tech.malyah.fastpay.establishments.SettingsValues;
 
 /**
  * Validação da configuração da unidade (H14, FR-28–30, FR-23, FR-40, FR-57). Limites da proposta T-03 da H14:
- * serviço de 0% a 20% com até duas casas (maior que zero quando habilitado); couvert de R$ 0,01 a R$ 200,00 por
+ * serviço de 0% a 20% com até quatro casas (maior que zero quando habilitado); couvert de R$ 0,01 a R$ 200,00 por
  * pessoa; corte de 00:00 a 12:00; fuso IANA de região. Nada é arredondado: valor com mais casas é recusado.
  */
 public final class SettingsRules {
 
-    public static final BigDecimal SERVICE_MAX = new BigDecimal("20.00");
+    /** Percentuais com até 4 casas (especificação §7); dinheiro com 2. */
+    public static final int PERCENT_SCALE = 4;
+    public static final int MONEY_SCALE = 2;
+    public static final BigDecimal SERVICE_MAX = new BigDecimal("20");
     public static final BigDecimal COUVERT_MIN = new BigDecimal("0.01");
     public static final BigDecimal COUVERT_MAX = new BigDecimal("200.00");
 
-    private static final Pattern PLAIN = Pattern.compile("\\d{1,6}(\\.\\d{1,2})?");
-    private static final Pattern COMMA = Pattern.compile("\\d{1,6}(,\\d{1,2})?");
+    private static final Pattern NUMBER = Pattern.compile("\\d{1,6}([.,]\\d{1,4})?");
 
     /** O que chegou da tela, campo a campo; nulos e textos inválidos são recusados com o campo e a mensagem. */
     public record Draft(Boolean serviceEnabled, String servicePercent, String serviceBase,
@@ -58,11 +60,11 @@ public final class SettingsRules {
         List<Problem> found = new ArrayList<>();
         boolean serviceEnabled = flag(draft.serviceEnabled(), "serviceEnabled",
                 "Informe se a taxa de serviço está habilitada.", found);
-        Optional<BigDecimal> percent = decimal(draft.servicePercent())
+        Optional<BigDecimal> percent = decimal(draft.servicePercent(), PERCENT_SCALE)
                 .filter(p -> p.signum() >= 0 && p.compareTo(SERVICE_MAX) <= 0);
         if (percent.isEmpty()) {
             found.add(new Problem("servicePercent",
-                    "Informe o percentual do serviço entre 0 e 20, com até duas casas decimais (ex.: 10 ou 12,5)."));
+                    "Informe o percentual do serviço entre 0 e 20, com até quatro casas decimais (ex.: 10 ou 12,5)."));
         } else if (serviceEnabled && percent.get().signum() == 0) {
             found.add(new Problem("servicePercent",
                     "Com o serviço habilitado, o percentual precisa ser maior que zero. Para não cobrar, desabilite."));
@@ -77,7 +79,7 @@ public final class SettingsRules {
         BigDecimal couvertAmount = null;
         boolean amountGiven = draft.couvertAmount() != null && !draft.couvertAmount().isBlank();
         if (amountGiven || couvertEnabled) {
-            Optional<BigDecimal> amount = decimal(draft.couvertAmount())
+            Optional<BigDecimal> amount = decimal(draft.couvertAmount(), MONEY_SCALE)
                     .filter(a -> a.compareTo(COUVERT_MIN) >= 0 && a.compareTo(COUVERT_MAX) <= 0);
             if (amount.isEmpty()) {
                 found.add(new Problem("couvertAmount",
@@ -111,10 +113,10 @@ public final class SettingsRules {
     }
 
     /**
-     * Número com até duas casas, com ponto ou vírgula decimal, sem milhar; devolvido com duas casas. Vazio se o
-     * texto não é um número assim.
+     * Número com até {@code scale} casas, com ponto ou vírgula decimal, sem milhar; devolvido com {@code scale}
+     * casas. Vazio se o texto não é um número assim (mais casas são recusadas, nunca arredondadas).
      */
-    public static Optional<BigDecimal> decimal(String raw) {
+    public static Optional<BigDecimal> decimal(String raw, int scale) {
         if (raw == null) {
             return Optional.empty();
         }
@@ -125,10 +127,14 @@ public final class SettingsRules {
         if (s.endsWith("%")) {
             s = s.substring(0, s.length() - 1).strip();
         }
-        if (!PLAIN.matcher(s).matches() && !COMMA.matcher(s).matches()) {
+        if (!NUMBER.matcher(s).matches()) {
             return Optional.empty();
         }
-        return Optional.of(new BigDecimal(s.replace(',', '.')).setScale(2, RoundingMode.UNNECESSARY));
+        BigDecimal value = new BigDecimal(s.replace(',', '.'));
+        if (value.scale() > scale) {
+            return Optional.empty();
+        }
+        return Optional.of(value.setScale(scale, RoundingMode.UNNECESSARY));
     }
 
     /** Nomes dos campos que mudaram de uma versão para outra, para a auditoria. */

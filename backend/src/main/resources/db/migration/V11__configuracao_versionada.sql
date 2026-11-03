@@ -1,6 +1,6 @@
 -- H14: configurações versionadas por estabelecimento (FR-23, FR-28–30, FR-40, FR-57, FR-68; D-08).
 --   * unit_settings_version guarda cada versão da configuração comercial e operacional da unidade: serviço
---     (habilitado, percentual, base, couvert na base), couvert (habilitado, automático ou manual, valor por
+--     (habilitado, percentual com até 4 casas como na especificação §7, base, couvert na base), couvert (habilitado, automático ou manual, valor por
 --     pessoa), formatos de desconto aceitos e modalidades de atendimento e de saída. Versões são imutáveis: o
 --     runtime só lê e insere. Salvar cria a versão seguinte; comandas guardam o id da versão capturada na abertura
 --     (H15) e nunca são reescritas por mudanças posteriores.
@@ -17,7 +17,7 @@ CREATE TABLE unit_settings_version (
     establishment_id         uuid         NOT NULL REFERENCES establishment (id),
     number                   integer      NOT NULL CHECK (number >= 1),
     service_enabled          boolean      NOT NULL,
-    service_percent          numeric(4, 2) NOT NULL CHECK (service_percent BETWEEN 0 AND 20),
+    service_percent          numeric(6, 4) NOT NULL CHECK (service_percent BETWEEN 0 AND 20),
     service_base             text         NOT NULL CHECK (service_base IN ('APOS_DESCONTO', 'ANTES_DESCONTO')),
     service_includes_couvert boolean      NOT NULL,
     couvert_enabled          boolean      NOT NULL,

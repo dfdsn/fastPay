@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { comCookieCsrf } from '../auth/auth-testing';
-import { SettingsPage } from './settings-page';
+import { SettingsPage, percentText } from './settings-page';
 import { SettingsView, changedLabel } from './settings.service';
 
 const URL = '/api/v1/establishment/settings';
@@ -14,7 +14,7 @@ function visao(parcial: Partial<SettingsView> = {}): SettingsView {
     versionId: 'v-1',
     savedAt: '2026-11-03T12:00:00Z',
     serviceEnabled: true,
-    servicePercent: '10.00',
+    servicePercent: '10.0000',
     serviceBase: 'APOS_DESCONTO',
     serviceIncludesCouvert: false,
     couvertEnabled: false,
@@ -77,7 +77,7 @@ describe('SettingsPage', () => {
 
   it('mostra os padrões e o dia operacional na hora local da unidade', () => {
     abrir(visao());
-    expect(campo('servicePercent').value).toBe('10,00');
+    expect(campo('servicePercent').value).toBe('10');
     expect(campo('serviceEnabled').checked).toBe(true);
     expect(campo('couvertEnabled').checked).toBe(false);
     expect(texto()).toContain('Versão 1.');
@@ -106,7 +106,7 @@ describe('SettingsPage', () => {
     pedido.flush(
       visao({
         version: 2,
-        servicePercent: '12.50',
+        servicePercent: '12.5000',
         couvertEnabled: true,
         couvertAmount: '15.00',
         history: [
@@ -171,6 +171,14 @@ describe('SettingsPage', () => {
     expect(texto()).toContain('Só o administrador do estabelecimento altera.');
     expect(texto()).toContain('corte às 08:00, a partir do dia 04/11/2026');
     expect(campo('cutoff').value).toBe('08:00');
+  });
+});
+
+describe('percentText', () => {
+  it('mostra o percentual sem zeros à direita e com vírgula', () => {
+    expect(percentText('10.0000')).toBe('10');
+    expect(percentText('12.5000')).toBe('12,5');
+    expect(percentText('0.0125')).toBe('0,0125');
   });
 });
 

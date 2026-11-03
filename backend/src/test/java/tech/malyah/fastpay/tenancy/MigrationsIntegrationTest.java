@@ -60,7 +60,7 @@ class MigrationsIntegrationTest extends PostgresIntegrationTest {
         assertThat(admin.queryForObject("""
                 SELECT service_percent || ' ' || attendance_mode || ' ' || exit_mode FROM fastpay.unit_settings_version
                  WHERE establishment_id = ? AND number = 1
-                """, String.class, loja)).isEqualTo("10.00 GARCOM_RESPONSAVEL AUTOMATICA");
+                """, String.class, loja)).isEqualTo("10.0000 GARCOM_RESPONSAVEL AUTOMATICA");
         assertThat(admin.queryForObject(
                 "SELECT time_zone || ' ' || cutoff FROM fastpay.operational_calendar WHERE establishment_id = ?",
                 String.class, loja)).isEqualTo("America/Sao_Paulo 06:00:00");

@@ -80,7 +80,7 @@ import {
             <mat-form-field appearance="outline">
               <mat-label>Percentual do serviço (%)</mat-label>
               <input matInput formControlName="servicePercent" inputmode="decimal" autocomplete="off" />
-              <mat-hint>De 0 a 20, com até duas casas (ex.: 10 ou 12,5).</mat-hint>
+              <mat-hint>De 0 a 20, com até quatro casas (ex.: 10 ou 12,5).</mat-hint>
             </mat-form-field>
             @if (fieldError('servicePercent'); as message) {
               <p class="error" id="erro-servicePercent">{{ message }}</p>
@@ -401,7 +401,7 @@ export class SettingsPage {
     this.state.set('ready');
     this.form.setValue({
       serviceEnabled: view.serviceEnabled,
-      servicePercent: view.servicePercent.replace('.', ','),
+      servicePercent: percentText(view.servicePercent),
       serviceBase: view.serviceBase,
       serviceIncludesCouvert: view.serviceIncludesCouvert,
       couvertEnabled: view.couvertEnabled,
@@ -420,6 +420,13 @@ export class SettingsPage {
       this.form.disable();
     }
   }
+}
+
+/** Percentual do servidor ("12.5000") como digitado na tela ("12,5"). */
+export function percentText(value: string): string {
+  const [whole, fraction = ''] = value.split('.');
+  const trimmed = fraction.replace(/0+$/, '');
+  return trimmed ? `${whole},${trimmed}` : whole;
 }
 
 function fieldProblems(error: unknown): Record<string, string> {

@@ -32,7 +32,8 @@ import tech.malyah.fastpay.identity.SessionContext;
 
 /**
  * Configuração da unidade escolhida na sessão (H14). Ver: gerente e administrador; salvar: administrador
- * (403 {@code PERMISSAO_NEGADA} para os demais). Valores monetários e percentuais como texto decimal com duas casas.
+ * (403 {@code PERMISSAO_NEGADA} para os demais). Percentual como texto decimal com 4 casas ({@code "10.0000"}) e
+ * dinheiro com 2 ({@code "15.00"}), como na especificação §7.
  * Salvar exige a versão lida ({@code version}): 409 {@code VERSAO_DESATUALIZADA} se outra pessoa salvou antes; 400
  * {@code DADOS_INVALIDOS} com o primeiro campo recusado em {@code field} e todos em {@code problems}.
  */
@@ -88,8 +89,8 @@ class SettingsController {
         return new ErrorResponseException(status, problem, null);
     }
 
-    private static String decimal(BigDecimal value) {
-        return value == null ? null : value.setScale(2).toPlainString();
+    private static String decimal(BigDecimal value, int scale) {
+        return value == null ? null : value.setScale(scale).toPlainString();
     }
 
     private static String hour(LocalTime time) {
@@ -132,8 +133,8 @@ class SettingsController {
             SettingsValues v = view.current().values();
             EstablishmentSettings.PendingCalendar p = view.pendingCalendar();
             return new SettingsView(view.current().number(), view.current().id(), view.current().createdAt(),
-                    v.serviceEnabled(), decimal(v.servicePercent()), v.serviceBase(), v.serviceIncludesCouvert(),
-                    v.couvertEnabled(), v.couvertMode(), decimal(v.couvertAmount()), v.discountFixedAllowed(),
+                    v.serviceEnabled(), decimal(v.servicePercent(), SettingsRules.PERCENT_SCALE), v.serviceBase(), v.serviceIncludesCouvert(),
+                    v.couvertEnabled(), v.couvertMode(), decimal(v.couvertAmount(), SettingsRules.MONEY_SCALE), v.discountFixedAllowed(),
                     v.discountPercentAllowed(), v.attendanceMode(), v.exitMode(),
                     p == null ? view.calendar().timeZone() : p.timeZone(),
                     hour(p == null ? view.calendar().cutoff() : p.cutoff()),
