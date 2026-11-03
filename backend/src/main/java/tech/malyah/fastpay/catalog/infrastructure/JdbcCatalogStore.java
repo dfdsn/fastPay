@@ -115,6 +115,19 @@ public class JdbcCatalogStore {
                 JdbcCatalogStore::product, id).stream().findFirst();
     }
 
+    /**
+     * Produtos ativos entre os pedidos, travados para leitura ({@code FOR SHARE}) até o fim da transação, em ordem de
+     * id: preço e disponibilidade não mudam entre a conferência e a gravação do pedido (H16).
+     */
+    public List<ProductRow> shareActiveProducts(java.util.Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT " + PRODUCT_COLUMNS + " FROM product WHERE id = ANY (?) AND archived_at IS NULL"
+                + " ORDER BY id FOR SHARE", ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid",
+                        ids.toArray())), JdbcCatalogStore::product);
+    }
+
     public boolean activeProductNamed(String name, UUID exceptId) {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM product WHERE archived_at IS NULL AND lower(name) = lower(?)

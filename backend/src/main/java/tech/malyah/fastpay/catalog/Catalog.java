@@ -116,6 +116,25 @@ public class Catalog {
         });
     }
 
+    /** Produto como o pedido o captura no envio (H16): preço vigente, setor de preparo e disponibilidade. */
+    public record OrderableProduct(UUID id, String name, BigDecimal price, UUID sectorId, boolean available) {
+    }
+
+    /**
+     * Produtos ativos da unidade entre os pedidos, na transação de unidade de quem chama (H16, FR-14, FR-16), travados
+     * para leitura até o commit: uma troca de preço ou de disponibilidade simultânea espera o envio terminar ou é
+     * vista por ele. Arquivado ou de outra unidade não aparece (o pedido trata como indisponível). A permissão é
+     * conferida por quem chama.
+     */
+    public java.util.Map<UUID, OrderableProduct> forOrderInCurrentUnit(java.util.Collection<UUID> productIds) {
+        java.util.Map<UUID, OrderableProduct> found = new java.util.LinkedHashMap<>();
+        for (ProductRow row : store.shareActiveProducts(productIds)) {
+            found.put(row.id(), new OrderableProduct(row.id(), row.name(), row.price(), row.sectorId(),
+                    row.available()));
+        }
+        return found;
+    }
+
     // Setores
 
     public Outcome<Sector> createSector(UUID actorId, UUID establishmentId, String name, String correlationId) {

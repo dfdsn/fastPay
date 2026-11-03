@@ -185,6 +185,7 @@ interface ShownQr {
                 </form>
               } @else {
                 <div class="row">
+                  <a mat-flat-button [routerLink]="['/comandas', tab.id]">Pedido</a>
                   @if (!tab.guestLinked) {
                     <button mat-stroked-button type="button" (click)="showQr(tab)">Mostrar QR</button>
                   } @else if (canRecover()) {
