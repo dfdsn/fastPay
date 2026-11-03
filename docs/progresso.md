@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 03/11/2026 por Claude Code (H14 em `feature/H14-configuracoes-versionadas`, aguardando revisão; H13 reconciliada: PR #15 mergeado em `develop` `6dbf324`, CI de `develop` verde; T-03/T-04 de imagens e `imageio-webp` aprovados por Diego).
+Atualizado em 03/11/2026 por Claude Code (H14 reconciliada: PR #17 mergeado em `develop` `cf1fccb`, CI de `develop` verde; T-03 da H14 e P-17 aprovadas por Diego; H13 reconciliada: PR #15 mergeado em `develop` `6dbf324`, CI de `develop` verde; T-03/T-04 de imagens e `imageio-webp` aprovados por Diego).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -58,7 +58,7 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H13 (02/11/2026):** Diego pediu a próxima história e escolheu a H13 no cartão de decisão do thread do projeto. H05 e H06 seguem bloqueadas pelo PSP (Mercado Pago escolhido; credenciais de teste ainda em criação); H13 e H14 estavam elegíveis (dependem só da H11). Feita em `feature/H13-catalogo-setores-logo`, a partir de `develop` (`5f841fe`). Diego fez o merge do PR #15 em 03/11/2026 (`6dbf324`) e aprovou, na mesma data, as propostas T-03 (limites de imagem e catálogo), T-04 (tratamento de imagens) e a dependência `imageio-webp` (T-01). **Concluída.** Detalhes no registro da H13.
 
-**H14 (03/11/2026):** Diego pediu "Pode iniciar o H14" no thread do projeto. Feita em `feature/H14-configuracoes-versionadas`, a partir de `develop` (`dd06c44`). Propostas aguardando Diego: limites e padrões da configuração (T-03) e o modelo do limite de desconto por pessoa (P-17, cartão de decisão no thread da H14). **Aguardando revisão.** Detalhes no registro da H14.
+**H14 (03/11/2026):** Diego pediu "Pode iniciar o H14" no thread do projeto. Feita em `feature/H14-configuracoes-versionadas`, a partir de `develop` (`dd06c44`). Diego fez o merge do PR #17 em 03/11/2026 (`cf1fccb`) e aprovou, na mesma data, os limites e padrões da configuração (T-03 da H14) e o limite de desconto por pessoa (P-17). **Concluída.** Detalhes no registro da H14.
 
 ## Estados
 
@@ -81,7 +81,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H11 | Equipe, permissões e concessão de suporte | Concluída | [PR #10](https://github.com/dfdsn/fastPay/pull/10) (`54728ce`) + correção do teste no [PR #11](https://github.com/dfdsn/fastPay/pull/11) (`32c78a6`); CI de `develop` verde (run 39184491303) ([evidência](evidencias/H11-equipe-permissoes-suporte.md)); P-16 (suporte) aprovada por Diego em 19/10/2026; ver registro abaixo |
 | H12 | Convites e e-mail durável em homologação | Concluída | [PR #8](https://github.com/dfdsn/fastPay/pull/8) (`21b2058`); CI de `develop` verde (run 38492760180) ([evidência](evidencias/H12-email-duravel.md)); envio pelo Gmail de homologação depende da conta de teste (T-02) |
 | H13 | Catálogo, setores, disponibilidade e logo | Concluída | PR #15, merge `6dbf324` em `develop`, CI de `develop` run 41643198934 verde ([evidência](evidencias/H13-catalogo-setores-logo.md)); T-03/T-04 de imagens e `imageio-webp` aprovados por Diego em 03/11/2026 |
-| H14 | Configurações versionadas por estabelecimento | Aguardando revisão | Branch `feature/H14-configuracoes-versionadas`, PR para `develop` ([evidência](evidencias/H14-configuracoes-versionadas.md)); propostas T-03 (limites/padrões) e P-17 (limite de desconto por pessoa) aguardando Diego |
+| H14 | Configurações versionadas por estabelecimento | Concluída | PR #17, merge `cf1fccb` em `develop`, CI de `develop` run 41659354531 verde ([evidência](evidencias/H14-configuracoes-versionadas.md)); T-03 da H14 e P-17 aprovadas por Diego em 03/11/2026 |
 | H15 | Comanda individual, visita e QR avulso | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H16 | Rascunho, envio atômico e preço capturado | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H17 | Sincronização operacional SSE e reconexão | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -413,25 +413,25 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H14 — Configurações versionadas por estabelecimento
 
-- História e estado: H14, **aguardando revisão** (PR aberto para `develop`). Propostas T-03 da H14 e P-17 aguardando Diego.
+- História e estado: H14, **concluída** (critérios atendidos e testados com PostgreSQL real; merge em `develop` verificado em 03/11/2026). T-03 da H14 e P-17 aprovadas por Diego em 03/11/2026.
 - Data/hora e agente: 03/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Configuração por unidade de serviço (habilitado, percentual, base antes/depois do desconto, couvert na base), couvert (valor por pessoa, automático ou manual), formatos de desconto aceitos, modalidade de atendimento e de saída, fuso e corte do dia operacional.
   - Versões imutáveis: salvar cria a versão seguinte, com versão esperada, auditoria e histórico; a versão capturada antes de uma mudança continua igual depois (`EstablishmentSettings.currentInCurrentUnit/versionInCurrentUnit`, pontos de captura para H15/H20/H22/H32).
   - Fuso e corte com vigência futura: valem no início do próximo dia operacional, sem reclassificar o passado; mudança pendente substituível ou cancelável; `dayInCurrentUnit` classifica pelo calendário da época (FR-57, CA-26).
-  - Validação no servidor e no banco (limites T-03 propostos); configuração inválida e limite percentual fora de 0–100 recusados com mensagem por campo.
+  - Validação no servidor e no banco (limites T-03 aprovados); configuração inválida e limite percentual fora de 0–100 recusados com mensagem por campo.
   - Permissão: gerente vê, só o administrador altera (`VER_CONFIGURACAO`, `CONFIGURAR_ESTABELECIMENTO`); mudança de papel/permissão vale na operação seguinte.
-  - Limite de desconto por pessoa (FR-30, proposta P-17) na equipe, efetivo em `UnitMembership.discountLimitPercent`.
+  - Limite de desconto por pessoa (FR-30, P-17) na equipe, efetivo em `UnitMembership.discountLimitPercent`.
   - Tela `/configuracao` (administrador edita, gerente consulta) e limite de desconto na tela Equipe.
 - Critérios faltantes / motivo: "Comandas antes/depois de mudança mantêm snapshot correto" foi provado no ponto de captura (versão guardada e relida), porque ainda não existem comandas; a gravação do `versionId` na comanda é da H15. Uso do limite e dos formatos ao conceder desconto e cálculo C/D/K/S são da H22; atendimento da H20; saída da H32.
-- Branch e commit reais: `feature/H14-configuracoes-versionadas` (a partir de `develop` `dd06c44`); hash final no PR.
-- PR, checks e merge real: PR para `develop` (link no thread da H14); merge pendente de Diego.
+- Branch e commit reais: `feature/H14-configuracoes-versionadas` (a partir de `develop` `dd06c44`), último commit `6dd538f`.
+- PR, checks e merge real: [PR #17](https://github.com/dfdsn/fastPay/pull/17), checks verdes no PR (backend, frontend, imagens e smoke Compose); merge por Diego em 03/11/2026, commit `cf1fccb`; CI de `develop` após o merge: run 41659354531, sucesso.
 - Arquivos/migrations/contratos: `V11__configuracao_versionada.sql`; `establishments` (`EstablishmentSettings`, `SettingsValues`, `SettingsVersion`, `OperationalDay`, enums, `domain.SettingsRules`, `domain.CalendarRules`, `infrastructure.JdbcSettingsStore`, `web.SettingsController`); `identity` (`Permission.VER_CONFIGURACAO`, `AccessPolicy.discountLimit*`, `UnitMembership.discountLimitPercent`, `Team.setDiscountLimit`, `TeamController` `/discount-limit`, `JdbcMembershipStore`); frontend (`settings/`, `team/`, rota, início da unidade); especificação §6 e §7; decisões T-03 e P-17; [evidência](evidencias/H14-configuracoes-versionadas.md).
 - Testes: backend `./mvnw -B clean verify` no contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble` com Docker para o Testcontainers: **323 testes, 0 falhas**, enforcer, Modulith e JaCoCo ok. Frontend no contêiner `node:24.18.0-trixie-slim`: lint ok, **125 testes**, build ok. Detalhes na evidência.
 - Testes não executados e por quê: `compose-smoke.sh` e build das imagens (rodam na CI do PR); E2E Playwright (não configurado); teste manual na homologação de Diego.
-- Decisões novas/alteradas: T-03 (limites e padrões da configuração) e P-17 (limite de desconto por pessoa), propostas implementadas, aguardando Diego. Sem mudança de regra do PRD.
-- Bloqueios / quem resolve: nenhum para a revisão. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego revisa o PR e responde às propostas; depois do merge, reconciliar este registro com o hash e a CI de `develop`.
+- Decisões novas/alteradas: T-03 (limites e padrões da configuração) e P-17 (limite de desconto por pessoa), aprovadas por Diego em 03/11/2026 como implementadas; FR-30 do PRD ganhou o detalhe do limite por pessoa.
+- Bloqueios / quem resolve: nenhum da H14. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: nenhum na H14. Próxima candidata elegível: H15, só quando Diego pedir.
 
 ## Registro de release (ainda nenhum)
 
