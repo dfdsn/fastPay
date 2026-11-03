@@ -38,6 +38,8 @@ export interface UnitView {
   role: MembershipRole;
   /** Permissões na unidade agora (papel e delegações); o servidor confere de novo em cada ação. */
   permissions?: Permission[];
+  /** A pessoa nesta unidade: o rascunho de pedido é guardado por vínculo e comanda (H16). */
+  membershipId?: string;
 }
 
 export function can(unit: UnitView | null, permission: Permission): boolean {

@@ -132,6 +132,35 @@ public class Tabs {
         });
     }
 
+    /** Situação da comanda para receber pedido, lida com a comanda travada (H16). */
+    public enum OrderTarget {
+        /** Ativa e travada até o fim da transação: o pedido entra antes de qualquer fechamento. */
+        ABERTA,
+        /** Encerrada (H28/H29): não recebe pedido; o rascunho continua no aparelho. */
+        ENCERRADA,
+        /** Não existe nesta unidade. */
+        NAO_ENCONTRADA
+    }
+
+    /**
+     * Trava a comanda para o envio de pedido, na transação de unidade de quem chama (H16, FR-15, FR-31, CA-07). É o
+     * contrato com o fechamento (H28/H29): quem inicia o fechamento ou encerra trava a mesma linha da comanda
+     * ({@code SELECT ... FOR UPDATE}) antes de consolidar, então um envio concorrente ou entra antes da consolidação
+     * ou vê a comanda encerrada e é recusado, preservando o rascunho. A permissão é conferida por quem chama.
+     */
+    public OrderTarget lockForOrderInCurrentUnit(UUID tabId) {
+        if (store.lockActiveTab(tabId).isPresent()) {
+            return OrderTarget.ABERTA;
+        }
+        // Encerrada não aparece na trava (a policy de UPDATE só cobre a ativa); a leitura distingue os casos.
+        return store.tab(tabId).isPresent() ? OrderTarget.ENCERRADA : OrderTarget.NAO_ENCONTRADA;
+    }
+
+    /** A comanda (ativa ou encerrada) existe na unidade da transação de quem chama (H16). */
+    public boolean existsInCurrentUnit(UUID tabId) {
+        return store.tab(tabId).isPresent();
+    }
+
     /** Comandas ativas da unidade, por número. */
     public List<Tab> active(UUID actorId, UUID establishmentId) {
         return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_COMANDA,

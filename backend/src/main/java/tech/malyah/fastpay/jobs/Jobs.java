@@ -1,6 +1,9 @@
 package tech.malyah.fastpay.jobs;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -72,6 +75,47 @@ public class Jobs {
             store.audit("job.retomada_autorizada", jobId, actorId, correlationId);
             return true;
         });
+    }
+
+    /** Situação de um efeito para mostrar a quem o pediu (H16): em andamento, feito ou na fila de falhas. */
+    public enum EffectState {
+        /** Aguardando, rodando ou com nova tentativa marcada. */
+        PENDENTE,
+        CONCLUIDO,
+        /** Esgotou as tentativas: está na fila de falhas e pode ser retomado. */
+        FALHOU
+    }
+
+    /**
+     * Situação dos efeitos de um tipo pelas chaves de deduplicação, na transação de quem chama (contexto da unidade).
+     * Chave sem job não aparece no mapa.
+     */
+    public Map<String, EffectState> statesInCurrentTransaction(String kind, Collection<String> dedupKeys) {
+        Objects.requireNonNull(kind, "kind");
+        Map<String, EffectState> states = new HashMap<>();
+        store.statusByDedupKey(kind, dedupKeys).forEach((key, row) -> states.put(key, switch (row.status()) {
+            case "SUCCEEDED" -> EffectState.CONCLUIDO;
+            case "EXHAUSTED" -> EffectState.FALHOU;
+            default -> EffectState.PENDENTE;
+        }));
+        return states;
+    }
+
+    /**
+     * Como {@link #retryExhausted}, achando o job pelo tipo e pela chave, na transação de quem chama, que já autorizou o
+     * ator na unidade com a permissão da ação original (H16: reprocessar o encaminhamento sem outro lançamento).
+     *
+     * @return {@code false} se o efeito não tem job ou não está na fila de falhas
+     */
+    public boolean retryExhaustedInCurrentTransaction(String kind, String dedupKey, UUID actorId,
+            String correlationId) {
+        Objects.requireNonNull(actorId, "actorId");
+        JdbcJobStore.StatusRow row = store.statusByDedupKey(kind, List.of(dedupKey)).get(dedupKey);
+        if (row == null || !store.resumeExhausted(row.jobId(), retryPolicy.maxAttempts())) {
+            return false;
+        }
+        store.audit("job.retomada_autorizada", row.jobId(), actorId, correlationId);
+        return true;
     }
 
     /** Resultado do enfileiramento; {@code created} falso quando o efeito já tinha job. */

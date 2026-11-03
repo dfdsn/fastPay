@@ -4,7 +4,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -119,6 +122,21 @@ public class JdbcJobStore {
                 UPDATE job SET status = 'PENDING', max_attempts = attempts + ?, next_run_at = now(), updated_at = now()
                 WHERE id = ? AND status = 'EXHAUSTED'
                 """, extraAttempts, jobId) == 1;
+    }
+
+    /** Situação ({@code status}) e id dos jobs de um tipo pelas chaves, no escopo do contexto. */
+    public Map<String, StatusRow> statusByDedupKey(String kind, Collection<String> dedupKeys) {
+        Map<String, StatusRow> found = new HashMap<>();
+        if (dedupKeys.isEmpty()) {
+            return found;
+        }
+        jdbc.query("SELECT id, dedup_key, status FROM job WHERE kind = ? AND dedup_key = ANY (?)", rs -> {
+            found.put(rs.getString("dedup_key"), new StatusRow(rs.getObject("id", UUID.class), rs.getString("status")));
+        }, kind, dedupKeys.toArray(String[]::new));
+        return found;
+    }
+
+    public record StatusRow(UUID jobId, String status) {
     }
 
     public List<JobSummary> exhausted(int limit) {

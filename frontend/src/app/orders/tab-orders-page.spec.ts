@@ -1,0 +1,267 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+
+import { comCookieCsrf } from '../auth/auth-testing';
+import { CatalogListing, Product } from '../catalog/catalog.service';
+import { Permission, UnitContextService } from '../session/unit-context.service';
+import { Tab } from '../tabs/tabs.service';
+import { draftStorageKey, loadDraft, saveDraft } from './order-draft';
+import { SentOrder } from './orders.service';
+import { TabOrdersPage } from './tab-orders-page';
+
+const ANA: Tab = {
+  id: 't-1',
+  visitId: 'v-1',
+  number: 7,
+  name: 'Ana',
+  table: '4',
+  settingsVersionId: 's-1',
+  openedAt: '2026-11-03T20:00:00Z',
+  guestLinked: false,
+  version: 0,
+};
+
+function produto(id: string, name: string, price: number, available = true): Product {
+  return {
+    id,
+    name,
+    category: 'Bebidas',
+    description: null,
+    price,
+    sectorId: null,
+    available,
+    photoFileId: null,
+    version: 0,
+  };
+}
+
+const CATALOGO: CatalogListing = {
+  sectors: [],
+  products: [produto('p-chopp', 'Chopp', 9.9), produto('p-agua', 'Água', 5), produto('p-suco', 'Suco', 8, false)],
+  categories: ['Bebidas'],
+  page: 0,
+  pageSize: 100,
+  totalProducts: 3,
+  pricesVisible: true,
+};
+
+function pedido(forwarding: SentOrder['forwarding'] = 'CONCLUIDO'): SentOrder {
+  return {
+    id: 'o-1',
+    tabId: 't-1',
+    operationKey: 'k',
+    sentBy: 'g',
+    sentAt: '2026-11-03T20:10:00Z',
+    forwarding,
+    lines: [
+      {
+        id: 'l-1',
+        position: 1,
+        productId: 'p-chopp',
+        productName: 'Chopp',
+        unitPrice: '9.90',
+        quantity: 2,
+        lineTotal: '19.80',
+        note: 'gelado',
+        sectorId: null,
+      },
+    ],
+  };
+}
+
+const CHAVE = draftStorageKey('m-1', 't-1');
+
+describe('TabOrdersPage', () => {
+  let fixture: ComponentFixture<TabOrdersPage>;
+  let http: HttpTestingController;
+  const element = () => fixture.nativeElement as HTMLElement;
+  const texto = () => (element().textContent ?? '').replace(/\u00a0/g, ' ');
+  const botao = (rotulo: string) =>
+    Array.from(element().querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+      b.textContent?.includes(rotulo),
+    )!;
+
+  function abrir(pedidos: SentOrder[] = [], permissions: Permission[] = ['OPERAR_COMANDA']): void {
+    comCookieCsrf(true);
+    TestBed.configureTestingModule({
+      imports: [TabOrdersPage],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: 't-1' }) } } },
+      ],
+    });
+    TestBed.inject(UnitContextService).current.set({
+      establishmentId: 'a',
+      name: 'Bar',
+      role: 'GARCOM',
+      permissions,
+      membershipId: 'm-1',
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(TabOrdersPage);
+    fixture.detectChanges();
+    http.expectOne('/api/v1/tabs/t-1').flush(ANA);
+    http.expectOne((r) => r.url === '/api/v1/catalog').flush(CATALOGO);
+    http.expectOne((r) => r.url === '/api/v1/orders' && r.method === 'GET').flush(pedidos);
+    fixture.detectChanges();
+  }
+
+  function envio() {
+    return http.expectOne((r) => r.url === '/api/v1/orders' && r.method === 'POST');
+  }
+
+  function recarregaPedidos(pedidos: SentOrder[]): void {
+    http.expectOne((r) => r.url === '/api/v1/orders' && r.method === 'GET').flush(pedidos);
+    fixture.detectChanges();
+  }
+
+  beforeEach(() => localStorage.clear());
+  afterEach(() => http.verify());
+
+  it('monta o rascunho só no aparelho e envia o pedido inteiro com chave e preços vistos', () => {
+    abrir();
+    expect(texto()).toContain('Comanda 7 · Ana');
+    expect(texto()).toContain('esgotado');
+    expect(botao('Adicionar Suco')).toBeUndefined();
+    botao('Adicionar Chopp').click();
+    botao('Adicionar Água').click();
+    fixture.detectChanges();
+    const quantidade = element().querySelector<HTMLInputElement>('input[aria-label="Quantidade de Chopp"]')!;
+    quantidade.value = '2';
+    quantidade.dispatchEvent(new Event('change'));
+    const obs = element().querySelector<HTMLInputElement>('input[aria-label="Observação de Chopp"]')!;
+    obs.value = ' gelado ';
+    obs.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    // Nada foi ao servidor; o rascunho está guardado para esta pessoa e comanda.
+    expect(loadDraft(CHAVE).lines.map((l) => [l.name, l.quantity, l.price])).toEqual([
+      ['Chopp', 2, '9.90'],
+      ['Água', 1, '5.00'],
+    ]);
+    expect(texto()).toContain('R$ 24,80');
+
+    botao('Enviar pedido').click();
+    const req = envio();
+    expect(req.request.body.tabId).toBe('t-1');
+    expect(req.request.body.operationKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(req.request.body.lines).toEqual([
+      { productId: 'p-chopp', quantity: 2, note: 'gelado', expectedPrice: '9.90' },
+      { productId: 'p-agua', quantity: 1, note: null, expectedPrice: '5.00' },
+    ]);
+    // Enquanto espera, a chave fica guardada: uma queda não perde o vínculo com o envio.
+    expect(loadDraft(CHAVE).pendingKey).toBe(req.request.body.operationKey);
+    req.flush({ order: pedido(), replayed: false });
+    recarregaPedidos([pedido()]);
+    expect(texto()).toContain('Pedido enviado: 1 linha.');
+    expect(localStorage.getItem(CHAVE)).toBeNull();
+    expect(texto()).toContain('2× Chopp');
+    expect(texto()).toContain('gelado');
+    expect(texto()).toContain('na produção');
+  });
+
+  it('esgotado e preço mudado voltam marcados no rascunho e pedem reconfirmação', () => {
+    abrir();
+    botao('Adicionar Chopp').click();
+    botao('Adicionar Água').click();
+    fixture.detectChanges();
+    botao('Enviar pedido').click();
+    envio().flush(
+      {
+        code: 'PEDIDO_PRECISA_REVISAO',
+        detail: 'Há item esgotado ou fora do catálogo. Nada foi enviado: ajuste o rascunho e envie de novo.',
+        unavailable: ['p-agua'],
+        priceChanges: [{ productId: 'p-chopp', seenPrice: '9.90', currentPrice: '10.50' }],
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
+    http.expectOne((r) => r.url === '/api/v1/catalog').flush(CATALOGO);
+    fixture.detectChanges();
+    expect(texto()).toContain('Nada foi enviado');
+    expect(texto()).toContain('preço mudou de R$ 9,90 para R$ 10,50');
+    expect(texto()).toContain('esgotado ou fora do catálogo: remova para enviar');
+    expect(loadDraft(CHAVE)).toMatchObject({ pendingKey: null });
+    expect(loadDraft(CHAVE).lines).toHaveLength(2);
+
+    botao('Remover Água').click();
+    fixture.detectChanges();
+    botao('Confirmar novos preços e enviar').click();
+    const req = envio();
+    expect(req.request.body.lines).toEqual([
+      { productId: 'p-chopp', quantity: 1, note: null, expectedPrice: '10.50' },
+    ]);
+    req.flush({ order: pedido(), replayed: false });
+    recarregaPedidos([pedido()]);
+  });
+
+  it('sem resposta, confere a operação e reenvia com a mesma chave', () => {
+    abrir();
+    botao('Adicionar Chopp').click();
+    fixture.detectChanges();
+    botao('Enviar pedido').click();
+    const primeira = envio();
+    const chave = primeira.request.body.operationKey;
+    primeira.error(new ProgressEvent('error'));
+    fixture.detectChanges();
+    expect(texto()).toContain('O pedido pode ter chegado');
+    expect(botao('Adicionar Chopp').disabled).toBe(true);
+    expect(botao('Remover Chopp').disabled).toBe(true);
+
+    botao('Conferir envio').click();
+    http.expectOne(`/api/v1/orders/operations/${chave}`).flush(
+      { code: 'PEDIDO_NAO_ENCONTRADO', detail: 'x' },
+      { status: 404, statusText: 'Not Found' },
+    );
+    fixture.detectChanges();
+    expect(texto()).toContain('O pedido não chegou');
+
+    botao('Enviar de novo').click();
+    const segunda = envio();
+    expect(segunda.request.body.operationKey).toBe(chave);
+    segunda.flush({ order: pedido(), replayed: true });
+    recarregaPedidos([pedido()]);
+    expect(texto()).toContain('já tinha chegado');
+    expect(localStorage.getItem(CHAVE)).toBeNull();
+  });
+
+  it('ao voltar à tela com envio pendente, confere antes de qualquer repetição', () => {
+    saveDraft(CHAVE, {
+      lines: [{ key: 'x', productId: 'p-chopp', name: 'Chopp', price: '9.90', quantity: 2, note: '' }],
+      pendingKey: 'k-pendente',
+    });
+    abrir();
+    http.expectOne('/api/v1/orders/operations/k-pendente').flush(pedido());
+    recarregaPedidos([pedido()]);
+    expect(texto()).toContain('O pedido tinha chegado');
+    expect(localStorage.getItem(CHAVE)).toBeNull();
+  });
+
+  it('comanda encerrada recusa e preserva o rascunho', () => {
+    abrir();
+    botao('Adicionar Chopp').click();
+    fixture.detectChanges();
+    botao('Enviar pedido').click();
+    envio().flush(
+      { code: 'COMANDA_ENCERRADA', detail: 'Esta comanda não recebe mais pedidos.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+    fixture.detectChanges();
+    expect(texto()).toContain('não recebe mais pedidos');
+    expect(loadDraft(CHAVE)).toMatchObject({ pendingKey: null });
+    expect(loadDraft(CHAVE).lines).toHaveLength(1);
+  });
+
+  it('mostra falha de encaminhamento e reenvia à produção sem novo pedido', () => {
+    abrir([pedido('FALHOU')]);
+    expect(texto()).toContain('falha ao encaminhar à produção');
+    botao('Reenviar à produção').click();
+    const req = http.expectOne('/api/v1/orders/o-1/forwarding/retry');
+    expect(req.request.method).toBe('POST');
+    req.flush(pedido('PENDENTE'));
+    recarregaPedidos([pedido('PENDENTE')]);
+    expect(texto()).toContain('encaminhando à produção');
+  });
+});

@@ -45,6 +45,10 @@ export class TabsService {
     return this.http.get<Tab[]>('/api/v1/tabs');
   }
 
+  find(id: string): Observable<Tab> {
+    return this.http.get<Tab>(`/api/v1/tabs/${id}`);
+  }
+
   open(name: string, table: string | null): Observable<Tab> {
     return this.auth.withCsrf(() => this.http.post<Tab>('/api/v1/tabs', { name, table }));
   }

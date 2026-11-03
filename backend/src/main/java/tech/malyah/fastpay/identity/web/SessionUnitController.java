@@ -90,10 +90,15 @@ class SessionUnitController {
     }
 
     /** {@code permissions}: o que a pessoa pode fazer na unidade agora (papel e delegações), para a tela. */
-    record UnitView(UUID establishmentId, String name, MembershipRole role, List<Permission> permissions) {
+    /**
+     * {@code membershipId} identifica a pessoa nesta unidade: o aparelho guarda o rascunho de pedido por vínculo e
+     * comanda (H16), sem reaproveitar entre contas ou unidades.
+     */
+    record UnitView(UUID establishmentId, String name, MembershipRole role, List<Permission> permissions,
+            UUID membershipId) {
         static UnitView of(UnitMembership membership) {
             return new UnitView(membership.establishmentId(), membership.establishmentName(), membership.role(),
-                    membership.permissions().stream().sorted().toList());
+                    membership.permissions().stream().sorted().toList(), membership.membershipId());
         }
     }
 
