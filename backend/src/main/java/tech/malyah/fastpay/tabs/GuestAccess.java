@@ -144,6 +144,46 @@ public class GuestAccess {
         return Optional.empty();
     }
 
+    /**
+     * Comanda de um acesso válido do consumidor, dentro da transação da unidade (H21). {@code grantId}: o acesso, para
+     * a autoria do que o consumidor registra; {@code closed}: a comanda já foi encerrada.
+     */
+    public record GuestContext(UUID establishmentId, UUID tabId, UUID grantId, boolean closed) {
+    }
+
+    /**
+     * Roda o trabalho no contexto da unidade da comanda, se um dos acessos guardados no navegador vale para ela; a
+     * validade é conferida na mesma transação do trabalho. Vazio sem acesso válido (cliente de outra comanda, acesso
+     * revogado ou vencido).
+     */
+    public <T> Optional<T> inTab(List<String> grantTokens, UUID tabId, java.util.function.Function<GuestContext, T> work) {
+        for (String token : grantTokens) {
+            if (!AccessTokens.wellFormed(token)) {
+                continue;
+            }
+            String hash = AccessTokens.hash(token);
+            Optional<GrantRow> found = tenants.forGuestGrant(hash, () -> store.grant(hash))
+                    .filter(g -> g.tabId().equals(tabId));
+            if (found.isEmpty()) {
+                continue;
+            }
+            Optional<T> result = tenants.inEstablishment(found.get().establishmentId(), () -> {
+                Optional<GrantRow> grant = store.grant(hash).filter(g -> g.tabId().equals(tabId));
+                Optional<TabRow> tab = store.tab(tabId);
+                if (grant.isEmpty() || tab.isEmpty() || !GuestAccessRules.grantValid(grant.get().revokedAt(),
+                        tab.get().accessUntil(), clock.instant())) {
+                    return Optional.<T>empty();
+                }
+                return Optional.ofNullable(work.apply(new GuestContext(grant.get().establishmentId(), tabId,
+                        grant.get().id(), tab.get().closedAt() != null)));
+            });
+            if (result.isPresent()) {
+                return result;
+            }
+        }
+        return Optional.empty();
+    }
+
     /** Comandas dos acessos guardados no navegador que ainda valem; os que não valem ficam de fora. */
     public List<Remembered> remembered(List<String> grantTokens) {
         List<Remembered> result = new ArrayList<>();

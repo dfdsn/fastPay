@@ -57,8 +57,8 @@ public class Attendance {
             int quantity, Instant createdAt, Instant claimedAt, Production.Line line, long version) {
     }
 
-    /** Chamados em aberto e o instante do servidor, para contar os tempos. */
-    public record Queue(Instant now, List<Call> calls) {
+    /** Chamados em aberto, problemas do consumidor ainda não tratados (H21) e o instante do servidor. */
+    public record Queue(Instant now, List<Call> calls, List<ConsumerIssues.Issue> issues) {
     }
 
     public enum Refusal {
@@ -68,7 +68,22 @@ public class Attendance {
         CHAMADO_COM_RESPONSAVEL,
         /** Central: outra pessoa já assumiu. */
         CHAMADO_JA_ASSUMIDO,
-        VERSAO_DESATUALIZADA
+        VERSAO_DESATUALIZADA,
+        /** H21: problema do consumidor. */
+        PROBLEMA_NAO_ENCONTRADO,
+        PROBLEMA_TRATADO,
+        /** Central: outra pessoa já está atendendo o problema. */
+        PROBLEMA_JA_ASSUMIDO,
+        /** Garçom responsável: o problema é do responsável da comanda; o gerente troca o responsável. */
+        PROBLEMA_COM_RESPONSAVEL,
+        /** Encaminhar ou concluir antes de alguém começar a atender. */
+        PROBLEMA_NAO_ATENDIDO,
+        /** Problema após o encerramento: só quem autoriza devolução conclui. */
+        PROBLEMA_EXIGE_GERENTE,
+        /** Consumidor: já há um problema em aberto para este item (ou para a conta). */
+        PROBLEMA_JA_ABERTO,
+        /** Consumidor: o item não é desta comanda. */
+        ITEM_NAO_ENCONTRADO
     }
 
     public sealed interface Outcome<T> {
@@ -89,9 +104,11 @@ public class Attendance {
     private final JdbcAttendanceStore store;
     private final Changes changes;
     private final Clock clock;
+    private final ConsumerIssues issues;
 
     Attendance(Memberships memberships, Tabs tabs, Production production, JdbcAttendanceStore store, Changes changes,
-            Clock clock) {
+            Clock clock, ConsumerIssues issues) {
+        this.issues = issues;
         this.memberships = memberships;
         this.tabs = tabs;
         this.production = production;
@@ -103,7 +120,7 @@ public class Attendance {
     /** Chamados em aberto da unidade, dos mais antigos aos mais novos. */
     public Queue queue(UUID actorId, UUID establishmentId) {
         return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_COMANDA,
-                me -> new Queue(clock.instant(), calls(store.open(), actorId)));
+                me -> new Queue(clock.instant(), calls(store.open(), actorId), issues.pendingInCurrentUnit(actorId)));
     }
 
     /**

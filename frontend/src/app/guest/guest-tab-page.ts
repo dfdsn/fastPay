@@ -9,15 +9,24 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
 import { failureMessage } from '../session/unit-context.service';
+import { GuestIssuesPanel } from './guest-issues';
 import { GuestService, GuestTab } from './guest.service';
 
 /**
  * Comanda do cliente avulso, sem login (H15, FR-09–FR-11). O servidor confere o acesso guardado neste aparelho; os
- * itens e a conta chegam com os pedidos (H16) e o fechamento (H28).
+ * itens e a conta chegam com os pedidos (H16) e o fechamento (H28). O cliente informa e acompanha problemas (H21).
  */
 @Component({
   selector: 'fp-guest-tab-page',
-  imports: [DatePipe, MatButtonModule, MatCardModule, MatProgressSpinnerModule, RouterLink, LiveStatus],
+  imports: [
+    DatePipe,
+    MatButtonModule,
+    MatCardModule,
+    MatProgressSpinnerModule,
+    RouterLink,
+    LiveStatus,
+    GuestIssuesPanel,
+  ],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -42,6 +51,7 @@ import { GuestService, GuestTab } from './guest.service';
           <p>{{ t.table ? 'Mesa ' + t.table : 'Sem mesa' }} · aberta às {{ t.openedAt | date: 'HH:mm' }}</p>
           <p>{{ t.open ? 'Em atendimento.' : 'Encerrada.' }} Os pedidos aparecerão aqui.</p>
           <button mat-stroked-button type="button" (click)="load()">Atualizar</button>
+          <fp-guest-issues [tabId]="t.tabId" [refresh]="refreshes()" />
         }
         <p><a routerLink="/minhas-comandas">Minhas comandas</a></p>
       </mat-card-content>
@@ -69,11 +79,16 @@ export class GuestTabPage {
   protected readonly tab = signal<GuestTab | null>(null);
   protected readonly loading = signal(true);
   protected readonly failure = signal<string | null>(null);
+  /** Conta as releituras por aviso: os problemas (H21) relêem junto. */
+  protected readonly refreshes = signal(0);
   /** Avisos só desta comanda (H17); acesso revogado ou vencido encerra a conexão e a tela relê para mostrar isso. */
   protected readonly live = inject(LiveUpdatesService).forGuestTab(this.id, this.destroyRef);
 
   constructor() {
-    this.live.signals.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load(true));
+    this.live.signals.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.refreshes.update((n) => n + 1);
+      this.load(true);
+    });
     effect(() => {
       if (this.live.status() === 'encerrada') {
         untracked(() => this.load(true));

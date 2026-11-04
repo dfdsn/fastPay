@@ -7,6 +7,8 @@ import { GuestTabPage } from './guest-tab-page';
 import { GuestTabsPage } from './guest-tabs-page';
 import { FakeEventSource, provideFakeEventSource } from '../live/live-testing';
 
+const SEM_PROBLEMAS = { now: '2026-11-04T20:00:00Z', closed: false, items: [], issues: [] };
+
 describe('Comanda do cliente', () => {
   let http: HttpTestingController;
 
@@ -39,8 +41,11 @@ describe('Comanda do cliente', () => {
       open: true,
     });
     fixture.detectChanges();
+    http.expectOne('/api/v1/guest/tabs/t-1/issues').flush(SEM_PROBLEMAS);
+    fixture.detectChanges();
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(texto).toContain('Comanda 3 · Ana');
+    expect(texto).toContain('Algum problema?');
     expect(texto).toContain('Sem mesa');
     expect(texto).toContain('Em atendimento.');
   });
@@ -59,11 +64,15 @@ describe('Comanda do cliente', () => {
       open: true,
     };
     http.expectOne('/api/v1/guest/tabs/t-1').flush(comanda);
+    fixture.detectChanges();
+    http.expectOne('/api/v1/guest/tabs/t-1/issues').flush(SEM_PROBLEMAS);
     const conexao = FakeEventSource.last();
     expect(conexao.url).toBe('/api/v1/guest/tabs/t-1/stream');
     conexao.emit('ready', { cursor: '1', resync: false });
     conexao.emit('change', { cursor: '2', topic: 'COMANDA', tabId: 't-1' });
     http.expectOne('/api/v1/guest/tabs/t-1').flush({ ...comanda, table: '5' });
+    fixture.detectChanges();
+    http.expectOne('/api/v1/guest/tabs/t-1/issues').flush(SEM_PROBLEMAS);
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Mesa 5');
 

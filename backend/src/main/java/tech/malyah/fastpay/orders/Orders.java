@@ -284,6 +284,19 @@ public class Orders {
         return details;
     }
 
+    /** Item da comanda como o consumidor o aponta num problema (H21): produto e unidades nesta comanda, sem valores. */
+    public record TabItem(UUID orderLineId, String productName, int quantity, Instant sentAt) {
+    }
+
+    /**
+     * Itens enviados da comanda, dos mais antigos aos mais novos, na transação de unidade de quem chama (a comanda e o
+     * acesso são conferidos por ele).
+     */
+    public List<TabItem> itemsOfTabInCurrentUnit(UUID tabId) {
+        return store.tabItems(tabId).stream()
+                .map(i -> new TabItem(i.orderLineId(), i.productName(), i.quantity(), i.sentAt())).toList();
+    }
+
     private List<SentOrder> view(List<OrderRow> orders) {
         List<UUID> ids = orders.stream().map(OrderRow::id).toList();
         Map<UUID, List<SentLine>> lines = new LinkedHashMap<>();

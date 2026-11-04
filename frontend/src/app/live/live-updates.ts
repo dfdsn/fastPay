@@ -6,7 +6,7 @@ import { Observable, Subject, Subscription } from 'rxjs';
 import { UnitContextService } from '../session/unit-context.service';
 
 /** Do que trata um aviso de mudança (H17). A tela relê pela API só o que mostra. */
-export type LiveTopic = 'COMANDA' | 'PEDIDO' | 'PRODUCAO' | 'ATENDIMENTO';
+export type LiveTopic = 'COMANDA' | 'PEDIDO' | 'PRODUCAO' | 'ATENDIMENTO' | 'PROBLEMA';
 
 /**
  * O que a tela recebe: {@code resync} manda reler tudo (conexão nova, cursor perdido, volta ao foco, rede voltou);

@@ -2,7 +2,6 @@ package tech.malyah.fastpay.tabs.web;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -10,7 +9,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -36,6 +34,7 @@ import tech.malyah.fastpay.sync.Poll;
 import tech.malyah.fastpay.sync.Streams;
 import tech.malyah.fastpay.sync.Topic;
 import tech.malyah.fastpay.tabs.GuestAccess;
+import tech.malyah.fastpay.tabs.GuestCookie;
 import tech.malyah.fastpay.tabs.GuestAccess.GuestTab;
 import tech.malyah.fastpay.tabs.GuestAccess.Remembered;
 import tech.malyah.fastpay.tabs.domain.AccessTokens;
@@ -52,21 +51,23 @@ import tech.malyah.fastpay.tabs.infrastructure.TabsProperties;
 @RequestMapping("/api/v1/guest")
 class GuestController {
 
-    static final String COOKIE = "FASTPAY_ACESSO";
+    static final String COOKIE = GuestCookie.NAME;
     private static final String PATH = "/api/v1/guest";
 
     /** O consumidor recebe só avisos da própria comanda, e nada da produção interna (especificação §11). */
-    private static final Set<Topic> GUEST_TOPICS = EnumSet.of(Topic.COMANDA, Topic.PEDIDO);
+    private static final Set<Topic> GUEST_TOPICS = EnumSet.of(Topic.COMANDA, Topic.PEDIDO, Topic.PROBLEMA);
 
     private final GuestAccess access;
     private final TabsProperties properties;
     private final boolean secureCookie;
     private final Streams streams;
     private final Changes changes;
+    private final GuestCookie cookie;
 
     GuestController(GuestAccess access, TabsProperties properties,
             @Value("${fastpay.auth.session-cookie-secure:true}") boolean secureCookie, Streams streams,
-            Changes changes) {
+            Changes changes, GuestCookie cookie) {
+        this.cookie = cookie;
         this.streams = streams;
         this.changes = changes;
         this.access = access;
@@ -145,14 +146,7 @@ class GuestController {
     }
 
     private List<String> stored(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) {
-            return List.of();
-        }
-        return Arrays.stream(cookies).filter(c -> COOKIE.equals(c.getName())).findFirst()
-                .map(c -> Arrays.stream(c.getValue().split("\\.")).filter(s -> !s.isBlank())
-                        .limit(properties.guestCookieMaxTabs()).toList())
-                .orElse(List.of());
+        return cookie.tokens(request);
     }
 
     private void remember(HttpServletResponse response, List<String> tokens) {
