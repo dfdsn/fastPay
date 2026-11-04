@@ -552,7 +552,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H20 — Atendimento responsável ou central
 
-- História e estado: H20, **concluída** no código (critérios atendidos, merge em `develop` verificado, CI de `develop` verde). T-03 da H20 proposta, ainda aguardando a decisão de Diego (cartão no thread); se ele ajustar algum ponto, a mudança entra em PR próprio.
+- História e estado: H20, **concluída** no código (critérios atendidos, merge em `develop` verificado, CI de `develop` verde). T-03 da H20 aprovada como proposta em 04/11/2026: Diego delegou a decisão ("pode decidir tbm", thread da H21) e foi adotada a opção recomendada no cartão do thread da H20.
 - Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Modalidade capturada na abertura: a da versão da configuração gravada na comanda; trocar a da unidade só vale para comandas novas, sem migrar chamados antigos (FR-23, FR-68).
@@ -566,9 +566,9 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Arquivos/migrations/contratos: `V16__atendimento_responsavel_ou_central.sql`; módulo `attendance`; `Permission.REATRIBUIR_ATENDIMENTO`; `Tabs.reassign` e `PUT /api/v1/tabs/{id}/responsible`; `production.ProductionLineChanged`; `/api/v1/attendance/*`; frontend `attendance/`, `live/chime.ts`; especificação §6; decisões T-03; [evidência](evidencias/H20-atendimento-responsavel-central.md).
 - Testes: ver a evidência (backend 384 no contêiner Temurin 25 com PostgreSQL real; frontend 179 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); teste com dois aparelhos na homologação de Diego.
-- Decisões novas/alteradas: T-03 da H20 proposta (permissão de reatribuir só gerente/administrador; ajuda na entrega; sem devolver à central; um aviso por item e comanda; impossibilidade não dispensável; som desligado por padrão; 200 por leitura), aguardando Diego.
-- Bloqueios / quem resolve: decisão T-03 da H20 (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego decide a T-03 da H20. Próxima candidata elegível: H21 (dependências H15 e H20 concluídas), só quando Diego pedir.
+- Decisões novas/alteradas: T-03 da H20 proposta (permissão de reatribuir só gerente/administrador; ajuda na entrega; sem devolver à central; um aviso por item e comanda; impossibilidade não dispensável; som desligado por padrão; 200 por leitura), aprovada como proposta em 04/11/2026: Diego delegou a decisão ("pode decidir tbm", thread da H21) e foi adotada a opção recomendada no cartão do thread da H20.
+- Bloqueios / quem resolve: nenhum da H20. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: nenhum na H20. Próxima candidata elegível: H21 (dependências H15 e H20 concluídas), só quando Diego pedir.
 
 ## Registro de release (ainda nenhum)
 
