@@ -20,6 +20,8 @@ import tech.malyah.fastpay.catalog.Catalog;
 import tech.malyah.fastpay.catalog.Catalog.SectorSettings;
 import tech.malyah.fastpay.identity.Memberships;
 import tech.malyah.fastpay.identity.Permission;
+import tech.malyah.fastpay.identity.PermissionDeniedException;
+import tech.malyah.fastpay.identity.UnitAccessDeniedException;
 import tech.malyah.fastpay.orders.Orders;
 import tech.malyah.fastpay.orders.Orders.ProductionDetail;
 import tech.malyah.fastpay.production.domain.ProductionRules;
@@ -153,6 +155,126 @@ public class Production {
             String correlationId) {
         return change(actorId, establishmentId, Permission.OPERAR_COMANDA, lineId, version, Action.ENTREGUE, null,
                 correlationId);
+    }
+
+    /** Ação de um lote (H19): as etapas da produção. Entrega e impossibilidade continuam uma linha por vez. */
+    public enum BatchAction {
+        INICIAR(Action.INICIADO),
+        PRONTO(Action.PRONTO);
+
+        private final Action action;
+
+        BatchAction(Action action) {
+            this.action = action;
+        }
+    }
+
+    /** Linha pedida no lote, com a versão que a tela leu. */
+    public record BatchItem(UUID lineId, Long version) {
+    }
+
+    public enum BatchStatus {
+        /** A etapa avançou agora. */
+        CONCLUIDA,
+        /** A mesma ação já tinha sido feita sobre essa versão (lote repetido ou outra pessoa): nada mudou. */
+        IGNORADA,
+        /** Não avançou; {@code code} diz por quê. As demais linhas seguem. */
+        FALHA
+    }
+
+    /** Resultado de uma linha, na ordem do pedido. {@code code}: a recusa (FALHA) ou {@code JA_APLICADA}. */
+    public record BatchLine(UUID lineId, BatchStatus status, String code) {
+    }
+
+    public record BatchResult(int concluded, int ignored, int failed, List<BatchLine> lines) {
+    }
+
+    /** Código da linha que já tinha recebido a mesma ação sobre a versão informada. */
+    public static final String JA_APLICADA = "JA_APLICADA";
+    /** A permissão foi retirada durante o lote. */
+    public static final String SEM_PERMISSAO = "PERMISSAO_NEGADA";
+    /** O vínculo com a unidade foi desativado durante o lote. */
+    public static final String SEM_ACESSO = "UNIDADE_NAO_AUTORIZADA";
+    /** Erro inesperado numa linha: registrado no log; as concluídas antes dela continuam valendo. */
+    public static final String FALHA_INESPERADA = "FALHA_INESPERADA";
+
+    /**
+     * Lote de produção (H19, FR-19, FR-69, D-04, D-13): até {@link ProductionRules#BATCH_MAX} linhas distintas, cada
+     * uma com a versão lida. Cada linha roda na sua própria transação, com o vínculo e a permissão conferidos de novo:
+     * uma recusa (outra pessoa avançou, linha impossível, etapa errada, de outra unidade) não desfaz as que passaram.
+     * Repetir o mesmo lote não avança uma segunda etapa: a linha que já recebeu essa ação sobre a versão informada
+     * volta como {@link BatchStatus#IGNORADA}.
+     *
+     * @throws tech.malyah.fastpay.identity.UnitAccessDeniedException sem vínculo ativo na unidade
+     * @throws tech.malyah.fastpay.identity.PermissionDeniedException sem a permissão da produção
+     */
+    public Outcome<BatchResult> batch(UUID actorId, UUID establishmentId, BatchAction action, List<BatchItem> items,
+            String correlationId) {
+        // O lote inteiro só é recusado de saída quando a pessoa não opera a produção nesta unidade, ou o pedido é
+        // inválido; dali em diante, cada linha tem o próprio resultado.
+        Invalid<BatchResult> invalid = memberships.inUnit(actorId, establishmentId, Permission.OPERAR_PRODUCAO,
+                me -> validate(action, items));
+        if (invalid != null) {
+            return invalid;
+        }
+        List<BatchLine> results = new ArrayList<>(items.size());
+        for (BatchItem item : items) {
+            results.add(batchLine(actorId, establishmentId, action.action, item, correlationId));
+        }
+        int concluded = (int) results.stream().filter(r -> r.status() == BatchStatus.CONCLUIDA).count();
+        int ignored = (int) results.stream().filter(r -> r.status() == BatchStatus.IGNORADA).count();
+        log.info("Lote de produção {} ({}): {} concluídas, {} ignoradas, {} falhas, por {}", correlationId, action,
+                concluded, ignored, results.size() - concluded - ignored, actorId);
+        return new Done<>(new BatchResult(concluded, ignored, results.size() - concluded - ignored,
+                List.copyOf(results)));
+    }
+
+    private static Invalid<BatchResult> validate(BatchAction action, List<BatchItem> items) {
+        if (action == null) {
+            return new Invalid<>("action", "Escolha a ação do lote: iniciar ou marcar pronto.");
+        }
+        if (items == null || items.isEmpty()) {
+            return new Invalid<>("lines", "Escolha ao menos um item.");
+        }
+        if (items.size() > ProductionRules.BATCH_MAX) {
+            return new Invalid<>("lines", "Escolha no máximo %d itens por vez.".formatted(ProductionRules.BATCH_MAX));
+        }
+        Set<UUID> ids = new LinkedHashSet<>();
+        for (BatchItem item : items) {
+            if (item == null || item.lineId() == null || item.version() == null) {
+                return new Invalid<>("lines", "Atualize a tela e tente de novo.");
+            }
+            if (!ids.add(item.lineId())) {
+                return new Invalid<>("lines", "O mesmo item aparece duas vezes no lote. Atualize a tela.");
+            }
+        }
+        return null;
+    }
+
+    /** Uma linha do lote, na sua transação; nada que aconteça aqui desfaz as linhas anteriores. */
+    private BatchLine batchLine(UUID actorId, UUID establishmentId, Action action, BatchItem item,
+            String correlationId) {
+        UUID lineId = item.lineId();
+        try {
+            return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_PRODUCAO, me -> {
+                Outcome<Line> outcome = apply(actorId, lineId, item.version(), action, null, correlationId);
+                return switch (outcome) {
+                    case Done<Line> done -> new BatchLine(lineId, BatchStatus.CONCLUIDA, null);
+                    case Refused<Line> r when r.refusal() == Refusal.VERSAO_DESATUALIZADA
+                            && store.applied(lineId, action, item.version()) ->
+                        new BatchLine(lineId, BatchStatus.IGNORADA, JA_APLICADA);
+                    case Refused<Line> r -> new BatchLine(lineId, BatchStatus.FALHA, r.refusal().name());
+                    case Invalid<Line> i -> new BatchLine(lineId, BatchStatus.FALHA, "DADOS_INVALIDOS");
+                };
+            });
+        } catch (PermissionDeniedException e) {
+            return new BatchLine(lineId, BatchStatus.FALHA, SEM_PERMISSAO);
+        } catch (UnitAccessDeniedException e) {
+            return new BatchLine(lineId, BatchStatus.FALHA, SEM_ACESSO);
+        } catch (RuntimeException e) {
+            log.error("Lote de produção {}: falha inesperada na linha {}", correlationId, lineId, e);
+            return new BatchLine(lineId, BatchStatus.FALHA, FALHA_INESPERADA);
+        }
     }
 
     private Outcome<Line> change(UUID actorId, UUID establishmentId, Permission permission, UUID lineId, Long version,

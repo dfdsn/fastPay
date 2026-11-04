@@ -48,7 +48,8 @@ import tech.malyah.fastpay.testsupport.PostgresIntegrationTest;
  * Fila de produção e entrega por linha pela API (H18, FR-18–FR-22, CA-08, D-06), com PostgreSQL real, RLS, Spring
  * Session e CSRF. Cobre a validação exigida no backlog: permissões por papel e unidade, linha impossível não avança,
  * entrega com versão desatualizada (contrato com transferência e cancelamento), relógios de etapa e uma linha só para
- * quantidade maior que 1.
+ * quantidade maior que 1. Lote de produção (H19, FR-69, D-04, D-13): lote misto com resultado por linha, autorização
+ * linha a linha, limite de 51 e repetição do mesmo lote.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -362,6 +363,161 @@ class ProductionIntegrationTest extends PostgresIntegrationTest {
                 SELECT action || ':' || coalesce(detail, '-') FROM fastpay.audit_event WHERE subject_id = ?
                 """, String.class, UUID.fromString(sushi))).containsExactlyInAnyOrder("setor.criado:atraso 15 min",
                 "setor.atraso_alterado:15>30 min", "setor.renomeado:-");
+    }
+
+    @Test
+    void loteMistoTemResultadoPorLinhaENaoDesfazAsQuePassaram() throws Exception {
+        Browser gabi = login.inUnit(garcom, loja);
+        Browser paulo = login.inUnit(producao, loja);
+        Browser rita = login.inUnit(dono, loja);
+        UUID pastel = produto(loja, "Pastel", "12.00", cozinha);
+        UUID salada = produto(loja, "Salada", "18.00", cozinha);
+        String comanda = comanda(gabi, "Eva", "7");
+        gabi.post("/api/v1/orders", envio(comanda, linha(batata, 2, null, "35.90"), linha(caipirinha, 1, null, "24.00"),
+                linha(pastel, 4, null, "12.00"), linha(salada, 1, null, "18.00"), linha(chopp, 1, null, "9.90")))
+                .andExpect(status().isOk());
+        // Linha de outra unidade, que a produção desta não vê.
+        UUID setorDaOutra = setor(outraLoja, "Cozinha da outra");
+        UUID pizza = produto(outraLoja, "Pizza", "50.00", setorDaOutra);
+        Browser otto = login.inUnit(garcomDaOutra, outraLoja);
+        otto.post("/api/v1/orders", envio(comanda(otto, "Zé", null), linha(pizza, 1, null, "50.00")))
+                .andExpect(status().isOk());
+        rodarJobs();
+        String fila = paulo.get(FILA).andReturn().getResponse().getContentAsString();
+        String batataId = idDe(fila, "Batata frita");
+        String caipirinhaId = idDe(fila, "Caipirinha");
+        String pastelId = idDe(fila, "Pastel");
+        String saladaId = idDe(fila, "Salada");
+        String choppId = idDe(gabi.get(ENTREGAS).andReturn().getResponse().getContentAsString(), "Chopp 300 ml");
+        String pizzaId = JsonPath.read(login.inUnit(producaoDaOutra, outraLoja).get(FILA).andReturn().getResponse()
+                .getContentAsString(), "$.lines[0].id");
+
+        // Antes do lote: o pastel foi sinalizado impossível; a salada foi iniciada por outra pessoa (mesma ação sobre a
+        // versão lida: já feito); a caipirinha mudou (sinalizada e retirada), então a versão lida ficou para trás.
+        paulo.post("/api/v1/production/lines/" + pastelId + "/impossible",
+                "{\"version\":0,\"reason\":\"Acabou a massa\"}").andExpect(status().isOk());
+        rita.post("/api/v1/production/lines/" + saladaId + "/start", "{\"version\":0}").andExpect(status().isOk());
+        paulo.post("/api/v1/production/lines/" + caipirinhaId + "/impossible",
+                "{\"version\":0,\"reason\":\"Sem gelo agora\"}").andExpect(status().isOk());
+        paulo.post("/api/v1/production/lines/" + caipirinhaId + "/impossible/withdraw", "{\"version\":1}")
+                .andExpect(status().isOk());
+
+        String lote = lote("INICIAR", batataId, 0, caipirinhaId, 0, pastelId, 1, saladaId, 0, choppId, 0, pizzaId, 0,
+                UUID.randomUUID().toString(), 0);
+        paulo.post(LOTE, lote).andExpect(status().isOk())
+                .andExpect(jsonPath("$.concluded").value(1))
+                .andExpect(jsonPath("$.ignored").value(1))
+                .andExpect(jsonPath("$.failed").value(5))
+                .andExpect(jsonPath("$.lines.length()").value(7))
+                .andExpect(jsonPath("$.lines[0].lineId").value(batataId))
+                .andExpect(jsonPath("$.lines[0].status").value("CONCLUIDA"))
+                .andExpect(jsonPath("$.lines[0].code").value(nullValue()))
+                .andExpect(jsonPath("$.lines[1].status").value("FALHA"))
+                .andExpect(jsonPath("$.lines[1].code").value("VERSAO_DESATUALIZADA"))
+                .andExpect(jsonPath("$.lines[1].message").value(containsString("mudou")))
+                .andExpect(jsonPath("$.lines[2].code").value("LINHA_IMPOSSIVEL"))
+                .andExpect(jsonPath("$.lines[3].status").value("IGNORADA"))
+                .andExpect(jsonPath("$.lines[3].code").value("JA_APLICADA"))
+                .andExpect(jsonPath("$.lines[4].code").value("ETAPA_INVALIDA"))
+                .andExpect(jsonPath("$.lines[5].code").value("LINHA_NAO_ENCONTRADA"))
+                .andExpect(jsonPath("$.lines[6].code").value("LINHA_NAO_ENCONTRADA"));
+
+        // A que passou ficou gravada; as recusas não mexeram em nada, nem na linha da outra unidade.
+        assertThat(etapa(batataId)).isEqualTo("EM_PREPARO:1");
+        assertThat(etapa(caipirinhaId)).isEqualTo("AGUARDANDO_PREPARO:2");
+        assertThat(etapa(pastelId)).isEqualTo("AGUARDANDO_PREPARO:1");
+        assertThat(etapa(saladaId)).isEqualTo("EM_PREPARO:1");
+        assertThat(etapa(choppId)).isEqualTo("PRONTO:0");
+        assertThat(etapa(pizzaId)).isEqualTo("AGUARDANDO_PREPARO:0");
+
+        // Repetir o mesmo lote (resposta perdida, toque duplo) não avança uma segunda etapa.
+        paulo.post(LOTE, lote).andExpect(status().isOk())
+                .andExpect(jsonPath("$.concluded").value(0))
+                .andExpect(jsonPath("$.ignored").value(2))
+                .andExpect(jsonPath("$.lines[0].status").value("IGNORADA"))
+                .andExpect(jsonPath("$.lines[3].status").value("IGNORADA"));
+        assertThat(etapa(batataId)).isEqualTo("EM_PREPARO:1");
+        // Pronto em lote com as versões novas; o que foi iniciado num lote e não está em preparo falha sozinho.
+        paulo.post(LOTE, lote("PRONTO", batataId, 1, saladaId, 1, pastelId, 1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.concluded").value(2))
+                .andExpect(jsonPath("$.lines[2].code").value("LINHA_IMPOSSIVEL"));
+        assertThat(etapa(batataId)).isEqualTo("PRONTO:2");
+
+        // Histórico: uma etapa por avanço, com o mesmo identificador para as linhas de um lote; avisos da comanda.
+        assertThat(admin().queryForList("""
+                SELECT action FROM fastpay.production_event WHERE production_line_id = ? ORDER BY line_version
+                """, String.class, UUID.fromString(batataId))).containsExactly("INICIADO", "PRONTO");
+        assertThat(admin().queryForObject("""
+                SELECT count(DISTINCT correlation_id) FROM fastpay.production_event
+                 WHERE production_line_id IN (?, ?) AND action = 'PRONTO'
+                """, Integer.class, UUID.fromString(batataId), UUID.fromString(saladaId))).isEqualTo(1);
+        assertThat(admin().queryForObject("""
+                SELECT count(*) FROM fastpay.production_event e JOIN fastpay.production_line p
+                    ON p.id = e.production_line_id WHERE p.establishment_id = ?
+                """, Integer.class, outraLoja)).isZero();
+    }
+
+    @Test
+    void loteRecusadoInteiroSoPorPedidoInvalidoOuSemPermissao() throws Exception {
+        Browser gabi = login.inUnit(garcom, loja);
+        Browser paulo = login.inUnit(producao, loja);
+        gabi.post("/api/v1/orders", envio(comanda(gabi, "Fê", null), linha(batata, 1, null, "35.90")))
+                .andExpect(status().isOk());
+        rodarJobs();
+        String id = JsonPath.read(paulo.get(FILA).andReturn().getResponse().getContentAsString(), "$.lines[0].id");
+
+        // Limite de 50 linhas por lote (D-13): 51 é recusado sem tocar em nenhuma.
+        Object[] muitas = new Object[102];
+        muitas[0] = id;
+        muitas[1] = 0;
+        for (int i = 1; i < 51; i++) {
+            muitas[2 * i] = UUID.randomUUID().toString();
+            muitas[2 * i + 1] = 0;
+        }
+        paulo.post(LOTE, lote("INICIAR", muitas)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DADOS_INVALIDOS"))
+                .andExpect(jsonPath("$.field").value("lines"))
+                .andExpect(jsonPath("$.detail").value(containsString("50")));
+        assertThat(etapa(id)).isEqualTo("AGUARDANDO_PREPARO:0");
+        Object[] cinquenta = java.util.Arrays.copyOf(muitas, 100);
+        paulo.post(LOTE, lote("INICIAR", cinquenta)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.concluded").value(1))
+                .andExpect(jsonPath("$.failed").value(49));
+
+        paulo.post(LOTE, lote("PRONTO", id, 1, id, 1)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(containsString("duas vezes")));
+        paulo.post(LOTE, lote("PRONTO")).andExpect(status().isBadRequest());
+        paulo.post(LOTE, "{\"action\":\"PRONTO\",\"lines\":[{\"id\":\"" + id + "\"}]}")
+                .andExpect(status().isBadRequest());
+        paulo.post(LOTE, "{\"lines\":[{\"id\":\"" + id + "\",\"version\":1}]}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.field").value("action"));
+        // Garçom não opera a produção: nem em lote. Entregar em lote não existe.
+        gabi.post(LOTE, lote("PRONTO", id, 1)).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSAO_NEGADA"));
+        paulo.post(LOTE, lote("ENTREGAR", id, 1)).andExpect(status().isBadRequest());
+        assertThat(etapa(id)).isEqualTo("EM_PREPARO:1");
+    }
+
+    private static final String LOTE = "/api/v1/production/batch";
+
+    /** Corpo do lote: ação e pares (id, versão). */
+    private static String lote(String acao, Object... idsEVersoes) {
+        StringJoiner linhas = new StringJoiner(",", "[", "]");
+        for (int i = 0; i < idsEVersoes.length; i += 2) {
+            linhas.add("{\"id\":\"" + idsEVersoes[i] + "\",\"version\":" + idsEVersoes[i + 1] + "}");
+        }
+        return "{\"action\":\"" + acao + "\",\"lines\":" + linhas + "}";
+    }
+
+    private static String idDe(String board, String produto) {
+        List<String> ids = JsonPath.read(board, "$.lines[?(@.productName == '" + produto + "')].id");
+        assertThat(ids).hasSize(1);
+        return ids.getFirst();
+    }
+
+    private String etapa(String linha) {
+        return admin().queryForObject("SELECT status || ':' || version FROM fastpay.production_line WHERE id = ?",
+                String.class, UUID.fromString(linha));
     }
 
     private void rodarJobs() {

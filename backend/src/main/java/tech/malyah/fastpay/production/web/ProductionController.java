@@ -1,6 +1,7 @@
 package tech.malyah.fastpay.production.web;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,7 +26,8 @@ import tech.malyah.fastpay.production.Production.Refused;
 
 /**
  * Fila de produção e entrega da unidade escolhida na sessão (H18). Fila e etapas de preparo: {@code OPERAR_PRODUCAO};
- * prontos e entrega: {@code OPERAR_COMANDA}. Conferidas no servidor a cada chamada.
+ * prontos e entrega: {@code OPERAR_COMANDA}. Conferidas no servidor a cada chamada. Lote da produção (H19):
+ * {@code OPERAR_PRODUCAO}, conferida de novo em cada linha.
  */
 @RestController
 @RequestMapping("/api/v1/production")
@@ -85,6 +87,37 @@ class ProductionController {
                 correlationId()));
     }
 
+    /**
+     * Lote de produção (H19): até 50 linhas, cada uma com a versão lida, todas com a mesma ação. 200 com o resultado
+     * de cada linha na ordem do pedido, mesmo com falhas; 400 só para pedido inválido (vazio, mais de 50, linha
+     * repetida, sem versão), 403 sem a permissão da produção.
+     */
+    @PostMapping("/batch")
+    BatchResponse batch(@RequestBody BatchRequest body, HttpServletRequest request) {
+        UUID actor = session.requireIdentity(request);
+        List<Production.BatchItem> items = body.lines() == null ? null
+                : body.lines().stream().map(l -> l == null ? null : new Production.BatchItem(l.id(), l.version()))
+                        .toList();
+        Production.BatchResult result = respond(production.batch(actor, session.requireSelectedUnit(request),
+                body.action(), items, correlationId()));
+        return new BatchResponse(result.concluded(), result.ignored(), result.failed(), result.lines().stream()
+                .map(l -> new BatchLineResponse(l.lineId(), l.status(), l.code(), message(l))).toList());
+    }
+
+    private static String message(Production.BatchLine line) {
+        if (line.code() == null) {
+            return null;
+        }
+        return switch (line.code()) {
+            case Production.JA_APLICADA -> "Já estava feito; nada mudou.";
+            case Production.SEM_PERMISSAO -> "Você não tem mais permissão para operar a produção nesta unidade.";
+            case Production.SEM_ACESSO -> "Você não tem mais acesso a esta unidade.";
+            case Production.FALHA_INESPERADA -> "Não foi possível atualizar este item. Tente de novo.";
+            case "DADOS_INVALIDOS" -> "Atualize a tela e tente de novo.";
+            default -> refusal(Production.Refusal.valueOf(line.code())).getBody().getDetail();
+        };
+    }
+
     private static <T> T respond(Outcome<T> outcome) {
         return switch (outcome) {
             case Done<T> done -> done.value();
@@ -123,6 +156,18 @@ class ProductionController {
     }
 
     record VersionRequest(Long version) {
+    }
+
+    record BatchRequest(Production.BatchAction action, List<BatchLineRequest> lines) {
+    }
+
+    record BatchLineRequest(UUID id, Long version) {
+    }
+
+    record BatchLineResponse(UUID lineId, Production.BatchStatus status, String code, String message) {
+    }
+
+    record BatchResponse(int concluded, int ignored, int failed, List<BatchLineResponse> lines) {
     }
 
     record ImpossibleRequest(Long version, String reason) {
