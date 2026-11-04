@@ -587,8 +587,8 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Arquivos/migrations/contratos: `V17__problemas_do_consumidor.sql`; `attendance.ConsumerIssues`, `attendance.domain.IssueRules`, `JdbcIssueStore`, `GuestIssueController`, `/api/v1/attendance/issues/*`; `tabs.GuestCookie`, `GuestAccess.inTab`; `Orders.itemsOfTabInCurrentUnit`; `sync.Topic.PROBLEMA`; frontend `guest/guest-issues.ts`, `attendance/issues-panel.ts`; especificação §6; decisões T-03; [evidência](evidencias/H21-problemas-consumidor.md).
 - Testes: ver a evidência (backend 397 no contêiner Temurin 25 com PostgreSQL real; frontend 185 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); teste com celular real do cliente na homologação de Diego.
-- Decisões novas/alteradas: T-03 da H21 proposta (textos 5–300; um aberto por item e um da conta; itens sem valores; quem atende e quem conclui; resolução visível ao cliente; caso pago só gerente; equipe não abre em nome do cliente; 200 por leitura), aprovada por Diego em 04/11/2026. Depende da T-03 da H20 só na reatribuição.
-- Bloqueios / quem resolve: T-03 da H20 segue aguardando Diego. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Decisões novas/alteradas: T-03 da H21 proposta (textos 5–300; um aberto por item e um da conta; itens sem valores; quem atende e quem conclui; resolução visível ao cliente; caso pago só gerente; equipe não abre em nome do cliente; 200 por leitura), aprovada por Diego em 04/11/2026. Depende da T-03 da H20 só na reatribuição (aprovada por Diego em 04/11/2026).
+- Bloqueios / quem resolve: nenhum da H21. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
 - Próximo passo concreto: Diego revisa e faz o merge do PR; depois do merge, PR de reconciliação.
 
 ## Registro de release (ainda nenhum)
