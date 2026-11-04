@@ -99,7 +99,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H19 | Operações em lote de produção | Concluída | PR #26, merge `1bdfa6e` em `develop`, CI de `develop` run 41768784263 verde ([evidência](evidencias/H19-lote-producao.md)); T-03 da H19 aprovada por Diego em 04/11/2026; caso "linha cancelada" entra no teste do lote com a H23 |
 | H20 | Atendimento responsável ou central | Concluída | PR #28, merge `c06b7b8` em `develop`, CI de `develop` run 41855357662 verde ([evidência](evidencias/H20-atendimento-responsavel-central.md)); T-03 da H20 aprovada por Diego em 04/11/2026 |
 | H21 | Problemas do consumidor e conclusão autorizada | Concluída | PR #30, merge `157d591` em `develop`, CI de `develop` run 41871502419 verde ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aprovada por Diego em 04/11/2026 |
-| H22 | Composição, serviço e descontos exatos | Concluída | PR #32, merge `2da7c4a` em `develop`, CI de `develop` run 41884465186 verde ([evidência](evidencias/H22-composicao-servico-descontos.md)); T-03 da H22 proposta, aguardando Diego |
+| H22 | Composição, serviço e descontos exatos | Concluída | PR #32, merge `2da7c4a` em `develop`, CI de `develop` run 41884465186 verde ([evidência](evidencias/H22-composicao-servico-descontos.md)); T-03 da H22 aprovada em 04/11/2026 (delegada por Diego, opção recomendada) |
 | H23 | Cancelar quantidade e alertar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H24 | Desfazer entrega com histórico | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H25 | Transferir unidades sem duplicar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -593,7 +593,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H22 — Composição, serviço e descontos exatos
 
-- História e estado: H22, **concluída** no código (critérios atendidos, merge em `develop` verificado, CI de `develop` verde). T-03 da H22 proposta, aguardando Diego: se mudar, o ajuste entra em PR próprio.
+- História e estado: H22, **concluída** no código (critérios atendidos, merge em `develop` verificado, CI de `develop` verde). T-03 da H22 aprovada como proposta em 04/11/2026 (Diego delegou a decisão; opção recomendada).
 - Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - C/D/K/S e total com BigDecimal e HALF_UP em 2 casas, D arredondado antes da base do serviço, base antes/depois do desconto e couvert na base só se configurado (PRD §10.2, FR-28, FR-68, especificação §7); total nunca negativo.
@@ -608,9 +608,9 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Arquivos/migrations/contratos: `V18__conta_desconto_servico.sql`; módulo `bills` (`Bills`, `domain.BillRules`, `JdbcBillStore`, `BillController`, `GuestBillController`); `Orders.chargedLinesOfTabInCurrentUnit`; `Tabs.forBillInCurrentUnit`; `sync.Topic.CONTA`; frontend `bills/bill-panel.ts`, `guest/guest-bill.ts`; especificação §6; decisões T-03; [evidência](evidencias/H22-composicao-servico-descontos.md).
 - Testes: ver a evidência (backend 439 no contêiner Temurin 25 com PostgreSQL real; frontend 192 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real do cliente na homologação de Diego.
-- Decisões novas/alteradas: T-03 da H22 proposta (formatos e limites de valor, motivo 5–300, formatos pela configuração vigente, substituição com desconto esperado, quem retira e quem revisa, só fixo entra em revisão, serviço pelo cliente ou pela equipe, couvert automático só, o que o cliente vê), aguardando Diego.
-- Bloqueios / quem resolve: aprovação da T-03 da H22 (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego decide a T-03 da H22. Próxima candidata elegível: H23 (dependências H18, H21 e H22 concluídas), só quando Diego pedir.
+- Decisões novas/alteradas: T-03 da H22 proposta (formatos e limites de valor, motivo 5–300, formatos pela configuração vigente, substituição com desconto esperado, quem retira e quem revisa, só fixo entra em revisão, serviço pelo cliente ou pela equipe, couvert automático só, o que o cliente vê), aprovada como proposta em 04/11/2026 (Diego delegou: "pode decidir").
+- Bloqueios / quem resolve: nenhum da H22. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: nenhum na H22. Próxima candidata elegível: H23 (dependências H18, H21 e H22 concluídas), só quando Diego pedir.
 
 ## Registro de release (ainda nenhum)
 
