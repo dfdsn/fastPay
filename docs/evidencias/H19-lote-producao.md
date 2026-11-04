@@ -14,7 +14,7 @@ Registro sanitizado. Claude Code, 04/11/2026, sessão em nuvem (Linux) com Docke
 
 Nenhuma migration nova; nenhuma dependência nova.
 
-## 2. Proposta aguardando Diego (T-03 da H19)
+## 2. Proposta aprovada por Diego em 04/11/2026 (T-03 da H19, cartão no thread da H19)
 
 | Proposta | Valor |
 |---|---|

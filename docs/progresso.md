@@ -68,7 +68,7 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H18 (04/11/2026):** iniciada pelo mesmo pedido de Diego, depois da aprovação da T-03 da H17. Feita em `feature/H18-fila-producao-entrega`, a partir de `feature/H17-sincronizacao-sse` (`d9a2c7e`), porque depende do código da H17 e o PR #23 ainda não foi mergeado; Diego fez o merge do PR #24 em 04/11/2026 (`d77b512`, depois do #23) e aprovou, na mesma data, os limites e escolhas da H18 (T-03). **Concluída.** Detalhes no registro da H18.
 
-**H19 (04/11/2026):** Diego pediu "pode começar" no thread do projeto (H19 era a próxima elegível: H18 concluída e gate D-04 resolvida). Feita em `feature/H19-lote-producao`, a partir de `develop` (`a3a1885`). **Aguardando revisão** no PR da H19; T-03 da H19 aguardando Diego. Detalhes no registro da H19.
+**H19 (04/11/2026):** Diego pediu "pode começar" no thread do projeto (H19 era a próxima elegível: H18 concluída e gate D-04 resolvida). Feita em `feature/H19-lote-producao`, a partir de `develop` (`a3a1885`). **Aguardando revisão** no PR #26; T-03 da H19 aprovada por Diego em 04/11/2026 (cartão no thread). Detalhes no registro da H19.
 
 ## Estados
 
@@ -96,7 +96,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H16 | Rascunho, envio atômico e preço capturado | Concluída | PR #21, merge `da4e270` em `develop`, CI de `develop` run 41715851513 verde ([evidência](evidencias/H16-rascunho-envio-preco.md)); T-03 da H16 aprovada por Diego em 03/11/2026 |
 | H17 | Sincronização operacional SSE e reconexão | Concluída | PR #23, merge `e575de0` em `develop`, CI de `develop` run 41758795363 verde ([evidência](evidencias/H17-sincronizacao-sse.md)); T-03 da H17 aprovada por Diego em 04/11/2026 |
 | H18 | Fila de produção e entrega por linha | Concluída | PR #24, merge `d77b512` em `develop`, CI de `develop` run 41758906795 verde ([evidência](evidencias/H18-fila-producao-entrega.md)); T-03 da H18 aprovada por Diego em 04/11/2026 |
-| H19 | Operações em lote de produção | Aguardando revisão | Branch `feature/H19-lote-producao`, PR para `develop` ([evidência](evidencias/H19-lote-producao.md)); T-03 da H19 aguardando Diego |
+| H19 | Operações em lote de produção | Aguardando revisão | Branch `feature/H19-lote-producao`, PR para `develop` ([evidência](evidencias/H19-lote-producao.md)); T-03 da H19 aprovada por Diego em 04/11/2026 |
 | H20 | Atendimento responsável ou central | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H21 | Problemas do consumidor e conclusão autorizada | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H22 | Composição, serviço e descontos exatos | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -532,7 +532,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H19 — Operações em lote de produção
 
-- História e estado: H19, **aguardando revisão** (PR aberto para `develop`). T-03 da H19 aguardando Diego.
+- História e estado: H19, **aguardando revisão** ([PR #26](https://github.com/dfdsn/fastPay/pull/26) aberto para `develop`). T-03 da H19 aprovada por Diego em 04/11/2026 (cartão no thread).
 - Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Até 50 linhas por lote, cada uma com a versão esperada; acima disso o lote inteiro é recusado sem tocar em linha (FR-69, D-13).
@@ -546,9 +546,9 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Arquivos/migrations/contratos: sem migration; `Production.batch`, `ProductionRules.BATCH_MAX`, `JdbcProductionStore.applied`, `POST /api/v1/production/batch`; frontend `production-page.ts` e `production.service.ts`; especificação §6; decisões T-03; [evidência](evidencias/H19-lote-producao.md).
 - Testes: ver a evidência (backend 375 no contêiner Temurin 25 com PostgreSQL real; frontend 171 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); uso real num tablet de cozinha e homologação de Diego.
-- Decisões novas/alteradas: T-03 da H19 proposta (lote só para iniciar e pronto; uma ação por lote; pedido inválido recusa tudo; transação por linha; repetição = "já estava feito"), aguardando Diego.
+- Decisões novas/alteradas: T-03 da H19 proposta (lote só para iniciar e pronto; uma ação por lote; pedido inválido recusa tudo; transação por linha; repetição = "já estava feito"), aprovada por Diego em 04/11/2026 (cartão no thread).
 - Bloqueios / quem resolve: nenhum da H19. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego revisa o PR e decide a T-03 da H19; depois do merge, PR de reconciliação.
+- Próximo passo concreto: Diego revisa e faz o merge do PR #26; depois do merge, PR de reconciliação.
 
 ## Registro de release (ainda nenhum)
 
