@@ -49,6 +49,27 @@ export interface ProductionBoard {
 
 export type ProductionAction = 'start' | 'ready' | 'impossible/withdraw' | 'deliver';
 
+/** Ação de um lote da produção (H19): só as etapas de preparo; entregar e sinalizar seguem uma linha por vez. */
+export type BatchAction = 'INICIAR' | 'PRONTO';
+
+/** Linhas por lote (H19, FR-69, D-13): o servidor recusa o lote inteiro acima disso. */
+export const BATCH_MAX = 50;
+
+/** Resultado de uma linha do lote, na ordem pedida; {@code message} explica a falha ou o "já estava feito". */
+export interface BatchLine {
+  lineId: string;
+  status: 'CONCLUIDA' | 'IGNORADA' | 'FALHA';
+  code: string | null;
+  message: string | null;
+}
+
+export interface BatchResult {
+  concluded: number;
+  ignored: number;
+  failed: number;
+  lines: BatchLine[];
+}
+
 /** Fila de produção e entrega da unidade da sessão (H18); a permissão é conferida no servidor a cada chamada. */
 @Injectable({ providedIn: 'root' })
 export class ProductionService {
@@ -68,6 +89,16 @@ export class ProductionService {
     return this.auth.withCsrf(() =>
       this.http.post<ProductionLine>(`/api/v1/production/lines/${line.id}/${action}`, {
         version: line.version,
+      }),
+    );
+  }
+
+  /** Lote (H19): cada linha com a versão lida; sucesso parcial explícito, uma recusa não desfaz as demais. */
+  batch(action: BatchAction, lines: ProductionLine[]): Observable<BatchResult> {
+    return this.auth.withCsrf(() =>
+      this.http.post<BatchResult>('/api/v1/production/batch', {
+        action,
+        lines: lines.map((l) => ({ id: l.id, version: l.version })),
       }),
     );
   }

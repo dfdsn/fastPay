@@ -180,6 +180,91 @@ describe('ProductionPage (H18)', () => {
     expect(element().querySelector('li.fresh')).toBeNull();
   });
 
+  it('lote (H19): marca, inicia só os da etapa e mostra o resultado de cada item', () => {
+    const pastel = linha({ id: 'l-2', productName: 'Pastel', quantity: 2 });
+    const salada = linha({ id: 'l-3', productName: 'Salada', quantity: 1, version: 4 });
+    const preparo = linha({ id: 'l-4', productName: 'Caldo', status: 'EM_PREPARO', version: 1 });
+    const travada = linha({
+      id: 'l-5',
+      productName: 'Torta',
+      impossible: { reason: 'Acabou', at: AGORA },
+      version: 1,
+    });
+    abrir([linha(), pastel, salada, preparo, travada]);
+    expect(botao('Iniciar marcados (0)')!.disabled).toBe(true);
+    const marcar = (rotulo: string) =>
+      element().querySelector<HTMLInputElement>(`input[aria-label="${rotulo}"]`)!.click();
+    marcar('Marcar todos');
+    fixture.detectChanges();
+    // A travada e a que já está em preparo não entram em "Iniciar".
+    expect(botao('Iniciar marcados (3)')).toBeDefined();
+    expect(botao('Marcar prontos os marcados (1)')).toBeDefined();
+    marcar('Marcar 3 × Batata frita');
+    fixture.detectChanges();
+    botao('Iniciar marcados (2)')!.click();
+    const lote = http.expectOne('/api/v1/production/batch');
+    expect(lote.request.body).toEqual({
+      action: 'INICIAR',
+      lines: [
+        { id: 'l-2', version: 0 },
+        { id: 'l-3', version: 4 },
+      ],
+    });
+    lote.flush({
+      concluded: 1,
+      ignored: 0,
+      failed: 1,
+      lines: [
+        { lineId: 'l-2', status: 'CONCLUIDA', code: null, message: null },
+        {
+          lineId: 'l-3',
+          status: 'FALHA',
+          code: 'VERSAO_DESATUALIZADA',
+          message: 'Este item mudou desde que a tela foi carregada.',
+        },
+      ],
+    });
+    fila().flush({
+      now: AGORA,
+      lines: [linha(), { ...pastel, status: 'EM_PREPARO', version: 1 }, salada, preparo, travada],
+    });
+    fixture.detectChanges();
+    expect(texto()).toContain('Lote: 1 iniciado, 1 não avançou.');
+    expect(texto()).toContain('1 × Salada: Este item mudou desde que a tela foi carregada.');
+    // O que avançou sai da marcação; o que falhou continua marcado para tentar de novo.
+    expect(botao('Iniciar marcados (1)')).toBeDefined();
+    expect(botao('Marcar prontos os marcados (1)')).toBeDefined();
+  });
+
+  it('lote repetido mostra o que já estava feito; acima de 50 nem envia', () => {
+    const muitas = Array.from({ length: 51 }, (_, i) => linha({ id: `l-${i}` }));
+    abrir(muitas);
+    element().querySelector<HTMLInputElement>('input[aria-label="Marcar todos"]')!.click();
+    fixture.detectChanges();
+    botao('Iniciar marcados (51)')!.click();
+    http.expectNone('/api/v1/production/batch');
+    fixture.detectChanges();
+    expect(texto()).toContain('Marque no máximo 50 itens por vez.');
+
+    element().querySelector<HTMLInputElement>('input[aria-label="Marcar 3 × Batata frita"]')!.click();
+    fixture.detectChanges();
+    botao('Iniciar marcados (50)')!.click();
+    http.expectOne('/api/v1/production/batch').flush({
+      concluded: 0,
+      ignored: 50,
+      failed: 0,
+      lines: muitas.slice(1).map((l) => ({
+        lineId: l.id,
+        status: 'IGNORADA',
+        code: 'JA_APLICADA',
+        message: 'Já estava feito; nada mudou.',
+      })),
+    });
+    fila().flush({ now: AGORA, lines: [] });
+    fixture.detectChanges();
+    expect(texto()).toContain('Lote: 0 iniciados, 50 já estavam feitos.');
+  });
+
   it('papel sem produção vê a recusa', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     comCookieCsrf(true);

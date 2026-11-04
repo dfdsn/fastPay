@@ -133,6 +133,17 @@ public class JdbcProductionStore {
                 Timestamp.from(now), correlationId);
     }
 
+    /**
+     * A ação já foi feita sobre a versão informada (H19): o histórico tem esse passo gravando a versão seguinte. Serve
+     * para reconhecer a repetição de um lote, que não pode avançar uma segunda etapa.
+     */
+    public boolean applied(UUID lineId, ProductionRules.Action action, long expectedVersion) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM production_event
+                                WHERE production_line_id = ? AND action = ? AND line_version = ?)
+                """, Boolean.class, lineId, action.name(), expectedVersion + 1));
+    }
+
     private static void requireOne(int updated) {
         // A linha está travada nesta transação: outra contagem é erro de programa, não corrida.
         if (updated != 1) {

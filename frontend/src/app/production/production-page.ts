@@ -1,7 +1,8 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -14,6 +15,9 @@ import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
 import { failureMessage, problemCode } from '../session/unit-context.service';
 import {
+  BATCH_MAX,
+  BatchAction,
+  BatchResult,
   ProductionLine,
   ProductionService,
   STATUS_LABEL,
@@ -37,6 +41,8 @@ const STALE = new Set([
  * mais novas. Cada linha é uma sequência só para toda a quantidade, com destinos, responsável, observação e os
  * tempos desde o envio e na etapa; passou do limite do setor, fica destacada (nada muda sozinho). Sem valores.
  * "Não é possível atender" pede motivo e trava a linha até retirar a sinalização ou o item ser cancelado.
+ * Em lote (H19, FR-69): marcar itens e iniciar ou marcar pronto até 50 de uma vez; cada item tem o próprio resultado,
+ * e os que não avançaram aparecem com o motivo, sem desfazer os que passaram.
  */
 @Component({
   selector: 'fp-production-page',
@@ -44,6 +50,7 @@ const STALE = new Set([
     ReactiveFormsModule,
     RouterLink,
     MatButtonModule,
+    MatCheckboxModule,
     MatFormFieldModule,
     MatInputModule,
     MatProgressSpinnerModule,
@@ -89,6 +96,40 @@ const STALE = new Set([
         <h2>Na fila ({{ lines().length }})</h2>
         @if (lines().length === 0) {
           <p>Nada aguardando preparo.</p>
+        } @else {
+          <div class="row batch" role="group" aria-label="Ações em lote">
+            <mat-checkbox
+              [checked]="allSelected()"
+              [indeterminate]="selected().size > 0 && !allSelected()"
+              (change)="selectAll($event.checked)"
+              aria-label="Marcar todos"
+            >
+              Marcar todos
+            </mat-checkbox>
+            <button
+              mat-flat-button
+              type="button"
+              [disabled]="busy() || toStart().length === 0"
+              (click)="runBatch('INICIAR')"
+            >
+              Iniciar marcados ({{ toStart().length }})
+            </button>
+            <button
+              mat-flat-button
+              type="button"
+              [disabled]="busy() || toFinish().length === 0"
+              (click)="runBatch('PRONTO')"
+            >
+              Marcar prontos os marcados ({{ toFinish().length }})
+            </button>
+          </div>
+        }
+        @if (batchFailures().length > 0) {
+          <ul class="failures" aria-label="Itens do lote que não avançaram">
+            @for (item of batchFailures(); track item.id) {
+              <li>{{ item.name }}: {{ item.message }}</li>
+            }
+          </ul>
         }
         <ul class="lines" aria-label="Fila de produção">
           @for (line of lines(); track line.id) {
@@ -98,6 +139,11 @@ const STALE = new Set([
               [class.fresh]="fresh().has(line.id)"
             >
               <div>
+                <mat-checkbox
+                  [checked]="selected().has(line.id)"
+                  (change)="toggle(line.id, $event.checked)"
+                  [aria-label]="'Marcar ' + line.quantity + ' × ' + line.productName"
+                />
                 @if (fresh().has(line.id)) {
                   <span class="badge">Novo</span>
                 }
@@ -197,6 +243,12 @@ const STALE = new Set([
       align-items: center;
       margin-top: 8px;
     }
+    .batch {
+      margin-bottom: 8px;
+    }
+    .failures {
+      color: #b3261e;
+    }
     .wide {
       flex: 1 1 280px;
     }
@@ -266,6 +318,15 @@ export class ProductionPage {
   protected readonly notice = signal<string | null>(null);
   protected readonly failure = signal<string | null>(null);
   protected readonly reporting = signal<string | null>(null);
+  /** Itens marcados para o lote (H19); some da marcação o que sai da fila. */
+  protected readonly selected = signal<ReadonlySet<string>>(new Set());
+  protected readonly allSelected = computed(
+    () => this.lines().length > 0 && this.lines().every((l) => this.selected().has(l.id)),
+  );
+  protected readonly toStart = computed(() => this.eligible('INICIAR'));
+  protected readonly toFinish = computed(() => this.eligible('PRONTO'));
+  /** Itens do último lote que não avançaram, com o motivo dado pelo servidor. */
+  protected readonly batchFailures = signal<{ id: string; name: string; message: string }[]>([]);
   protected readonly reasonForm = this.forms.group({
     reason: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(300)]],
   });
@@ -322,6 +383,69 @@ export class ProductionPage {
     this.run(this.service.act(line, action), done);
   }
 
+  toggle(id: string, checked: boolean): void {
+    this.selected.update((ids) => {
+      const next = new Set(ids);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  selectAll(checked: boolean): void {
+    this.selected.set(checked ? new Set(this.lines().map((l) => l.id)) : new Set());
+  }
+
+  /** Marcados na etapa da ação e sem impossibilidade: só esses vão no lote. */
+  private eligible(action: BatchAction): ProductionLine[] {
+    const status = action === 'INICIAR' ? 'AGUARDANDO_PREPARO' : 'EM_PREPARO';
+    return this.lines().filter(
+      (l) => this.selected().has(l.id) && l.status === status && !l.impossible,
+    );
+  }
+
+  runBatch(action: BatchAction): void {
+    const lines = action === 'INICIAR' ? this.toStart() : this.toFinish();
+    if (lines.length > BATCH_MAX) {
+      this.failure.set(`Marque no máximo ${BATCH_MAX} itens por vez.`);
+      return;
+    }
+    const names = new Map(lines.map((l) => [l.id, `${l.quantity} × ${l.productName}`]));
+    this.busy.set(true);
+    this.failure.set(null);
+    this.notice.set(null);
+    this.batchFailures.set([]);
+    this.fresh.update((ids) => new Set([...ids].filter((id) => !names.has(id))));
+    this.service
+      .batch(action, lines)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (result) => {
+          this.busy.set(false);
+          this.notice.set(batchSummary(action, result));
+          this.batchFailures.set(
+            result.lines
+              .filter((l) => l.status === 'FALHA')
+              .map((l) => ({
+                id: l.lineId,
+                name: names.get(l.lineId) ?? 'Item',
+                message: l.message ?? 'Não avançou.',
+              })),
+          );
+          const done = new Set(result.lines.filter((l) => l.status !== 'FALHA').map((l) => l.lineId));
+          this.selected.update((ids) => new Set([...ids].filter((id) => !done.has(id))));
+          this.fetch();
+        },
+        error: (error: unknown) => {
+          this.busy.set(false);
+          this.failure.set(failureMessage(error));
+        },
+      });
+  }
+
   startReport(line: ProductionLine): void {
     this.reasonForm.reset();
     this.reporting.set(line.id);
@@ -357,6 +481,8 @@ export class ProductionPage {
           this.offset = Date.parse(board.now) - Date.now();
           this.now.set(Date.now() + this.offset);
           this.lines.set(board.lines);
+          const present = new Set(board.lines.map((l) => l.id));
+          this.selected.update((ids) => new Set([...ids].filter((id) => present.has(id))));
           this.markFresh(board.lines);
           this.state.set('ready');
         },
@@ -400,4 +526,18 @@ export class ProductionPage {
       },
     });
   }
+}
+
+/** "3 iniciados, 1 já estava feito, 2 não avançaram." */
+function batchSummary(action: BatchAction, result: BatchResult): string {
+  const parts = [
+    `${result.concluded} ${action === 'INICIAR' ? 'iniciado' : 'pronto'}${result.concluded === 1 ? '' : 's'}`,
+  ];
+  if (result.ignored > 0) {
+    parts.push(`${result.ignored} já ${result.ignored === 1 ? 'estava feito' : 'estavam feitos'}`);
+  }
+  if (result.failed > 0) {
+    parts.push(`${result.failed} não ${result.failed === 1 ? 'avançou' : 'avançaram'}`);
+  }
+  return `Lote: ${parts.join(', ')}.`;
 }

@@ -15,6 +15,9 @@ public final class ProductionRules {
     public static final int REASON_MIN = 5;
     public static final int REASON_MAX = 300;
 
+    /** Linhas por lote de produção (H19, FR-69, D-13): parâmetro técnico global, não cota da loja. */
+    public static final int BATCH_MAX = 50;
+
     public enum Status {
         AGUARDANDO_PREPARO, EM_PREPARO, PRONTO, ENTREGUE
     }
