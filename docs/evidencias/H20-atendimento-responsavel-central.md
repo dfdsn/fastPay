@@ -15,7 +15,7 @@ Registro sanitizado. Claude Code, 04/11/2026, sessão em nuvem (Linux) com Docke
 
 Nenhuma dependência nova.
 
-## 2. Proposta aguardando Diego (T-03 da H20)
+## 2. T-03 da H20, aprovada como proposta em 04/11/2026: Diego delegou a decisão ("pode decidir tbm", thread da H21) e foi adotada a opção recomendada no cartão do thread da H20
 
 | Proposta | Valor |
 |---|---|
