@@ -7,5 +7,7 @@ public enum Topic {
     /** Pedido enviado ou encaminhamento retomado. */
     PEDIDO,
     /** Linhas recebidas ou mudadas na produção (mensagens internas: o consumidor não recebe). */
-    PRODUCAO
+    PRODUCAO,
+    /** Chamado de atendimento criado, assumido, reatribuído ou concluído; responsável da comanda trocado (H20). */
+    ATENDIMENTO
 }

@@ -14,10 +14,12 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import tech.malyah.fastpay.catalog.Catalog;
 import tech.malyah.fastpay.catalog.Catalog.SectorSettings;
+import tech.malyah.fastpay.establishments.AttendanceMode;
 import tech.malyah.fastpay.identity.Memberships;
 import tech.malyah.fastpay.identity.Permission;
 import tech.malyah.fastpay.identity.PermissionDeniedException;
@@ -59,7 +61,8 @@ public class Production {
     /**
      * Linha como as telas mostram. {@code sectorId} vazio: sem preparo. {@code sentAt}: envio do pedido (tempo total);
      * {@code statusSince}: início da etapa atual. {@code delayLimitMinutes} vazio: sem limite (sem setor).
-     * {@code responsible}: quem abriu a comanda do primeiro destino. Sem valores.
+     * {@code responsible}: o garçom responsável da comanda do primeiro destino, ou "Central" se ela é atendida pela
+     * central (H20). Sem valores.
      */
     public record Line(UUID id, UUID orderId, UUID sectorId, String sectorName, Integer delayLimitMinutes,
             String productName, int quantity, String note, Status status, Instant sentAt, Instant statusSince,
@@ -100,9 +103,11 @@ public class Production {
     private final JdbcProductionStore store;
     private final Changes changes;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     Production(Memberships memberships, Orders orders, Tabs tabs, Catalog catalog,
-            JdbcProductionStore store, Changes changes, Clock clock) {
+            JdbcProductionStore store, Changes changes, Clock clock, ApplicationEventPublisher events) {
+        this.events = events;
         this.memberships = memberships;
         this.orders = orders;
         this.tabs = tabs;
@@ -122,6 +127,16 @@ public class Production {
     public Board deliveries(UUID actorId, UUID establishmentId) {
         return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_COMANDA,
                 me -> board(store.deliveries()));
+    }
+
+    /**
+     * Linhas pelo id, na transação de unidade de quem chama, que confere a permissão (H20: o atendimento mostra o
+     * item de cada chamado). Linha de outra unidade não aparece.
+     */
+    public Map<UUID, Line> linesInCurrentUnit(List<UUID> lineIds) {
+        Map<UUID, Line> lines = new HashMap<>();
+        board(store.lines(lineIds)).lines().forEach(l -> lines.put(l.id(), l));
+        return lines;
     }
 
     public Outcome<Line> start(UUID actorId, UUID establishmentId, UUID lineId, Long version, String correlationId) {
@@ -313,10 +328,29 @@ public class Production {
         store.event(lineId, action, current.status(), to, reason, version + 1, actorId, now, correlationId);
         Line line = board(List.of(store.line(lineId).orElseThrow())).lines().getFirst();
         // Mesma transação: as telas das comandas da linha relêem depois do commit.
-        line.destinations().stream().map(Destination::tabId).distinct()
-                .forEach(tab -> changes.publishInCurrentTransaction(Topic.PRODUCAO, tab));
+        List<UUID> tabIds = line.destinations().stream().map(Destination::tabId).distinct().toList();
+        tabIds.forEach(tab -> changes.publishInCurrentTransaction(Topic.PRODUCAO, tab));
+        ProductionLineChanged.Change change = switch (action) {
+            case PRONTO -> ProductionLineChanged.Change.PRONTA;
+            case ENTREGUE -> ProductionLineChanged.Change.ENTREGUE;
+            case IMPOSSIVEL -> ProductionLineChanged.Change.IMPOSSIVEL;
+            case IMPOSSIVEL_RETIRADO -> ProductionLineChanged.Change.IMPOSSIVEL_RETIRADO;
+            case INICIADO -> null;
+        };
+        if (change != null) {
+            // Avisos do atendimento (H20) no mesmo commit da mudança.
+            events.publishEvent(new ProductionLineChanged(lineId, change, tabIds, actorId, now));
+        }
         log.info("Linha de produção {}: {} ({} > {}) por {}", lineId, action, current.status(), to, actorId);
         return new Done<>(line);
+    }
+
+    /** Quem responde pela comanda: o garçom responsável, ou a central (H20). */
+    private static String responsible(Tabs.Label label, Map<UUID, String> names) {
+        if (label.attendanceMode() == AttendanceMode.CENTRAL) {
+            return "Central";
+        }
+        return label.responsibleId() == null ? null : names.get(label.responsibleId());
     }
 
     private Board board(List<LineRow> rows) {
@@ -326,8 +360,8 @@ public class Production {
         Set<UUID> tabIds = new LinkedHashSet<>();
         details.values().forEach(d -> d.allocations().forEach(a -> tabIds.add(a.tabId())));
         Map<UUID, Tabs.Label> labels = tabs.labelsInCurrentUnit(List.copyOf(tabIds));
-        Map<UUID, String> names = memberships.namesInCurrentUnit(
-                labels.values().stream().map(Tabs.Label::openedBy).distinct().toList());
+        Map<UUID, String> names = memberships.namesInCurrentUnit(labels.values().stream()
+                .map(Tabs.Label::responsibleId).filter(Objects::nonNull).distinct().toList());
         Map<UUID, SectorSettings> sectors = catalog.sectorsInCurrentUnit(
                 rows.stream().map(LineRow::sectorId).filter(Objects::nonNull).distinct().toList());
 
@@ -351,7 +385,7 @@ public class Production {
             SectorSettings sector = row.sectorId() == null ? null : sectors.get(row.sectorId());
             Integer limit = sector == null ? null : sector.delayLimitMinutes();
             String responsible = destinations.isEmpty() ? null
-                    : names.get(labels.get(destinations.getFirst().tabId()).openedBy());
+                    : responsible(labels.get(destinations.getFirst().tabId()), names);
             lines.add(new Line(row.id(), detail.orderId(), row.sectorId(), sector == null ? null : sector.name(), limit,
                     detail.productName(), row.quantity(), detail.note(), row.status(), detail.sentAt(),
                     row.statusSince(), row.startedAt(), row.readyAt(), row.deliveredAt(),

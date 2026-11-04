@@ -30,6 +30,8 @@ class AccessPolicyTest {
             Map.entry(Permission.OPERAR_COMANDA, List.of(true, false, true, true)),
             Map.entry(Permission.OPERAR_PRODUCAO, List.of(false, true, true, true)),
             Map.entry(Permission.ATENDER_PROBLEMA, List.of(true, false, true, true)),
+            // H20 (FR-23): o gerente reatribui o atendimento; não é delegável.
+            Map.entry(Permission.REATRIBUIR_ATENDIMENTO, List.of(false, false, true, true)),
             Map.entry(Permission.CONCLUIR_PROBLEMA, List.of(false, false, true, true)),
             Map.entry(Permission.CANCELAR_ITEM, List.of(false, false, true, true)),
             Map.entry(Permission.CONCEDER_DESCONTO, List.of(false, false, true, true)),

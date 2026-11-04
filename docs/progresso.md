@@ -550,6 +550,26 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Bloqueios / quem resolve: nenhum da H19. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
 - Próximo passo concreto: Diego revisa e faz o merge do PR #26; depois do merge, PR de reconciliação.
 
+### H20 — Atendimento responsável ou central
+
+- História e estado: H20, **aguardando revisão** (PR aberto para `develop`). T-03 da H20 proposta, aguardando Diego.
+- Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - Modalidade capturada na abertura: a da versão da configuração gravada na comanda; trocar a da unidade só vale para comandas novas, sem migrar chamados antigos (FR-23, FR-68).
+  - Garçom responsável: quem abre assume; o gerente reatribui (os chamados em aberto acompanham); os demais ajudam (FR-23).
+  - Central: fila compartilhada, cada chamado assumido por uma pessoa de forma exclusiva; o gerente reatribui e acompanha (FR-23).
+  - Fila de prontos e de impossibilidades em `/atendimento` (problemas do consumidor chegam com a H21); entrega conclui o aviso de pronto, leitura não conclui; sem botão "Chamar atendimento" (FR-26, FR-27); som opcional na produção e no atendimento.
+  - Validação exigida: dois funcionários assumem ao mesmo tempo, ajuda permitida, reatribuição e troca de modo sem migrar chamadas antigas.
+- Critérios faltantes / motivo: nenhum do texto da H20. Fora do escopo: problemas do consumidor (H21), cancelamento que conclui a impossibilidade (H23).
+- Branch e commit reais: `feature/H20-atendimento-responsavel-central` (a partir de `develop` `1bdfa6e`); commit no PR.
+- PR, checks e merge real: PR da H20 aberto; checks da CI no PR; sem merge.
+- Arquivos/migrations/contratos: `V16__atendimento_responsavel_ou_central.sql`; módulo `attendance`; `Permission.REATRIBUIR_ATENDIMENTO`; `Tabs.reassign` e `PUT /api/v1/tabs/{id}/responsible`; `production.ProductionLineChanged`; `/api/v1/attendance/*`; frontend `attendance/`, `live/chime.ts`; especificação §6; decisões T-03; [evidência](evidencias/H20-atendimento-responsavel-central.md).
+- Testes: ver a evidência (backend 384 no contêiner Temurin 25 com PostgreSQL real; frontend 179 no contêiner Node 24.18.0).
+- Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); teste com dois aparelhos na homologação de Diego.
+- Decisões novas/alteradas: T-03 da H20 proposta (permissão de reatribuir só gerente/administrador; ajuda na entrega; sem devolver à central; um aviso por item e comanda; impossibilidade não dispensável; som desligado por padrão; 200 por leitura), aguardando Diego.
+- Bloqueios / quem resolve: decisão T-03 da H20 (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego decide a T-03 da H20, revisa e faz o merge do PR; depois do merge, PR de reconciliação.
+
 ## Registro de release (ainda nenhum)
 
 Tag/imagens/digests; histórias incluídas; migrations; restore/backup; validação Diego; autorização deploy; ambiente/data; smoke; rollback compatível; resultado. Merge main não substitui autorização de publicação.
