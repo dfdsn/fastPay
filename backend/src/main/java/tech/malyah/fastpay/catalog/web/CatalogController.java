@@ -59,14 +59,15 @@ class CatalogController {
     @PostMapping("/sectors")
     Catalog.Sector createSector(@RequestBody SectorRequest body, HttpServletRequest request) {
         UUID actor = session.requireIdentity(request);
-        return respond(catalog.createSector(actor, session.requireSelectedUnit(request), body.name(), correlationId()));
+        return respond(catalog.createSector(actor, session.requireSelectedUnit(request), body.name(),
+                body.delayLimitMinutes(), correlationId()));
     }
 
     @PutMapping("/sectors/{id}")
-    Catalog.Sector renameSector(@PathVariable UUID id, @RequestBody SectorRequest body, HttpServletRequest request) {
+    Catalog.Sector updateSector(@PathVariable UUID id, @RequestBody SectorRequest body, HttpServletRequest request) {
         UUID actor = session.requireIdentity(request);
-        return respond(catalog.renameSector(actor, session.requireSelectedUnit(request), id, version(body.version()),
-                body.name(), correlationId()));
+        return respond(catalog.updateSector(actor, session.requireSelectedUnit(request), id, version(body.version()),
+                body.name(), body.delayLimitMinutes(), correlationId()));
     }
 
     @PostMapping("/sectors/{id}/archive")
@@ -179,7 +180,7 @@ class CatalogController {
         return UUID.randomUUID().toString();
     }
 
-    record SectorRequest(String name, Long version) {
+    record SectorRequest(String name, Integer delayLimitMinutes, Long version) {
     }
 
     record VersionRequest(Long version) {

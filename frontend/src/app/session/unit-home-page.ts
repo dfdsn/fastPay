@@ -12,7 +12,7 @@ import { UnitContextService, can, roleLabel } from './unit-context.service';
 /**
  * Início dentro da unidade escolhida. Ao abrir, confere no servidor o papel e as permissões atuais (H11), que
  * podem ter mudado durante a sessão; os caminhos aparecem conforme elas. Mostra o logo da unidade ou as iniciais
- * (H13). Comandas desde H15; as demais funções de operação chegam nas próximas histórias.
+ * (H13). Comandas desde H15; produção e entregas desde H18; as demais funções de operação chegam nas próximas histórias.
  */
 @Component({
   selector: 'fp-unit-home-page',
@@ -31,6 +31,10 @@ import { UnitContextService, can, roleLabel } from './unit-context.service';
           <nav aria-label="Administração da unidade" class="row">
             @if (canOperateTabs()) {
               <a mat-stroked-button routerLink="/comandas">Comandas</a>
+              <a mat-stroked-button routerLink="/entregas">Entregas</a>
+            }
+            @if (canOperateProduction()) {
+              <a mat-stroked-button routerLink="/producao">Produção</a>
             }
             <a mat-stroked-button routerLink="/catalogo">Catálogo</a>
             @if (canSeeSettings()) {
@@ -79,6 +83,7 @@ export class UnitHomePage {
     return current ? roleLabel(current.role) : '';
   });
   protected readonly canOperateTabs = computed(() => can(this.unit(), 'OPERAR_COMANDA'));
+  protected readonly canOperateProduction = computed(() => can(this.unit(), 'OPERAR_PRODUCAO'));
   protected readonly canSeeTeam = computed(() => can(this.unit(), 'VER_EQUIPE'));
   protected readonly canAuthorizeSupport = computed(() => can(this.unit(), 'AUTORIZAR_SUPORTE'));
   protected readonly canSeeSettings = computed(() => can(this.unit(), 'VER_CONFIGURACAO'));

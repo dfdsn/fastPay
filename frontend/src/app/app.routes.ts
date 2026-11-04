@@ -92,6 +92,18 @@ export const routes: Routes = [
     loadComponent: () => import('./orders/tab-orders-page').then((m) => m.TabOrdersPage),
   },
   {
+    path: 'producao',
+    title: 'Produção · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () => import('./production/production-page').then((m) => m.ProductionPage),
+  },
+  {
+    path: 'entregas',
+    title: 'Entregas · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () => import('./production/deliveries-page').then((m) => m.DeliveriesPage),
+  },
+  {
     path: 'catalogo',
     title: 'Catálogo · fastPay',
     canActivate: [signedInGuard, unitSelectedGuard],

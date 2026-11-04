@@ -256,6 +256,34 @@ public class Orders {
         return store.order(orderId).map(OrderRow::tabId);
     }
 
+    /** Destino de uma linha: unidades alocadas numa comanda (especificação §3.2). */
+    public record Allocation(UUID tabId, int quantity) {
+    }
+
+    /**
+     * Linha enviada como a produção e a entrega a mostram (H18, FR-18): produto, quantidade, observação, envio e
+     * destinos, sem valores.
+     */
+    public record ProductionDetail(UUID orderLineId, UUID orderId, int position, String productName, int quantity,
+            String note,
+            UUID sentBy, Instant sentAt, List<Allocation> allocations) {
+    }
+
+    /** Detalhes das linhas enviadas, na transação de unidade de quem chama (a permissão é conferida por ele). */
+    public Map<UUID, ProductionDetail> forProductionInCurrentUnit(List<UUID> orderLineIds) {
+        Map<UUID, List<Allocation>> allocations = new LinkedHashMap<>();
+        for (JdbcOrderStore.AllocationRow a : store.allocations(orderLineIds)) {
+            allocations.computeIfAbsent(a.orderLineId(), k -> new ArrayList<>())
+                    .add(new Allocation(a.tabId(), a.quantity()));
+        }
+        Map<UUID, ProductionDetail> details = new LinkedHashMap<>();
+        for (JdbcOrderStore.ProductionLineRow l : store.productionLines(orderLineIds)) {
+            details.put(l.id(), new ProductionDetail(l.id(), l.orderId(), l.position(), l.productName(), l.quantity(), l.note(),
+                    l.sentBy(), l.sentAt(), List.copyOf(allocations.getOrDefault(l.id(), List.of()))));
+        }
+        return details;
+    }
+
     private List<SentOrder> view(List<OrderRow> orders) {
         List<UUID> ids = orders.stream().map(OrderRow::id).toList();
         Map<UUID, List<SentLine>> lines = new LinkedHashMap<>();

@@ -96,6 +96,40 @@ public class JdbcOrderStore {
                 """, UUID.randomUUID(), action, subjectId, actorId, detail, correlationId);
     }
 
+    /** Linha enviada vista pela produção (H18): sem preço. */
+    public record ProductionLineRow(UUID id, UUID orderId, int position, String productName, int quantity, String note,
+            UUID sentBy, Instant sentAt) {
+    }
+
+    public record AllocationRow(UUID orderLineId, UUID tabId, int quantity) {
+    }
+
+    public List<ProductionLineRow> productionLines(List<UUID> lineIds) {
+        if (lineIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("""
+                SELECT l.id, l.order_id, l.position, l.product_name, l.quantity, l.note, o.sent_by, o.sent_at
+                  FROM order_line l JOIN customer_order o ON o.id = l.order_id
+                 WHERE l.id = ANY (?)
+                """, ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", lineIds.toArray())),
+                (rs, n) -> new ProductionLineRow(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
+                        rs.getInt("position"), rs.getString("product_name"), rs.getInt("quantity"), rs.getString("note"),
+                        rs.getObject("sent_by", UUID.class), rs.getTimestamp("sent_at").toInstant()));
+    }
+
+    public List<AllocationRow> allocations(List<UUID> lineIds) {
+        if (lineIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("""
+                SELECT order_line_id, tab_id, quantity FROM tab_allocation
+                 WHERE order_line_id = ANY (?) ORDER BY created_at, id
+                """, ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", lineIds.toArray())),
+                (rs, n) -> new AllocationRow(rs.getObject("order_line_id", UUID.class),
+                        rs.getObject("tab_id", UUID.class), rs.getInt("quantity")));
+    }
+
     private static OrderRow order(ResultSet rs, int n) throws SQLException {
         return new OrderRow(rs.getObject("id", UUID.class), rs.getObject("tab_id", UUID.class),
                 rs.getObject("operation_key", UUID.class), rs.getString("payload_hash"),

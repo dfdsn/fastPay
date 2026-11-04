@@ -1,6 +1,8 @@
 package tech.malyah.fastpay.identity;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -74,6 +76,16 @@ public class Memberships {
             membership.require(permission);
             return work.apply(membership);
         });
+    }
+
+    /**
+     * Nomes de quem tem ou teve vínculo na unidade da transação de quem chama (H18: responsável pela comanda na fila
+     * de produção). Quem não é da unidade não aparece.
+     */
+    public Map<UUID, String> namesInCurrentUnit(List<UUID> identityIds) {
+        Map<UUID, String> names = new LinkedHashMap<>();
+        store.memberNames(identityIds).forEach(s -> names.put(s.id(), s.displayName()));
+        return names;
     }
 
     /**

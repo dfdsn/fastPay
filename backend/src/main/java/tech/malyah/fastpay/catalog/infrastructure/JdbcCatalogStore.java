@@ -22,7 +22,7 @@ public class JdbcCatalogStore {
         this.jdbc = jdbc;
     }
 
-    public record SectorRow(UUID id, String name, long version) {
+    public record SectorRow(UUID id, String name, int delayLimitMinutes, boolean archived, long version) {
     }
 
     public record ProductRow(UUID id, String name, String category, String description, BigDecimal price,
@@ -31,14 +31,16 @@ public class JdbcCatalogStore {
 
     // Setores
 
+    private static final String SECTOR_COLUMNS =
+            "id, name, delay_limit_minutes, archived_at IS NOT NULL AS archived, version";
+
     public List<SectorRow> activeSectors() {
-        return jdbc.query("""
-                SELECT id, name, version FROM sector WHERE archived_at IS NULL ORDER BY lower(name), id
-                """, JdbcCatalogStore::sector);
+        return jdbc.query("SELECT " + SECTOR_COLUMNS
+                + " FROM sector WHERE archived_at IS NULL ORDER BY lower(name), id", JdbcCatalogStore::sector);
     }
 
     public Optional<SectorRow> activeSector(UUID id) {
-        return jdbc.query("SELECT id, name, version FROM sector WHERE id = ? AND archived_at IS NULL",
+        return jdbc.query("SELECT " + SECTOR_COLUMNS + " FROM sector WHERE id = ? AND archived_at IS NULL",
                 JdbcCatalogStore::sector, id).stream().findFirst();
     }
 
@@ -49,19 +51,32 @@ public class JdbcCatalogStore {
                 """, Boolean.class, name, exceptId));
     }
 
-    public void insertSector(UUID id, String name, UUID actorId, Instant now) {
+    public void insertSector(UUID id, String name, int delayLimitMinutes, UUID actorId, Instant now) {
         jdbc.update("""
-                INSERT INTO sector (id, establishment_id, name, created_by, created_at, updated_by, updated_at)
-                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?)
-                """, id, name, actorId, Timestamp.from(now), actorId, Timestamp.from(now));
+                INSERT INTO sector (id, establishment_id, name, delay_limit_minutes, created_by, created_at, updated_by,
+                                    updated_at)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?)
+                """, id, name, delayLimitMinutes, actorId, Timestamp.from(now), actorId, Timestamp.from(now));
     }
 
     /** @return {@code false} se o setor não existe, está arquivado ou a versão mudou */
-    public boolean renameSector(UUID id, long version, String name, UUID actorId, Instant now) {
+    public boolean updateSector(UUID id, long version, String name, int delayLimitMinutes, UUID actorId,
+            Instant now) {
         return jdbc.update("""
-                UPDATE sector SET name = ?, updated_by = ?, updated_at = ?, version = version + 1
+                UPDATE sector SET name = ?, delay_limit_minutes = ?, updated_by = ?, updated_at = ?,
+                                  version = version + 1
                  WHERE id = ? AND version = ? AND archived_at IS NULL
-                """, name, actorId, Timestamp.from(now), id, version) == 1;
+                """, name, delayLimitMinutes, actorId, Timestamp.from(now), id, version) == 1;
+    }
+
+    /** Setores pelos ids, arquivados inclusive (a fila de produção mostra o setor de linhas antigas, H18). */
+    public List<SectorRow> sectors(List<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT " + SECTOR_COLUMNS + " FROM sector WHERE id = ANY (?)",
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", ids.toArray())),
+                JdbcCatalogStore::sector);
     }
 
     public boolean archiveSector(UUID id, long version, UUID actorId, Instant now) {
@@ -73,7 +88,8 @@ public class JdbcCatalogStore {
 
     /** Trava o setor ativo (troca de setor de produto e arquivamento não se cruzam). */
     public Optional<SectorRow> lockActiveSector(UUID id) {
-        return jdbc.query("SELECT id, name, version FROM sector WHERE id = ? AND archived_at IS NULL FOR UPDATE",
+        return jdbc.query("SELECT " + SECTOR_COLUMNS
+                + " FROM sector WHERE id = ? AND archived_at IS NULL FOR UPDATE",
                 JdbcCatalogStore::sector, id).stream().findFirst();
     }
 
@@ -183,7 +199,8 @@ public class JdbcCatalogStore {
     }
 
     private static SectorRow sector(ResultSet rs, int n) throws SQLException {
-        return new SectorRow(rs.getObject("id", UUID.class), rs.getString("name"), rs.getLong("version"));
+        return new SectorRow(rs.getObject("id", UUID.class), rs.getString("name"), rs.getInt("delay_limit_minutes"),
+                rs.getBoolean("archived"), rs.getLong("version"));
     }
 
     private static ProductRow product(ResultSet rs, int n) throws SQLException {

@@ -4,7 +4,7 @@ Atualizado em 08/10/2026. Responsável pelo aceite: Diego.
 
 ## Situação real
 
-Atualizado em 04/11/2026 por Claude Code (H17 em revisão no PR #23, T-03 da H17 aprovada por Diego; H16 reconciliada: PR #21 mergeado em `develop` `da4e270`, CI de `develop` verde; T-03 da H16 aprovada por Diego; H15 reconciliada: PR #19 mergeado em `develop` `d3ec085`, CI de `develop` verde; P-07 recuperação avulsa, P-18, T-01 `qrcodegen` e T-03 da H15 aprovadas por Diego; H14 reconciliada: PR #17 mergeado em `develop` `cf1fccb`, CI de `develop` verde; T-03 da H14 e P-17 aprovadas por Diego; H13 reconciliada: PR #15 mergeado em `develop` `6dbf324`, CI de `develop` verde; T-03/T-04 de imagens e `imageio-webp` aprovados por Diego).
+Atualizado em 04/11/2026 por Claude Code (H18 em revisão, a partir da branch da H17, T-03 da H18 aguardando Diego; H17 em revisão no PR #23, T-03 da H17 aprovada por Diego; H16 reconciliada: PR #21 mergeado em `develop` `da4e270`, CI de `develop` verde; T-03 da H16 aprovada por Diego; H15 reconciliada: PR #19 mergeado em `develop` `d3ec085`, CI de `develop` verde; P-07 recuperação avulsa, P-18, T-01 `qrcodegen` e T-03 da H15 aprovadas por Diego; H14 reconciliada: PR #17 mergeado em `develop` `cf1fccb`, CI de `develop` verde; T-03 da H14 e P-17 aprovadas por Diego; H13 reconciliada: PR #15 mergeado em `develop` `6dbf324`, CI de `develop` verde; T-03/T-04 de imagens e `imageio-webp` aprovados por Diego).
 
 **Correção de registro (08/10/2026):** até 08/10/2026 o repositório local não tinha nenhum commit, embora esta seção dissesse que `main`, `develop` e `feature/H01-bootstrap` existiam. A chave GPG de Diego (assinatura obrigatória) estava bloqueada. Depois de desbloqueada, os commits foram criados: pacote documental em `main` (e `develop`), H01 em `feature/H01-bootstrap` e H02 em `feature/H02-ambientes-docker-ci`, criada a partir da H01 porque a H01 ainda não está em `develop`.
 
@@ -66,6 +66,8 @@ Histórias aguardando revisão: **H01 e H02** (PR #2 aberto, CI verde). Próximo
 
 **H17 (04/11/2026):** Diego pediu "pode começar a H17, e se não tiver erro e nenhum ponto para ser decidido por mim, pode fazer a H18 também" no thread do projeto (H17 era a próxima elegível: H04, H15 e H16 concluídas; PR #22 da reconciliação da H16 mergeado). Feita em `feature/H17-sincronizacao-sse`, a partir de `develop` (`dccb4b7`). **Aguardando revisão** no [PR #23](https://github.com/dfdsn/fastPay/pull/23); Diego aprovou os tempos e limites da sincronização (T-03 da H17) em 04/11/2026, o que liberou a H18 pela condição do pedido. Detalhes no registro da H17.
 
+**H18 (04/11/2026):** iniciada pelo mesmo pedido de Diego, depois da aprovação da T-03 da H17. Feita em `feature/H18-fila-producao-entrega`, a partir de `feature/H17-sincronizacao-sse` (`d9a2c7e`), porque depende do código da H17 e o PR #23 ainda não foi mergeado; o PR da H18 vai para `develop` e mostra também os commits da H17 até o merge do #23. **Aguardando revisão**; os limites e escolhas da H18 (T-03) aguardam Diego. Detalhes no registro da H18.
+
 ## Estados
 
 Não iniciada → em andamento → aguardando validação ou revisão → concluída. Bloqueada quando falta pré-requisito concreto. Aguardando revisão inclui PR aberto; concluída só após checks e merge develop verificados. Uma release possui registro separado do estado das histórias. Progresso inicialmente sem agente/branch/commit/PR.
@@ -91,7 +93,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H15 | Comanda individual, visita e QR avulso | Concluída | PR #19, merge `d3ec085` em `develop`, CI de `develop` run 41672570090 verde ([evidência](evidencias/H15-comanda-visita-qr.md)); P-07 recuperação avulsa, P-18, T-01 (`qrcodegen`) e T-03 da H15 aprovadas por Diego em 03/11/2026 |
 | H16 | Rascunho, envio atômico e preço capturado | Concluída | PR #21, merge `da4e270` em `develop`, CI de `develop` run 41715851513 verde ([evidência](evidencias/H16-rascunho-envio-preco.md)); T-03 da H16 aprovada por Diego em 03/11/2026 |
 | H17 | Sincronização operacional SSE e reconexão | Aguardando revisão | [PR #23](https://github.com/dfdsn/fastPay/pull/23) para `develop`, CI verde ([evidência](evidencias/H17-sincronizacao-sse.md)); T-03 da H17 aprovada por Diego em 04/11/2026 |
-| H18 | Fila de produção e entrega por linha | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H18 | Fila de produção e entrega por linha | Aguardando revisão | PR para `develop` a partir da branch da H17 ([evidência](evidencias/H18-fila-producao-entrega.md)); T-03 da H18 aguardando Diego |
 | H19 | Operações em lote de produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H20 | Atendimento responsável ou central | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H21 | Problemas do consumidor e conclusão autorizada | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -504,6 +506,27 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: T-03 da H17 (tempos e limites da sincronização) proposta e aprovada por Diego em 04/11/2026 (cartão no thread).
 - Bloqueios / quem resolve: nenhum da H17 além do merge (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
 - Próximo passo concreto: Diego revisa e faz o merge do PR #23; depois, reconciliar progresso com o hash real. A H18 começou com a T-03 aprovada (pedido de Diego de 03/11/2026).
+
+### H18 — Fila de produção e entrega por linha
+
+- História e estado: H18, **aguardando revisão** (critérios atendidos e testados com PostgreSQL real; PR aberto). T-03 da H18 (limites e escolhas) aguardando Diego.
+- Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - Aguardando preparo → em preparo → pronto → entregue por linha, sem pular etapa; sem setor entra pronta e aparece numa classe separada ("Sem preparo") na entrega (FR-19).
+  - Uma sequência para toda a quantidade: quantidade 3 é uma linha só, entregue de uma vez a todos os destinos (D-06).
+  - Fila por setor (ou todos) e entrega mostram produto, quantidade, observação, destinos (comanda, nome, mesa, unidades), responsável, tempo desde o envio e na etapa, sem valores (FR-18).
+  - Atraso: limite por setor (catálogo), destaque visual sem nada automático (FR-22); sinal visual de item novo na fila (FR-27; som opcional fica com a H20).
+  - "Não é possível atender" com motivo: aparece para quem atende e bloqueia qualquer avanço até ser retirado ou a linha cancelada (FR-21, H23).
+  - Validação exigida: permissões por papel e unidade (produção opera a fila, quem atende entrega, outra unidade 404), linha impossível não avança, entrega com versão desatualizada recusada (contrato com transferência/cancelamento), relógios de etapa gravados e no histórico, linha única para quantidade maior que 1; entregas simultâneas: só uma passa.
+- Critérios faltantes / motivo: nenhum do texto da H18. Fora do escopo: lote (H19), responsável/central, notificação dirigida e som (H20), bloqueio do fechamento por item pronto não entregue (CA-08, nas histórias de fechamento H28/H29, que leem `production_line`), cancelamento e ciência da produção (H23), desfazer entrega (H24), transferência (H25).
+- Branch e commit reais: `feature/H18-fila-producao-entrega` (a partir de `feature/H17-sincronizacao-sse` `d9a2c7e`); commit no PR.
+- PR, checks e merge real: PR para `develop` (link no thread); merge pendente de Diego, depois do PR #23.
+- Arquivos/migrations/contratos: `V15__producao_etapas_e_entrega.sql`; `production.Production`, `production.domain.ProductionRules`, `production.web.ProductionController`, `JdbcProductionStore` (etapas e histórico); `Orders.forProductionInCurrentUnit`, `Tabs.labelsInCurrentUnit`, `Catalog.sectorsInCurrentUnit` e limite de atraso no setor (`updateSector`), `Memberships.namesInCurrentUnit`; frontend `production/` (`/producao`, `/entregas`), atraso do setor no catálogo, atalhos no início; especificação §6; decisões T-03; [evidência](evidencias/H18-fila-producao-entrega.md).
+- Testes: ver a evidência (backend no contêiner Temurin 25 com PostgreSQL real; frontend no contêiner Node 24.18.0).
+- Testes não executados e por quê: `compose-smoke.sh` e build das imagens (rodam na CI do PR); E2E Playwright (não configurado); uso real num tablet de cozinha e teste manual na homologação de Diego.
+- Decisões novas/alteradas: T-03 da H18 proposta (limite de atraso 1–240 min, padrão 15; motivo 5–300; produção pode retirar a própria sinalização; sem pular etapa; responsável = quem abriu a comanda até a H20; 200 linhas por leitura), aguardando Diego.
+- Bloqueios / quem resolve: decisão da T-03 da H18 e merge dos PRs #23 e da H18 (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego decide a T-03 da H18 e revisa os PRs (#23 primeiro); depois, reconciliar progresso com os hashes reais. Não iniciar a H19 sem pedido.
 
 ## Registro de release (ainda nenhum)
 

@@ -71,6 +71,20 @@ public final class CatalogRules {
         return new Valid<>(n);
     }
 
+    /** Limite de atraso do setor em minutos (H18, FR-22): só destaque visual. */
+    public static final int DELAY_LIMIT_MIN = 1;
+    public static final int DELAY_LIMIT_MAX = 240;
+    /** Padrão de setor novo (proposta T-03 da H18). */
+    public static final int DELAY_LIMIT_DEFAULT = 15;
+
+    public static Checked<Integer> delayLimit(Integer minutes) {
+        if (minutes == null || minutes < DELAY_LIMIT_MIN || minutes > DELAY_LIMIT_MAX) {
+            return reject("delayLimitMinutes", "Informe o limite de atraso em minutos, de %d a %d."
+                    .formatted(DELAY_LIMIT_MIN, DELAY_LIMIT_MAX));
+        }
+        return new Valid<>(minutes);
+    }
+
     /**
      * Preço em reais, maior que zero e até {@link #PRICE_MAX}, com no máximo duas casas: aceita vírgula ou ponto
      * decimal e ponto de milhar no formato brasileiro. Nunca arredonda o que foi digitado.
