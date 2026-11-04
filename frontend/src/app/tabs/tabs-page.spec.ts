@@ -7,6 +7,7 @@ import { comCookieCsrf } from '../auth/auth-testing';
 import { Permission, UnitContextService } from '../session/unit-context.service';
 import { BindingQr, Tab } from './tabs.service';
 import { TabsPage } from './tabs-page';
+import { FakeEventSource, provideFakeEventSource } from '../live/live-testing';
 
 const ANA: Tab = {
   id: 't-1',
@@ -42,7 +43,7 @@ describe('TabsPage', () => {
     comCookieCsrf(true);
     TestBed.configureTestingModule({
       imports: [TabsPage],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), provideFakeEventSource()],
     });
     TestBed.inject(UnitContextService).current.set({
       establishmentId: 'a',
@@ -88,6 +89,25 @@ describe('TabsPage', () => {
     const imagem = element().querySelector<HTMLImageElement>('.qr img')!;
     expect(imagem.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
     expect(imagem.alt).toBe('QR de acesso à comanda 1');
+  });
+
+  it('aviso de comanda relê a lista e fecha o QR quando o cliente confirma noutro aparelho', () => {
+    abrir(['OPERAR_COMANDA'], [ANA]);
+    botao('Mostrar QR').click();
+    http.expectOne('/api/v1/tabs/t-1/binding-qr').flush(qr());
+    fixture.detectChanges();
+    expect(texto()).toContain('QR da comanda 1 · Ana');
+
+    const conexao = FakeEventSource.last();
+    conexao.emit('ready', { cursor: '1', resync: false });
+    conexao.emit('change', { cursor: '2', topic: 'PRODUCAO', tabId: 't-1' });
+    http.expectNone('/api/v1/tabs');
+    conexao.emit('change', { cursor: '3', topic: 'COMANDA', tabId: 't-1' });
+    http.expectOne('/api/v1/tabs').flush([{ ...ANA, guestLinked: true }]);
+    fixture.detectChanges();
+    expect(texto()).not.toContain('QR da comanda 1 · Ana');
+    expect(texto()).toContain('Cliente da comanda 1 confirmou o acesso.');
+    expect(texto()).toContain('cliente com acesso');
   });
 
   it('sem nome não envia', () => {
@@ -152,7 +172,7 @@ describe('TabsPage', () => {
     comCookieCsrf(true);
     TestBed.configureTestingModule({
       imports: [TabsPage],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), provideFakeEventSource()],
     });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(TabsPage);

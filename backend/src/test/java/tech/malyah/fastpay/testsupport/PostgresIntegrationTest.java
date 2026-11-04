@@ -65,6 +65,8 @@ public abstract class PostgresIntegrationTest {
         // executa jobs explicitamente e um contexto não consome jobs de outro. Um teste do próprio
         // worker liga com fastpay.test.jobs-worker=true.
         registry.add("fastpay.jobs.worker-enabled", () -> "${fastpay.test.jobs-worker:false}");
+        // Envio às conexões SSE (H17) também só quando o teste chama Streams.dispatch().
+        registry.add("fastpay.sync.dispatcher-enabled", () -> "false");
     }
 
     private static Path temporaryStorage() {

@@ -31,6 +31,8 @@ import tech.malyah.fastpay.orders.domain.OrderRules.Review;
 import tech.malyah.fastpay.orders.infrastructure.JdbcOrderStore;
 import tech.malyah.fastpay.orders.infrastructure.JdbcOrderStore.LineRow;
 import tech.malyah.fastpay.orders.infrastructure.JdbcOrderStore.OrderRow;
+import tech.malyah.fastpay.sync.Changes;
+import tech.malyah.fastpay.sync.Topic;
 import tech.malyah.fastpay.tabs.Tabs;
 import tech.malyah.fastpay.tabs.Tabs.OrderTarget;
 
@@ -114,7 +116,11 @@ public class Orders {
     private final JdbcOrderStore store;
     private final Clock clock;
 
-    Orders(Memberships memberships, Tabs tabs, Catalog catalog, Jobs jobs, JdbcOrderStore store, Clock clock) {
+    private final Changes changes;
+
+    Orders(Memberships memberships, Tabs tabs, Catalog catalog, Jobs jobs, JdbcOrderStore store, Clock clock,
+            Changes changes) {
+        this.changes = changes;
         this.memberships = memberships;
         this.tabs = tabs;
         this.catalog = catalog;
@@ -191,6 +197,7 @@ public class Orders {
                     + units + " unidades", correlationId);
             log.info("Pedido {} enviado na comanda {} por {} ({} linhas, {} unidades)", orderId, tabId, actorId,
                     lines.size(), units);
+            changes.publishInCurrentTransaction(Topic.PEDIDO, tabId);
             return new Done<>(new Sent(view(List.of(store.order(orderId).orElseThrow())).getFirst(), false));
         });
     }
@@ -230,6 +237,7 @@ public class Orders {
                 return new Refused<>(Refusal.ENCAMINHAMENTO_SEM_FALHA);
             }
             store.audit("pedido.encaminhamento_retomado", orderId, actorId, null, correlationId);
+            changes.publishInCurrentTransaction(Topic.PEDIDO, order.get().tabId());
             return new Done<>(view(List.of(order.get())).getFirst());
         });
     }
@@ -241,6 +249,11 @@ public class Orders {
     public List<ForwardedLine> forwardingInCurrentUnit(UUID orderId) {
         return store.lines(List.of(orderId)).stream()
                 .map(l -> new ForwardedLine(l.id(), l.sectorId(), l.quantity())).toList();
+    }
+
+    /** Comanda do pedido, na transação de unidade (aviso de mudança da produção, H17). */
+    public Optional<UUID> tabInCurrentUnit(UUID orderId) {
+        return store.order(orderId).map(OrderRow::tabId);
     }
 
     private List<SentOrder> view(List<OrderRow> orders) {

@@ -3,8 +3,11 @@ package tech.malyah.fastpay.tabs.web;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import jakarta.servlet.http.Cookie;
@@ -21,12 +24,21 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import tech.malyah.fastpay.sync.Change;
+import tech.malyah.fastpay.sync.Changes;
+import tech.malyah.fastpay.sync.Poll;
+import tech.malyah.fastpay.sync.Streams;
+import tech.malyah.fastpay.sync.Topic;
 import tech.malyah.fastpay.tabs.GuestAccess;
 import tech.malyah.fastpay.tabs.GuestAccess.GuestTab;
 import tech.malyah.fastpay.tabs.GuestAccess.Remembered;
+import tech.malyah.fastpay.tabs.domain.AccessTokens;
 import tech.malyah.fastpay.tabs.infrastructure.TabsProperties;
 
 /**
@@ -43,12 +55,20 @@ class GuestController {
     static final String COOKIE = "FASTPAY_ACESSO";
     private static final String PATH = "/api/v1/guest";
 
+    /** O consumidor recebe só avisos da própria comanda, e nada da produção interna (especificação §11). */
+    private static final Set<Topic> GUEST_TOPICS = EnumSet.of(Topic.COMANDA, Topic.PEDIDO);
+
     private final GuestAccess access;
     private final TabsProperties properties;
     private final boolean secureCookie;
+    private final Streams streams;
+    private final Changes changes;
 
     GuestController(GuestAccess access, TabsProperties properties,
-            @Value("${fastpay.auth.session-cookie-secure:true}") boolean secureCookie) {
+            @Value("${fastpay.auth.session-cookie-secure:true}") boolean secureCookie, Streams streams,
+            Changes changes) {
+        this.streams = streams;
+        this.changes = changes;
         this.access = access;
         this.properties = properties;
         this.secureCookie = secureCookie;
@@ -86,6 +106,42 @@ class GuestController {
                 .filter(t -> t.tabId().equals(id)).findFirst()
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "COMANDA_NAO_ENCONTRADA",
                         "Não encontramos esta comanda neste aparelho. Peça ao atendente para mostrar o QR da sua comanda."));
+    }
+
+    /**
+     * Avisos da comanda em tempo real (H17): SSE só com o acesso válido guardado neste navegador, filtrado por esta
+     * comanda e pelos tópicos do consumidor, e reconferido periodicamente (acesso revogado ou vencido encerra com
+     * {@code ACESSO_ENCERRADO}).
+     */
+    @GetMapping("/tabs/{id}/stream")
+    SseEmitter stream(@PathVariable UUID id, @RequestParam(required = false) String after,
+            @RequestHeader(name = "Last-Event-ID", required = false) String lastEventId, HttpServletRequest request,
+            HttpServletResponse response) {
+        GuestAccess.GuestStream target = guestStream(request, id);
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+        String token = target.grantToken();
+        return streams.open(new Streams.Subscription(target.establishmentId(), "consumidor:" + AccessTokens.hash(token),
+                after != null ? after : lastEventId, change -> visibleToGuest(change, id),
+                () -> access.valid(token).filter(t -> t.tabId().equals(id)).isPresent()
+                        ? Optional.empty() : Optional.of("ACESSO_ENCERRADO")));
+    }
+
+    /** O mesmo por polling, quando o SSE não conecta. */
+    @GetMapping("/tabs/{id}/changes")
+    Poll changes(@PathVariable UUID id, @RequestParam(required = false) String after, HttpServletRequest request) {
+        GuestAccess.GuestStream target = guestStream(request, id);
+        return Poll.of(changes.read(target.establishmentId(), after, change -> visibleToGuest(change, id)));
+    }
+
+    private GuestAccess.GuestStream guestStream(HttpServletRequest request, UUID tabId) {
+        return access.stream(stored(request), tabId).orElseThrow(() -> error(HttpStatus.NOT_FOUND,
+                "COMANDA_NAO_ENCONTRADA",
+                "Não encontramos esta comanda neste aparelho. Peça ao atendente para mostrar o QR da sua comanda."));
+    }
+
+    private static boolean visibleToGuest(Change change, UUID tabId) {
+        return GUEST_TOPICS.contains(change.topic()) && tabId.equals(change.tabId());
     }
 
     private List<String> stored(HttpServletRequest request) {

@@ -13,6 +13,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import tech.malyah.fastpay.establishments.UnitProfiles;
+import tech.malyah.fastpay.sync.Changes;
+import tech.malyah.fastpay.sync.Topic;
 import tech.malyah.fastpay.tabs.domain.AccessTokens;
 import tech.malyah.fastpay.tabs.domain.GuestAccessRules;
 import tech.malyah.fastpay.tabs.infrastructure.JdbcTabStore;
@@ -58,7 +60,10 @@ public class GuestAccess {
     private final UnitProfiles units;
     private final Clock clock;
 
-    GuestAccess(TenantTransactions tenants, JdbcTabStore store, UnitProfiles units, Clock clock) {
+    private final Changes changes;
+
+    GuestAccess(TenantTransactions tenants, JdbcTabStore store, UnitProfiles units, Clock clock, Changes changes) {
+        this.changes = changes;
         this.tenants = tenants;
         this.store = store;
         this.units = units;
@@ -107,12 +112,36 @@ public class GuestAccess {
                 store.audit(binding.get().recovery() ? "acesso.revinculado" : "acesso.vinculado", tabId, null, null,
                         grantId.toString());
                 log.info("Consumidor vinculado à comanda {} (acesso {})", tabId, grantId);
+                changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
                 return Optional.of(new Bound(grantToken, guestTab(store.tab(tabId).orElseThrow())));
             });
         } catch (DuplicateKeyException concurrent) {
             // Outro vínculo da mesma comanda gravou antes: um único acesso ativo por comanda.
             return Optional.empty();
         }
+    }
+
+    /** Conexão em tempo real do consumidor (H17): a unidade e a comanda de um acesso válido. */
+    public record GuestStream(String grantToken, UUID establishmentId, UUID tabId) {
+    }
+
+    /**
+     * O acesso guardado no navegador que vale agora para a comanda pedida, com a unidade dela, para abrir a conexão em
+     * tempo real filtrada por essa comanda (H17). Vazio sem acesso válido.
+     */
+    public Optional<GuestStream> stream(List<String> grantTokens, UUID tabId) {
+        for (String token : grantTokens) {
+            if (!AccessTokens.wellFormed(token)) {
+                continue;
+            }
+            String hash = AccessTokens.hash(token);
+            Optional<GrantRow> grant = tenants.forGuestGrant(hash, () -> store.grant(hash))
+                    .filter(g -> g.tabId().equals(tabId));
+            if (grant.isPresent() && valid(token).filter(t -> t.tabId().equals(tabId)).isPresent()) {
+                return Optional.of(new GuestStream(token, grant.get().establishmentId(), tabId));
+            }
+        }
+        return Optional.empty();
     }
 
     /** Comandas dos acessos guardados no navegador que ainda valem; os que não valem ficam de fora. */

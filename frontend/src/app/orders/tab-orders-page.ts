@@ -8,6 +8,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { EMPTY, Observable, expand, reduce, timeout } from 'rxjs';
 
 import { CatalogService, Product } from '../catalog/catalog.service';
+import { LiveStatus } from '../live/live-status';
+import { LiveUpdatesService } from '../live/live-updates';
 import { UnitContextService, failureMessage, problemCode } from '../session/unit-context.service';
 import { Tab, TabsService } from '../tabs/tabs.service';
 import {
@@ -57,9 +59,10 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
  */
 @Component({
   selector: 'fp-tab-orders-page',
-  imports: [DatePipe, RouterLink, MatButtonModule, MatCardModule, MatProgressSpinnerModule],
+  imports: [DatePipe, RouterLink, MatButtonModule, MatCardModule, MatProgressSpinnerModule, LiveStatus],
   template: `
     <p><a routerLink="/comandas">Voltar às comandas</a></p>
+    <fp-live-status [live]="live" />
     @if (tab(); as t) {
       <h1>Comanda {{ t.number }} · {{ t.name }}</h1>
       <p>{{ t.table ? 'Mesa ' + t.table : 'Sem mesa' }} · aberta às {{ t.openedAt | date: 'HH:mm' }}</p>
@@ -298,6 +301,11 @@ export class TabOrdersPage {
   private readonly unit = inject(UnitContextService);
   private readonly tabId = inject(ActivatedRoute).snapshot.paramMap.get('id') ?? '';
   private storageKey: string | null = null;
+  /**
+   * Avisos da unidade (H17): pedidos e produção desta comanda chegam sem recarregar. Reconectar ou voltar à tela
+   * relê comanda, catálogo e pedidos e confere um envio sem resposta; o rascunho nunca é enviado sozinho.
+   */
+  protected readonly live = inject(LiveUpdatesService).forUnit(this.destroyRef);
 
   protected readonly maxLines = MAX_LINES;
   protected readonly maxQuantity = MAX_QUANTITY;
@@ -326,6 +334,25 @@ export class TabOrdersPage {
       this.products.set([]);
     });
     this.destroyRef.onDestroy(cancel);
+    this.live.signals.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((signal) => {
+      if (this.state() !== 'ready') {
+        return;
+      }
+      if (signal.kind === 'resync') {
+        this.refreshTab();
+        this.loadCatalog();
+        this.loadOrders();
+        if (this.draft().pendingKey && !this.busy()) {
+          this.verify();
+        }
+      } else if (signal.tabId === this.tabId) {
+        if (signal.topic === 'COMANDA') {
+          this.refreshTab();
+        } else {
+          this.loadOrders();
+        }
+      }
+    });
     this.load();
   }
 
@@ -346,6 +373,11 @@ export class TabOrdersPage {
           if (this.draft().pendingKey) {
             // Envio interrompido em outra visita à tela: conferir antes de qualquer repetição (nunca reenviar sozinho).
             this.verify();
+          } else if (this.draft().lines.length > 0) {
+            // Rascunho de antes (outra visita, queda ou novo login): confere antes de enviar (especificação §5).
+            this.notice.set(
+              'Rascunho guardado neste aparelho. Confira itens e quantidades antes de enviar: nada é enviado sem sua confirmação.',
+            );
           }
         },
         error: (error: unknown) => {
@@ -365,6 +397,14 @@ export class TabOrdersPage {
         next: (orders) => this.orders.set(orders),
         error: (error: unknown) => this.failure.set(failureMessage(error)),
       });
+  }
+
+  /** Cabeçalho da comanda (mesa trocada por outra pessoa), sem tirar a tela do lugar. */
+  private refreshTab(): void {
+    this.tabs
+      .find(this.tabId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (tab) => this.tab.set(tab), error: () => undefined });
   }
 
   protected byCategory(category: string): Product[] {
