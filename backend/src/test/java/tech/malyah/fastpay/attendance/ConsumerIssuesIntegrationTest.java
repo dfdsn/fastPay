@@ -363,9 +363,11 @@ class ConsumerIssuesIntegrationTest extends PostgresIntegrationTest {
         rodarJobs();
         Browser cliente = vincular(gabi, comanda);
         // Encerramento e quitação chegam com H28–H32: aqui a comanda é encerrada direto no banco, com o acesso de 7 dias.
-        admin().update("""
-                UPDATE fastpay.tab SET closed_at = now(), access_until = now() + interval '7 days' WHERE id = ?
-                """, UUID.fromString(comanda));
+        // Datas pelo relógio da aplicação (controlado no teste), não pelo do banco.
+        admin().update("UPDATE fastpay.tab SET closed_at = ?, access_until = ? WHERE id = ?",
+                java.sql.Timestamp.from(relogio.instant()),
+                java.sql.Timestamp.from(relogio.instant().plus(Duration.ofDays(7))),
+                UUID.fromString(comanda));
         Map<String, Object> antes = admin().queryForMap("SELECT closed_at, access_until, version FROM fastpay.tab "
                 + "WHERE id = ?", UUID.fromString(comanda));
 
