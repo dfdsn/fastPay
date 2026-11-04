@@ -11,5 +11,7 @@ public enum Topic {
     /** Chamado de atendimento criado, assumido, reatribuído ou concluído; responsável da comanda trocado (H20). */
     ATENDIMENTO,
     /** Problema do consumidor informado, atendido, encaminhado ou tratado (H21). Vai à equipe e ao consumidor. */
-    PROBLEMA
+    PROBLEMA,
+    /** Desconto concedido, revisado ou retirado; serviço retirado ou devolvido (H22). Vai à equipe e ao consumidor. */
+    CONTA
 }

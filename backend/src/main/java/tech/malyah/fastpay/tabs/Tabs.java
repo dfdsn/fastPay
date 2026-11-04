@@ -173,6 +173,21 @@ public class Tabs {
         return store.tab(tabId).isPresent() ? OrderTarget.ENCERRADA : OrderTarget.NAO_ENCONTRADA;
     }
 
+    /** Comanda como a conta a usa (H22): a versão da configuração capturada na abertura e se ainda está ativa. */
+    public record BillTab(UUID id, UUID settingsVersionId, boolean open) {
+    }
+
+    /**
+     * Comanda para a conta, na transação de unidade de quem chama (H22). Com {@code lock}, a comanda ativa fica travada
+     * ({@code SELECT ... FOR UPDATE}, a mesma trava do envio de pedido e do fechamento) até o fim da transação: o
+     * consumo lido para conceder desconto não muda no meio. Vazio se não existe nesta unidade.
+     */
+    public Optional<BillTab> forBillInCurrentUnit(UUID tabId, boolean lock) {
+        Optional<TabRow> active = lock ? store.lockActiveTab(tabId) : Optional.empty();
+        return active.or(() -> store.tab(tabId))
+                .map(row -> new BillTab(row.id(), row.settingsVersionId(), row.closedAt() == null));
+    }
+
     /** A comanda (ativa ou encerrada) existe na unidade da transação de quem chama (H16). */
     public boolean existsInCurrentUnit(UUID tabId) {
         return store.tab(tabId).isPresent();

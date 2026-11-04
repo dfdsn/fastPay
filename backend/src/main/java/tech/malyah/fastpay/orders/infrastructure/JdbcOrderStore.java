@@ -147,6 +147,25 @@ public class JdbcOrderStore {
                 rs.getInt("quantity"), rs.getTimestamp("sent_at").toInstant()), tabId);
     }
 
+    /** Linha enviada com as unidades alocadas na comanda e o preço do envio (H22, composição da conta). */
+    public record ChargedLineRow(UUID orderLineId, String productName, int quantity, BigDecimal unitPrice,
+            Instant sentAt) {
+    }
+
+    public List<ChargedLineRow> chargedLines(UUID tabId) {
+        return jdbc.query("""
+                SELECT l.id, l.product_name, sum(a.quantity)::int AS quantity, l.unit_price, o.sent_at, l.position
+                  FROM tab_allocation a
+                  JOIN order_line l ON l.establishment_id = a.establishment_id AND l.id = a.order_line_id
+                  JOIN customer_order o ON o.establishment_id = l.establishment_id AND o.id = l.order_id
+                 WHERE a.tab_id = ?
+                 GROUP BY l.id, l.product_name, l.unit_price, o.sent_at, l.position
+                 ORDER BY o.sent_at, l.position, l.id
+                """, (rs, n) -> new ChargedLineRow(rs.getObject("id", UUID.class), rs.getString("product_name"),
+                rs.getInt("quantity"), rs.getBigDecimal("unit_price"), rs.getTimestamp("sent_at").toInstant()),
+                tabId);
+    }
+
     private static OrderRow order(ResultSet rs, int n) throws SQLException {
         return new OrderRow(rs.getObject("id", UUID.class), rs.getObject("tab_id", UUID.class),
                 rs.getObject("operation_key", UUID.class), rs.getString("payload_hash"),

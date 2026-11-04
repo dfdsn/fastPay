@@ -25,7 +25,11 @@ describe('Comanda do cliente', () => {
     http = TestBed.inject(HttpTestingController);
   }
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // A conta (H22) tem testes próprios; aqui basta que a tela a releia junto.
+    http.match('/api/v1/guest/tabs/t-1/bill');
+    http.verify();
+  });
 
   it('mostra a comanda deste aparelho', () => {
     configurar();

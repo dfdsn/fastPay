@@ -55,7 +55,7 @@ class GuestController {
     private static final String PATH = "/api/v1/guest";
 
     /** O consumidor recebe só avisos da própria comanda, e nada da produção interna (especificação §11). */
-    private static final Set<Topic> GUEST_TOPICS = EnumSet.of(Topic.COMANDA, Topic.PEDIDO, Topic.PROBLEMA);
+    private static final Set<Topic> GUEST_TOPICS = EnumSet.of(Topic.COMANDA, Topic.PEDIDO, Topic.PROBLEMA, Topic.CONTA);
 
     private final GuestAccess access;
     private final TabsProperties properties;
