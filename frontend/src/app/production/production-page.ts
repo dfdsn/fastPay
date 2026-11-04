@@ -1,3 +1,4 @@
+import { LowerCasePipe } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -19,6 +20,7 @@ import {
   BATCH_MAX,
   BatchAction,
   BatchResult,
+  CancellationNotice,
   ProductionLine,
   ProductionService,
   STATUS_LABEL,
@@ -48,6 +50,7 @@ const STALE = new Set([
 @Component({
   selector: 'fp-production-page',
   imports: [
+    LowerCasePipe,
     ReactiveFormsModule,
     RouterLink,
     MatButtonModule,
@@ -96,6 +99,30 @@ const STALE = new Set([
         <button mat-stroked-button type="button" (click)="load()">Tentar novamente</button>
       }
       @if (state() === 'ready') {
+        @if (cancellations().length > 0) {
+          <h2>Cancelamentos para dar ciência ({{ cancellations().length }})</h2>
+          <ul class="lines" aria-label="Cancelamentos para dar ciência">
+            @for (c of cancellations(); track c.id) {
+              <li class="blocked">
+                <div>
+                  <strong>Cancelado: {{ c.quantity }} × {{ c.productName }}</strong>
+                  · estava {{ statusLabel[c.stage] | lowercase }}
+                  @if (!sectorId() && c.sectorName) {
+                    · {{ c.sectorName }}
+                  }
+                </div>
+                <div>
+                  {{ c.remaining === 0 ? 'Não sobrou nada desta linha: pare o preparo.' : 'Agora são ' + c.remaining + ' de ' + c.originalQuantity + '.' }}
+                  Comanda {{ c.tab.number }} · {{ c.tab.name }}
+                </div>
+                <div>Motivo: {{ c.reason }} · por {{ c.cancelledBy ?? 'equipe' }} há {{ since(c.cancelledAt) }}</div>
+                <button mat-flat-button type="button" [disabled]="busy()" (click)="acknowledge(c)">
+                  Ciente do cancelamento de {{ c.productName }}
+                </button>
+              </li>
+            }
+          </ul>
+        }
         <h2>Na fila ({{ lines().length }})</h2>
         @if (lines().length === 0) {
           <p>Nada aguardando preparo.</p>
@@ -152,6 +179,9 @@ const STALE = new Set([
                 }
                 <strong>{{ line.quantity }} × {{ line.productName }}</strong>
                 · {{ statusLabel[line.status] }}
+                @if (line.cancelledQuantity > 0) {
+                  · <span class="cancelled">enviado {{ line.originalQuantity }}, cancelado {{ line.cancelledQuantity }}</span>
+                }
                 @if (!sectorId() && line.sectorName) {
                   · {{ line.sectorName }}
                 }
@@ -281,6 +311,10 @@ const STALE = new Set([
       color: #fff;
       font-size: 0.85em;
     }
+    .cancelled {
+      color: #7a4f00;
+      font-weight: 500;
+    }
     .lines li.blocked {
       background: #fdecea;
     }
@@ -316,6 +350,10 @@ export class ProductionPage {
   protected readonly statusLabel = STATUS_LABEL;
   protected readonly state = signal<State>('loading');
   protected readonly lines = signal<ProductionLine[]>([]);
+  /** Cancelamentos em preparo ou pronto que esperam a ciência da produção (H23). */
+  protected readonly cancellations = signal<CancellationNotice[]>([]);
+  /** Cancelamentos já vistos nesta tela: só os que chegam depois tocam o som. */
+  private seenCancellations: Set<string> | null = null;
   protected readonly sectors = signal<Sector[]>([]);
   protected readonly sectorId = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -359,6 +397,7 @@ export class ProductionPage {
   chooseSector(sectorId: string | null): void {
     this.sectorId.set(sectorId);
     this.seen = null;
+    this.seenCancellations = null;
     this.fresh.set(new Set());
     this.load();
   }
@@ -467,6 +506,32 @@ export class ProductionPage {
     );
   }
 
+  /** Ciência do cancelamento (H23): a correção já valeu; aqui a produção confirma que viu. */
+  acknowledge(c: CancellationNotice): void {
+    this.busy.set(true);
+    this.failure.set(null);
+    this.notice.set(null);
+    this.service
+      .acknowledge(c.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (result) => {
+          this.busy.set(false);
+          this.notice.set(
+            result.alreadyAcknowledged
+              ? `O cancelamento de ${c.productName} já tinha ciência de ${result.cancellation.acknowledgedBy ?? 'outra pessoa'}.`
+              : `Ciência registrada: cancelamento de ${c.productName}.`,
+          );
+          this.fetch();
+        },
+        error: (error: unknown) => {
+          this.busy.set(false);
+          this.failure.set(failureMessage(error));
+          this.fetch();
+        },
+      });
+  }
+
   /** Releitura por aviso do servidor: a fila continua na tela enquanto atualiza. */
   private refresh(): void {
     if (this.state() === 'ready') {
@@ -492,6 +557,20 @@ export class ProductionPage {
         },
         error: (error: unknown) =>
           this.state.set(problemCode(error) === 'PERMISSAO_NEGADA' ? 'forbidden' : 'error'),
+      });
+    this.service
+      .cancellations(this.sectorId())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (notices) => {
+          const seen = this.seenCancellations;
+          this.seenCancellations = new Set([...(seen ?? []), ...notices.cancellations.map((c) => c.id)]);
+          this.cancellations.set(notices.cancellations);
+          if (seen && notices.cancellations.some((c) => !seen.has(c.id))) {
+            this.chime.play();
+          }
+        },
+        error: () => undefined,
       });
   }
 

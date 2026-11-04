@@ -294,13 +294,10 @@ class BillsIntegrationTest extends PostgresIntegrationTest {
         gui.post(conta + "/discount/review", "{\"discountId\":\"" + id + "\"}").andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DESCONTO_SEM_REVISAO"));
 
-        // Cancelamento (H23) ainda não existe: o consumo cai direto no banco, como cairá pela correção autorizada.
-        // Sem os 2 chopps: C = 81,70; 20,30 é 24,85%, acima dos 20% de quem concedeu.
-        admin().update("""
-                UPDATE fastpay.tab_allocation a SET quantity = 1
-                  FROM fastpay.order_line l
-                 WHERE l.id = a.order_line_id AND a.tab_id = ? AND l.product_name = 'Chopp 300 ml'
-                """, UUID.fromString(comanda));
+        // Cancelamento real (H23) pelo gerente: sem 2 dos 3 chopps, C = 81,70; 20,30 é 24,85%, acima dos 20% de quem
+        // concedeu. A correção não espera a revisão.
+        gui.post(cancelar(comanda, "Chopp 300 ml"), "{\"quantity\":2,\"expectedQuantity\":3,\"reason\":\"Cliente "
+                + "desistiu\"}").andExpect(status().isOk());
         gabi.get(conta).andExpect(jsonPath("$.consumption").value("81.70"))
                 .andExpect(jsonPath("$.discount.amount").value("20.30"))
                 .andExpect(jsonPath("$.discount.effectivePercent").value("24.85"))
@@ -309,10 +306,8 @@ class BillsIntegrationTest extends PostgresIntegrationTest {
         assertThat(bloqueia(comanda)).isTrue();
 
         // Sem a batata: C = 9,90; o desconto em reais efetivo vira o consumo inteiro (100%), total só o serviço zero.
-        admin().update("""
-                DELETE FROM fastpay.tab_allocation a USING fastpay.order_line l
-                 WHERE l.id = a.order_line_id AND a.tab_id = ? AND l.product_name = 'Batata frita'
-                """, UUID.fromString(comanda));
+        gui.post(cancelar(comanda, "Batata frita"), "{\"quantity\":2,\"expectedQuantity\":2,\"reason\":\"Cozinha "
+                + "fechou\"}").andExpect(status().isOk());
         gabi.get(conta).andExpect(jsonPath("$.consumption").value("9.90"))
                 .andExpect(jsonPath("$.discount.value").value("20.30"))
                 .andExpect(jsonPath("$.discount.amount").value("9.90"))
@@ -393,6 +388,15 @@ class BillsIntegrationTest extends PostgresIntegrationTest {
     }
 
     // Apoio
+
+    /** Rota do cancelamento (H23) do item da comanda, pelo nome do produto. */
+    private String cancelar(String comanda, String produto) {
+        String linha = admin().queryForObject("""
+                SELECT l.id::text FROM fastpay.order_line l JOIN fastpay.customer_order o ON o.id = l.order_id
+                 WHERE o.tab_id = ? AND l.product_name = ?
+                """, String.class, UUID.fromString(comanda), produto);
+        return "/api/v1/tabs/" + comanda + "/items/" + linha + "/cancel";
+    }
 
     private boolean bloqueia(String comanda) {
         return tenants.inEstablishment(loja, () -> contas.blocksChargeInCurrentUnit(UUID.fromString(comanda)));

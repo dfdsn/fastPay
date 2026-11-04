@@ -29,7 +29,12 @@ public class JdbcProductionStore {
 
     public record LineRow(UUID id, UUID orderLineId, UUID sectorId, int quantity, Status status, Instant receivedAt,
             Instant statusSince, Instant startedAt, Instant readyAt, Instant deliveredAt, Instant impossibleAt,
-            String impossibleReason, long version) {
+            String impossibleReason, long version, int cancelledQuantity) {
+
+        /** Unidades que ainda contam (H23): original menos as canceladas. */
+        public int remaining() {
+            return quantity - cancelledQuantity;
+        }
 
         public boolean impossible() {
             return impossibleAt != null;
@@ -38,7 +43,7 @@ public class JdbcProductionStore {
 
     private static final String COLUMNS = """
             id, order_line_id, sector_id, quantity, status, received_at, status_since, started_at, ready_at,
-            delivered_at, impossible_at, impossible_reason, version
+            delivered_at, impossible_at, impossible_reason, version, cancelled_quantity
             """;
 
     /**
@@ -94,6 +99,31 @@ public class JdbcProductionStore {
                 .stream().findFirst();
     }
 
+    /** Trava a linha da linha enviada (H23: cancelamento a partir da comanda). Vazio se a produção ainda não a recebeu. */
+    public Optional<LineRow> lockByOrderLine(UUID orderLineId) {
+        return jdbc.query("SELECT " + COLUMNS + " FROM production_line WHERE order_line_id = ? FOR UPDATE",
+                JdbcProductionStore::line, orderLineId).stream().findFirst();
+    }
+
+    /**
+     * Grava um cancelamento na linha travada (H23): unidades canceladas, a etapa (CANCELADA quando não sobra nada antes
+     * da entrega) e, se o cancelamento foi total, a sinalização de impossibilidade retirada.
+     */
+    public void cancel(UUID id, long version, int cancelledAfter, Status to, boolean clearImpossible, Instant now) {
+        Timestamp at = Timestamp.from(now);
+        requireOne(jdbc.update("""
+                UPDATE production_line
+                   SET cancelled_quantity = ?, cancelled_at = ?, status = ?,
+                       status_since = CASE WHEN status = ? THEN status_since ELSE ? END,
+                       impossible_at = CASE WHEN ? THEN NULL ELSE impossible_at END,
+                       impossible_by = CASE WHEN ? THEN NULL ELSE impossible_by END,
+                       impossible_reason = CASE WHEN ? THEN NULL ELSE impossible_reason END,
+                       version = version + 1
+                 WHERE id = ? AND version = ?
+                """, cancelledAfter, at, to.name(), to.name(), at, clearImpossible, clearImpossible,
+                clearImpossible, id, version));
+    }
+
     /** Trava a linha até o fim da transação: duas mudanças de etapa simultâneas se enfileiram. */
     public Optional<LineRow> lock(UUID id) {
         return jdbc.query("SELECT " + COLUMNS + " FROM production_line WHERE id = ? FOR UPDATE",
@@ -106,7 +136,7 @@ public class JdbcProductionStore {
             case EM_PREPARO -> "started_at";
             case PRONTO -> "ready_at";
             case ENTREGUE -> "delivered_at";
-            case AGUARDANDO_PREPARO -> throw new IllegalArgumentException("Etapa inicial não é avanço.");
+            case AGUARDANDO_PREPARO, CANCELADA -> throw new IllegalArgumentException("Não é avanço de etapa.");
         };
         Timestamp at = Timestamp.from(now);
         int updated = jdbc.update("UPDATE production_line SET status = ?, status_since = ?, " + column + """
@@ -166,7 +196,7 @@ public class JdbcProductionStore {
                 rs.getObject("sector_id", UUID.class), rs.getInt("quantity"), Status.valueOf(rs.getString("status")),
                 instant(rs, "received_at"), instant(rs, "status_since"), instant(rs, "started_at"),
                 instant(rs, "ready_at"), instant(rs, "delivered_at"), instant(rs, "impossible_at"),
-                rs.getString("impossible_reason"), rs.getLong("version"));
+                rs.getString("impossible_reason"), rs.getLong("version"), rs.getInt("cancelled_quantity"));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

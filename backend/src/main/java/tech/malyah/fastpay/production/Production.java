@@ -62,10 +62,11 @@ public class Production {
      * Linha como as telas mostram. {@code sectorId} vazio: sem preparo. {@code sentAt}: envio do pedido (tempo total);
      * {@code statusSince}: início da etapa atual. {@code delayLimitMinutes} vazio: sem limite (sem setor).
      * {@code responsible}: o garçom responsável da comanda do primeiro destino, ou "Central" se ela é atendida pela
-     * central (H20). Sem valores.
+     * central (H20). {@code quantity}: as unidades que ainda contam; {@code originalQuantity} e
+     * {@code cancelledQuantity}: o enviado e o cancelado (H23, FR-20). Sem valores.
      */
     public record Line(UUID id, UUID orderId, UUID sectorId, String sectorName, Integer delayLimitMinutes,
-            String productName, int quantity, String note, Status status, Instant sentAt, Instant statusSince,
+            String productName, int quantity, int originalQuantity, int cancelledQuantity, String note, Status status, Instant sentAt, Instant statusSince,
             Instant startedAt, Instant readyAt, Instant deliveredAt, boolean late, Impossibility impossible,
             String responsible, List<Destination> destinations, long version) {
     }
@@ -324,6 +325,7 @@ public class Production {
             case INICIADO, PRONTO, ENTREGUE -> store.advance(lineId, version, to, now);
             case IMPOSSIVEL -> store.markImpossible(lineId, version, reason, actorId, now);
             case IMPOSSIVEL_RETIRADO -> store.clearImpossible(lineId, version);
+            case CANCELADO -> throw new IllegalStateException("Cancelamento passa por Cancellations.");
         }
         store.event(lineId, action, current.status(), to, reason, version + 1, actorId, now, correlationId);
         Line line = board(List.of(store.line(lineId).orElseThrow())).lines().getFirst();
@@ -336,6 +338,7 @@ public class Production {
             case IMPOSSIVEL -> ProductionLineChanged.Change.IMPOSSIVEL;
             case IMPOSSIVEL_RETIRADO -> ProductionLineChanged.Change.IMPOSSIVEL_RETIRADO;
             case INICIADO -> null;
+            case CANCELADO -> throw new IllegalStateException("Cancelamento passa por Cancellations.");
         };
         if (change != null) {
             // Avisos do atendimento (H20) no mesmo commit da mudança.
@@ -376,7 +379,8 @@ public class Production {
             List<Destination> destinations = new ArrayList<>();
             for (Orders.Allocation a : detail.allocations()) {
                 Tabs.Label label = labels.get(a.tabId());
-                if (label != null) {
+                // Alocação zerada por cancelamento (H23) não é destino.
+                if (label != null && a.quantity() > 0) {
                     destinations.add(new Destination(label.id(), label.number(), label.name(), label.table(),
                             a.quantity()));
                 }
@@ -387,7 +391,7 @@ public class Production {
             String responsible = destinations.isEmpty() ? null
                     : responsible(labels.get(destinations.getFirst().tabId()), names);
             lines.add(new Line(row.id(), detail.orderId(), row.sectorId(), sector == null ? null : sector.name(), limit,
-                    detail.productName(), row.quantity(), detail.note(), row.status(), detail.sentAt(),
+                    detail.productName(), row.remaining(), row.quantity(), row.cancelledQuantity(), detail.note(), row.status(), detail.sentAt(),
                     row.statusSince(), row.startedAt(), row.readyAt(), row.deliveredAt(),
                     ProductionRules.late(row.status(), detail.sentAt(), limit, now),
                     row.impossible() ? new Impossibility(row.impossibleReason(), row.impossibleAt()) : null,

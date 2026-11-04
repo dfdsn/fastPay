@@ -63,9 +63,13 @@ public class Orders {
      */
     public static final String FORWARDING_JOB = "production.receber_pedido";
 
-    /** Linha enviada; valores em reais como texto com duas casas (especificação §7). {@code sectorId} vazio: dispensa produção. */
+    /**
+     * Linha enviada; valores em reais como texto com duas casas (especificação §7). {@code sectorId} vazio: dispensa
+     * produção. {@code quantity} e {@code lineTotal}: o enviado; {@code activeQuantity} e {@code cancelledQuantity}:
+     * as unidades que ainda contam e as canceladas (H23, FR-20).
+     */
     public record SentLine(UUID id, int position, UUID productId, String productName, String unitPrice,
-            int quantity, String lineTotal, String note, UUID sectorId) {
+            int quantity, String lineTotal, String note, UUID sectorId, int activeQuantity, int cancelledQuantity) {
     }
 
     /** Pedido enviado. {@code forwarding}: encaminhamento à produção pendente, concluído ou na fila de falhas. */
@@ -317,14 +321,53 @@ public class Orders {
                 .toList();
     }
 
+    /** Linha enviada como o cancelamento a vê (H23): o enviado, as unidades ativas nesta comanda e o setor. */
+    public record CancelTarget(UUID orderLineId, String productName, int quantity, int activeInTab, UUID sectorId) {
+    }
+
+    /**
+     * A linha enviada com unidades alocadas na comanda, na transação de unidade de quem chama (a comanda já travada e a
+     * permissão conferida por ele). Vazio se a linha não existe na unidade ou nunca esteve nesta comanda.
+     */
+    public Optional<CancelTarget> cancelTargetInCurrentUnit(UUID orderLineId, UUID tabId) {
+        return store.cancelTarget(orderLineId, tabId)
+                .map(r -> new CancelTarget(r.orderLineId(), r.productName(), r.quantity(), r.activeInTab(),
+                        r.sectorId()));
+    }
+
+    /**
+     * Retira unidades ativas da linha nesta comanda (H23, FR-20): as alocações diminuem, até zero, e o consumo da conta
+     * (H22) acompanha. A linha enviada, o preço e o histórico ficam. Quem chama trava a comanda, confere a quantidade e
+     * grava o fato do cancelamento.
+     */
+    public void cancelInCurrentUnit(UUID orderLineId, UUID tabId, int quantity) {
+        int left = quantity;
+        for (JdbcOrderStore.AllocationIdRow a : store.allocationsInTab(orderLineId, tabId)) {
+            if (left == 0) {
+                break;
+            }
+            int take = Math.min(left, a.quantity());
+            store.reduceAllocation(a.id(), a.quantity(), a.quantity() - take);
+            left -= take;
+        }
+        if (left != 0) {
+            // Quem chama conferiu as unidades ativas com a comanda travada: sobrar é erro de programa.
+            throw new IllegalStateException("Cancelamento acima das unidades ativas na comanda.");
+        }
+        changes.publishInCurrentTransaction(Topic.PEDIDO, tabId);
+    }
+
     private List<SentOrder> view(List<OrderRow> orders) {
         List<UUID> ids = orders.stream().map(OrderRow::id).toList();
         Map<UUID, List<SentLine>> lines = new LinkedHashMap<>();
-        for (LineRow l : store.lines(ids)) {
+        List<LineRow> rows = store.lines(ids);
+        Map<UUID, Integer> active = store.activeUnits(rows.stream().map(LineRow::id).toList());
+        for (LineRow l : rows) {
+            int units = active.getOrDefault(l.id(), 0);
             lines.computeIfAbsent(l.orderId(), k -> new ArrayList<>()).add(new SentLine(l.id(), l.position(),
                     l.productId(), l.productName(), OrderRules.money(l.unitPrice()).toPlainString(), l.quantity(),
                     OrderRules.money(l.unitPrice().multiply(BigDecimal.valueOf(l.quantity()))).toPlainString(), l.note(),
-                    l.sectorId()));
+                    l.sectorId(), units, l.quantity() - units));
         }
         Map<String, EffectState> forwarding = jobs.statesInCurrentTransaction(FORWARDING_JOB,
                 ids.stream().map(UUID::toString).toList());

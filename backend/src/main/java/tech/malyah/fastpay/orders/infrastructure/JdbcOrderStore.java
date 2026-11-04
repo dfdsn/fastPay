@@ -6,7 +6,9 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -164,6 +166,59 @@ public class JdbcOrderStore {
                 """, (rs, n) -> new ChargedLineRow(rs.getObject("id", UUID.class), rs.getString("product_name"),
                 rs.getInt("quantity"), rs.getBigDecimal("unit_price"), rs.getTimestamp("sent_at").toInstant()),
                 tabId);
+    }
+
+    /** Unidades ativas por linha (H23): a soma das alocações em todas as comandas. */
+    public Map<UUID, Integer> activeUnits(List<UUID> lineIds) {
+        Map<UUID, Integer> units = new HashMap<>();
+        if (lineIds.isEmpty()) {
+            return units;
+        }
+        jdbc.query("""
+                SELECT order_line_id, sum(quantity)::int AS quantity FROM tab_allocation
+                 WHERE order_line_id = ANY (?) GROUP BY order_line_id
+                """, ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", lineIds.toArray())),
+                (ResultSet rs) -> {
+                    units.put(rs.getObject("order_line_id", UUID.class), rs.getInt("quantity"));
+                });
+        return units;
+    }
+
+    public record CancelTargetRow(UUID orderLineId, String productName, int quantity, int activeInTab,
+            UUID sectorId) {
+    }
+
+    public Optional<CancelTargetRow> cancelTarget(UUID orderLineId, UUID tabId) {
+        return jdbc.query("""
+                SELECT l.id, l.product_name, l.quantity, sum(a.quantity)::int AS active, l.sector_id
+                  FROM order_line l
+                  JOIN tab_allocation a ON a.establishment_id = l.establishment_id AND a.order_line_id = l.id
+                 WHERE l.id = ? AND a.tab_id = ?
+                 GROUP BY l.id, l.product_name, l.quantity, l.sector_id
+                """, (rs, n) -> new CancelTargetRow(rs.getObject("id", UUID.class), rs.getString("product_name"),
+                rs.getInt("quantity"), rs.getInt("active"), rs.getObject("sector_id", UUID.class)), orderLineId, tabId)
+                .stream().findFirst();
+    }
+
+    public record AllocationIdRow(UUID id, int quantity) {
+    }
+
+    /** Alocações ativas da linha na comanda, das mais novas às mais antigas (o cancelamento tira das recentes). */
+    public List<AllocationIdRow> allocationsInTab(UUID orderLineId, UUID tabId) {
+        return jdbc.query("""
+                SELECT id, quantity FROM tab_allocation
+                 WHERE order_line_id = ? AND tab_id = ? AND quantity > 0
+                 ORDER BY created_at DESC, id DESC
+                """, (rs, n) -> new AllocationIdRow(rs.getObject("id", UUID.class), rs.getInt("quantity")),
+                orderLineId, tabId);
+    }
+
+    public void reduceAllocation(UUID id, int expected, int quantity) {
+        int updated = jdbc.update("UPDATE tab_allocation SET quantity = ? WHERE id = ? AND quantity = ?", quantity, id,
+                expected);
+        if (updated != 1) {
+            throw new IllegalStateException("Alocação mudou com a comanda travada.");
+        }
     }
 
     private static OrderRow order(ResultSet rs, int n) throws SQLException {

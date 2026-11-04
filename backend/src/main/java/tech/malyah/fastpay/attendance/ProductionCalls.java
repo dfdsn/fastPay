@@ -19,7 +19,7 @@ import tech.malyah.fastpay.tabs.Tabs;
  * Avisos de atendimento a partir da produção (H20, FR-21, FR-26). Roda na mesma transação da mudança da linha (o
  * evento é publicado e ouvido de forma síncrona): o aviso e o fato entram no mesmo commit, ou nenhum dos dois. Cada
  * comanda de destino ganha o seu aviso, com a modalidade de atendimento dela; entregar conclui os avisos de pronto da
- * linha, e retirar a sinalização conclui os de impossibilidade.
+ * linha, retirar a sinalização conclui os de impossibilidade, e cancelar a linha inteira (H23) conclui os dois.
  */
 @Component
 class ProductionCalls {
@@ -43,6 +43,11 @@ class ProductionCalls {
             case IMPOSSIVEL -> open(event, CallKind.IMPOSSIBILIDADE);
             case ENTREGUE -> conclude(event, CallKind.ITEM_PRONTO, "ENTREGUE");
             case IMPOSSIVEL_RETIRADO -> conclude(event, CallKind.IMPOSSIBILIDADE, "SINALIZACAO_RETIRADA");
+            case CANCELADA -> {
+                // H23: a linha cancelada por inteiro não tem mais o que entregar nem impossibilidade a resolver.
+                conclude(event, CallKind.ITEM_PRONTO, "CANCELADO");
+                conclude(event, CallKind.IMPOSSIBILIDADE, "CANCELADO");
+            }
         }
     }
 

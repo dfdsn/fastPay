@@ -19,7 +19,9 @@ public record ProductionLineChanged(UUID lineId, Change change, List<UUID> tabId
         /** Produção sinalizou "não é possível atender". */
         IMPOSSIVEL,
         /** Produção retirou a sinalização. */
-        IMPOSSIVEL_RETIRADO
+        IMPOSSIVEL_RETIRADO,
+        /** Todas as unidades canceladas antes da entrega (H23): a linha terminou. */
+        CANCELADA
     }
 
     public ProductionLineChanged {

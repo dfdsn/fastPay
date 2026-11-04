@@ -18,6 +18,22 @@ export interface SentLine {
   lineTotal: string;
   note: string | null;
   sectorId: string | null;
+  /** Unidades que ainda contam (H23); {@code quantity} é o enviado. */
+  activeQuantity: number;
+  cancelledQuantity: number;
+}
+
+/** Resultado do cancelamento (H23): unidades da linha agora e se a produção precisa dar ciência. */
+export interface Cancelled {
+  cancellationId: string;
+  orderLineId: string;
+  tabId: string;
+  productName: string;
+  quantity: number;
+  originalQuantity: number;
+  cancelledQuantity: number;
+  remainingInTab: number;
+  requiresAck: boolean;
 }
 
 export interface SentOrder {
@@ -69,6 +85,20 @@ export class OrdersService {
 
   ofTab(tabId: string): Observable<SentOrder[]> {
     return this.http.get<SentOrder[]>('/api/v1/orders', { params: new HttpParams().set('tabId', tabId) });
+  }
+
+  /**
+   * Cancela unidades de um item da comanda (H23, permissão de cancelar). {@code expectedQuantity}: as unidades ativas
+   * mostradas; mudou (outra correção), o servidor recusa e a tela relê.
+   */
+  cancel(tabId: string, orderLineId: string, quantity: number, expectedQuantity: number, reason: string): Observable<Cancelled> {
+    return this.auth.withCsrf(() =>
+      this.http.post<Cancelled>(`/api/v1/tabs/${tabId}/items/${orderLineId}/cancel`, {
+        quantity,
+        expectedQuantity,
+        reason,
+      }),
+    );
   }
 
   retryForwarding(orderId: string): Observable<SentOrder> {
