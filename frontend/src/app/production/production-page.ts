@@ -11,6 +11,7 @@ import { RouterLink } from '@angular/router';
 import { Observable, interval } from 'rxjs';
 
 import { CatalogService, Sector } from '../catalog/catalog.service';
+import { ChimeService, SoundToggle } from '../live/chime';
 import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
 import { failureMessage, problemCode } from '../session/unit-context.service';
@@ -56,6 +57,7 @@ const STALE = new Set([
     MatProgressSpinnerModule,
     MatSelectModule,
     LiveStatus,
+    SoundToggle,
   ],
   template: `
     <h1>Produção</h1>
@@ -64,6 +66,7 @@ const STALE = new Set([
     @if (state() === 'forbidden') {
       <p role="alert">Seu papel nesta unidade não opera a produção.</p>
     } @else {
+      <fp-sound-toggle />
       <mat-form-field appearance="outline">
         <mat-label>Setor</mat-label>
         <mat-select [value]="sectorId()" (valueChange)="chooseSector($event)">
@@ -299,6 +302,7 @@ export class ProductionPage {
   private readonly service = inject(ProductionService);
   private readonly catalog = inject(CatalogService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly chime = inject(ChimeService);
   private readonly forms = inject(FormBuilder).nonNullable;
   /** Diferença entre o relógio do servidor e o do aparelho, medida a cada leitura. */
   private offset = 0;
@@ -497,6 +501,7 @@ export class ProductionPage {
     const arrived = seen ? lines.filter((l) => !seen.has(l.id)) : [];
     this.seen = new Set([...(seen ?? []), ...lines.map((l) => l.id)]);
     if (arrived.length > 0) {
+      this.chime.play();
       this.fresh.set(new Set([...this.fresh(), ...arrived.map((l) => l.id)]));
       this.notice.set(
         arrived.length === 1

@@ -21,6 +21,9 @@ const ANA: Tab = {
   settingsVersionId: 's-1',
   openedAt: '2026-11-03T20:00:00Z',
   guestLinked: false,
+  attendanceMode: 'GARCOM_RESPONSAVEL',
+  responsibleId: 'u-gabi',
+  responsibleName: 'Gabi',
   version: 0,
 };
 

@@ -46,7 +46,7 @@ public class JdbcProductionStore {
      *
      * @return {@code true} se criou agora
      */
-    public boolean receive(UUID orderLineId, UUID sectorId, int quantity, Instant now) {
+    public boolean receive(UUID id, UUID orderLineId, UUID sectorId, int quantity, Instant now) {
         Status status = ProductionRules.initial(sectorId != null);
         Timestamp at = Timestamp.from(now);
         return jdbc.update("""
@@ -54,7 +54,7 @@ public class JdbcProductionStore {
                                              received_at, status_since, ready_at)
                 VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (order_line_id) DO NOTHING
-                """, UUID.randomUUID(), orderLineId, sectorId, quantity, status.name(), at, at,
+                """, id, orderLineId, sectorId, quantity, status.name(), at, at,
                 status == Status.PRONTO ? at : null) == 1;
     }
 
@@ -67,6 +67,16 @@ public class JdbcProductionStore {
                  ORDER BY received_at, id
                  LIMIT ?
                 """, JdbcProductionStore::line, sectorId, sectorId, PAGE);
+    }
+
+    /** Linhas pelo id (H20). */
+    public List<LineRow> lines(List<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT " + COLUMNS + " FROM production_line WHERE id = ANY (?)",
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", ids.toArray())),
+                JdbcProductionStore::line);
     }
 
     /** Entrega: prontas para entregar e linhas com impossibilidade aberta, das mais antigas às mais novas. */

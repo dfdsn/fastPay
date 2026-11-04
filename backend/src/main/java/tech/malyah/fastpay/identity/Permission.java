@@ -10,6 +10,7 @@ public enum Permission {
     OPERAR_COMANDA("Abrir comanda, enviar pedido e entregar", false),
     OPERAR_PRODUCAO("Fila de produção do setor", false),
     ATENDER_PROBLEMA("Atender problema do consumidor", false),
+    REATRIBUIR_ATENDIMENTO("Reatribuir o atendimento de comandas e chamados", false),
     CONCLUIR_PROBLEMA("Concluir problema como tratado", true),
     CANCELAR_ITEM("Cancelar item", true),
     CONCEDER_DESCONTO("Conceder desconto", true),

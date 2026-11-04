@@ -10,6 +10,7 @@ import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
 
+import tech.malyah.fastpay.identity.domain.AccessPolicy;
 import tech.malyah.fastpay.identity.infrastructure.JdbcMembershipStore;
 import tech.malyah.fastpay.tenancy.TenantTransactions;
 
@@ -86,6 +87,25 @@ public class Memberships {
         Map<UUID, String> names = new LinkedHashMap<>();
         store.memberNames(identityIds).forEach(s -> names.put(s.id(), s.displayName()));
         return names;
+    }
+
+    /**
+     * Pessoas com vínculo ativo na unidade da transação de quem chama que têm a permissão (papel ou delegação), por
+     * nome (H20: para quem o gerente pode reatribuir o atendimento).
+     */
+    public List<IdentitySummary> holdersInCurrentUnit(Permission permission) {
+        Objects.requireNonNull(permission, "permission");
+        return store.members().stream()
+                .filter(m -> m.active() && AccessPolicy.effective(m.role(), m.delegated()).contains(permission))
+                .map(m -> new IdentitySummary(m.identityId(), m.displayName()))
+                .toList();
+    }
+
+    /** A identidade tem vínculo ativo na unidade da transação de quem chama e, nele, a permissão (H20). */
+    public boolean holdsInCurrentUnit(UUID identityId, Permission permission) {
+        Objects.requireNonNull(permission, "permission");
+        return identityId != null && store.activeMembershipInCurrentUnit(identityId)
+                .map(m -> m.has(permission)).orElse(false);
     }
 
     /**

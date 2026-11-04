@@ -27,6 +27,7 @@ import tech.malyah.fastpay.tabs.Tabs.Refused;
 /**
  * Comandas da unidade escolhida na sessão (H15). Abrir, listar, trocar mesa e mostrar o QR: {@code OPERAR_COMANDA}.
  * Recuperar o acesso do consumidor: {@code RECUPERAR_ACESSO_CONSUMIDOR}, com a conferência presencial de P-07.
+ * Reatribuir o garçom responsável (H20): {@code REATRIBUIR_ATENDIMENTO}.
  * A permissão é conferida no servidor a cada chamada (403 {@code PERMISSAO_NEGADA}).
  */
 @RestController
@@ -81,6 +82,14 @@ class TabController {
                 body.accountCheck(), body.reason(), correlationId()));
     }
 
+    /** Reatribui o garçom responsável (H20): {@code REATRIBUIR_ATENDIMENTO}, só na modalidade garçom responsável. */
+    @PutMapping("/{id}/responsible")
+    Tabs.Tab reassign(@PathVariable UUID id, @RequestBody ResponsibleRequest body, HttpServletRequest request) {
+        UUID actor = session.requireIdentity(request);
+        return respond(tabs.reassign(actor, session.requireSelectedUnit(request), id, body.version(),
+                body.responsibleId(), correlationId()));
+    }
+
     private static <T> T respond(Outcome<T> outcome) {
         return switch (outcome) {
             case Done<T> done -> done.value();
@@ -107,6 +116,9 @@ class TabController {
                     "O cliente já tem acesso a esta comanda. Para trocar de aparelho, use Recuperar acesso.");
             case SEM_ACESSO_A_RECUPERAR -> error(HttpStatus.CONFLICT, refusal.name(),
                     "Ninguém confirmou o acesso a esta comanda ainda. Basta mostrar o QR ao cliente.");
+            case ATENDIMENTO_CENTRAL -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda é atendida pela central e não tem responsável. Reatribua cada chamado na tela de "
+                            + "atendimento.");
         };
     }
 
@@ -125,6 +137,9 @@ class TabController {
     }
 
     record TableRequest(String table, Long version) {
+    }
+
+    record ResponsibleRequest(UUID responsibleId, Long version) {
     }
 
     record RecoveryRequest(Boolean nameChecked, String accountCheck, String reason) {

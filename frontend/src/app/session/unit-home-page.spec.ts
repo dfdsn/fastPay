@@ -61,14 +61,14 @@ describe('UnitHomePage', () => {
     expect(logo?.alt).toBe('Logo de Bar da Praia');
   });
 
-  it('garçom vê comandas, entregas e catálogo', () => {
+  it('garçom vê comandas, atendimento, entregas e catálogo', () => {
     const garcom: UnitView = {
       establishmentId: 'a',
       name: 'Bar da Praia',
       role: 'GARCOM',
       permissions: ['OPERAR_COMANDA', 'ATENDER_PROBLEMA', 'CANCELAR_ITEM'],
     };
-    expect(links(abrir(garcom, garcom))).toEqual(['Comandas', 'Entregas', 'Catálogo']);
+    expect(links(abrir(garcom, garcom))).toEqual(['Comandas', 'Atendimento', 'Entregas', 'Catálogo']);
   });
 
   it('produção vê a fila de produção e o catálogo', () => {

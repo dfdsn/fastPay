@@ -27,7 +27,7 @@ public class JdbcTabStore {
     /** {@code guestLinked}: há acesso de consumidor ativo (não revogado) na comanda. */
     public record TabRow(UUID id, UUID visitId, int number, String displayName, String tableLabel,
             UUID settingsVersionId, Instant openedAt, Instant closedAt, Instant accessUntil, boolean guestLinked,
-            long version) {
+            String attendanceMode, UUID responsibleId, long version) {
     }
 
     public record BindingRow(UUID id, UUID establishmentId, UUID tabId, boolean recovery, Instant expiresAt,
@@ -62,19 +62,22 @@ public class JdbcTabStore {
                 """, id, actorId, Timestamp.from(now));
     }
 
+    /** {@code responsibleId}: quem abre, na modalidade garçom responsável; nulo na central (H20). */
     public void insertTab(UUID id, UUID visitId, int number, String name, String table, UUID settingsVersionId,
-            UUID actorId, Instant now) {
+            UUID responsibleId, UUID actorId, Instant now) {
         jdbc.update("""
                 INSERT INTO tab (id, establishment_id, visit_id, number, display_name, table_label, settings_version_id,
-                                 opened_by, opened_at, updated_by, updated_at)
-                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, id, visitId, number, name, table, settingsVersionId, actorId, Timestamp.from(now), actorId,
-                Timestamp.from(now));
+                                 responsible_id, opened_by, opened_at, updated_by, updated_at)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, id, visitId, number, name, table, settingsVersionId, responsibleId, actorId, Timestamp.from(now),
+                actorId, Timestamp.from(now));
     }
 
     private static final String TAB_COLUMNS = """
             t.id, t.visit_id, t.number, t.display_name, t.table_label, t.settings_version_id, t.opened_at,
-            t.closed_at, t.access_until, t.version,
+            t.closed_at, t.access_until, t.version, t.responsible_id,
+            (SELECT v.attendance_mode FROM unit_settings_version v WHERE v.id = t.settings_version_id)
+                AS attendance_mode,
             EXISTS (SELECT 1 FROM guest_grant g WHERE g.tab_id = t.id AND g.revoked_at IS NULL) AS guest_linked
             """;
 
@@ -100,6 +103,14 @@ public class JdbcTabStore {
                 UPDATE tab SET table_label = ?, updated_by = ?, updated_at = ?, version = version + 1
                  WHERE id = ? AND version = ? AND closed_at IS NULL
                 """, table, actorId, Timestamp.from(now), id, version) == 1;
+    }
+
+    /** Troca o responsável da comanda ativa (H20). */
+    public boolean updateResponsible(UUID id, long version, UUID responsibleId, UUID actorId, Instant now) {
+        return jdbc.update("""
+                UPDATE tab SET responsible_id = ?, updated_by = ?, updated_at = ?, version = version + 1
+                 WHERE id = ? AND version = ? AND closed_at IS NULL
+                """, responsibleId, actorId, Timestamp.from(now), id, version) == 1;
     }
 
     // QR de vínculo
@@ -190,25 +201,31 @@ public class JdbcTabStore {
     }
 
     /** Identificação da comanda para a produção e a entrega (H18). */
-    public record LabelRow(UUID id, int number, String displayName, String tableLabel, UUID openedBy) {
+    public record LabelRow(UUID id, int number, String displayName, String tableLabel, UUID openedBy,
+            String attendanceMode, UUID responsibleId) {
     }
 
     public List<LabelRow> labels(List<UUID> ids) {
         if (ids.isEmpty()) {
             return List.of();
         }
-        return jdbc.query("SELECT id, number, display_name, table_label, opened_by FROM tab WHERE id = ANY (?)",
-                ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", ids.toArray())),
+        return jdbc.query("""
+                SELECT t.id, t.number, t.display_name, t.table_label, t.opened_by, t.responsible_id, v.attendance_mode
+                  FROM tab t JOIN unit_settings_version v ON v.id = t.settings_version_id
+                 WHERE t.id = ANY (?)
+                """, ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", ids.toArray())),
                 (rs, n) -> new LabelRow(rs.getObject("id", UUID.class), rs.getInt("number"),
                         rs.getString("display_name"), rs.getString("table_label"),
-                        rs.getObject("opened_by", UUID.class)));
+                        rs.getObject("opened_by", UUID.class), rs.getString("attendance_mode"),
+                        rs.getObject("responsible_id", UUID.class)));
     }
 
     private static TabRow tab(ResultSet rs, int n) throws SQLException {
         return new TabRow(rs.getObject("id", UUID.class), rs.getObject("visit_id", UUID.class), rs.getInt("number"),
                 rs.getString("display_name"), rs.getString("table_label"),
                 rs.getObject("settings_version_id", UUID.class), instant(rs, "opened_at"), instant(rs, "closed_at"),
-                instant(rs, "access_until"), rs.getBoolean("guest_linked"), rs.getLong("version"));
+                instant(rs, "access_until"), rs.getBoolean("guest_linked"), rs.getString("attendance_mode"),
+                rs.getObject("responsible_id", UUID.class), rs.getLong("version"));
     }
 
     private static BindingRow binding(ResultSet rs, int n) throws SQLException {

@@ -4,7 +4,11 @@ import { Observable } from 'rxjs';
 
 import { AuthService } from '../auth/auth.service';
 
-/** Comanda ativa da unidade (H15). {@code guestLinked}: o cliente já confirmou o acesso pelo QR. */
+/**
+ * Comanda ativa da unidade (H15). {@code guestLinked}: o cliente já confirmou o acesso pelo QR.
+ * {@code attendanceMode}: modalidade de atendimento capturada na abertura (H20); {@code responsibleName}: o garçom
+ * responsável, nulo na central.
+ */
 export interface Tab {
   id: string;
   visitId: string;
@@ -14,6 +18,9 @@ export interface Tab {
   settingsVersionId: string;
   openedAt: string;
   guestLinked: boolean;
+  attendanceMode: 'GARCOM_RESPONSAVEL' | 'CENTRAL';
+  responsibleId: string | null;
+  responsibleName: string | null;
   version: number;
 }
 
@@ -56,6 +63,16 @@ export class TabsService {
   changeTable(tab: Tab, table: string | null): Observable<Tab> {
     return this.auth.withCsrf(() =>
       this.http.put<Tab>(`/api/v1/tabs/${tab.id}/table`, { table, version: tab.version }),
+    );
+  }
+
+  /** Troca o garçom responsável (H20, gerente); só na modalidade garçom responsável. */
+  reassign(tab: Tab, responsibleId: string): Observable<Tab> {
+    return this.auth.withCsrf(() =>
+      this.http.put<Tab>(`/api/v1/tabs/${tab.id}/responsible`, {
+        responsibleId,
+        version: tab.version,
+      }),
     );
   }
 

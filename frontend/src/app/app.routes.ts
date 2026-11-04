@@ -104,6 +104,12 @@ export const routes: Routes = [
     loadComponent: () => import('./production/deliveries-page').then((m) => m.DeliveriesPage),
   },
   {
+    path: 'atendimento',
+    title: 'Atendimento · fastPay',
+    canActivate: [signedInGuard, unitSelectedGuard],
+    loadComponent: () => import('./attendance/attendance-page').then((m) => m.AttendancePage),
+  },
+  {
     path: 'catalogo',
     title: 'Catálogo · fastPay',
     canActivate: [signedInGuard, unitSelectedGuard],

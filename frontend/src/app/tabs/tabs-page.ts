@@ -13,6 +13,7 @@ import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { RouterLink } from '@angular/router';
 import { Observable, interval } from 'rxjs';
 
+import { AttendanceService, Attendant } from '../attendance/attendance.service';
 import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
 import { UnitContextService, can, failureMessage, problemCode } from '../session/unit-context.service';
@@ -177,6 +178,12 @@ interface ShownQr {
                 · {{ tab.table ? 'mesa ' + tab.table : 'sem mesa' }}
                 · aberta às {{ tab.openedAt | date: 'HH:mm' }}
                 · {{ tab.guestLinked ? 'cliente com acesso' : 'cliente sem acesso' }}
+                ·
+                {{
+                  tab.attendanceMode === 'CENTRAL'
+                    ? 'atendimento pela central'
+                    : 'responsável: ' + (tab.responsibleName ?? 'ninguém')
+                }}
               </div>
               @if (editingTable() === tab.id) {
                 <form [formGroup]="tableForm" (ngSubmit)="saveTable(tab)" class="row">
@@ -198,7 +205,33 @@ interface ShownQr {
                     </button>
                   }
                   <button mat-button type="button" (click)="editTable(tab)">Trocar mesa</button>
+                  @if (canReassign() && tab.attendanceMode === 'GARCOM_RESPONSAVEL') {
+                    <button mat-button type="button" (click)="startReassign(tab)">
+                      Trocar responsável
+                    </button>
+                  }
                 </div>
+                @if (reassigning() === tab.id) {
+                  <div
+                    class="row"
+                    role="group"
+                    [attr.aria-label]="'Novo responsável da comanda ' + tab.number"
+                  >
+                    @for (person of attendants(); track person.id) {
+                      @if (person.id !== tab.responsibleId) {
+                        <button
+                          mat-stroked-button
+                          type="button"
+                          [disabled]="busy()"
+                          (click)="reassign(tab, person)"
+                        >
+                          Passar para {{ person.displayName }}
+                        </button>
+                      }
+                    }
+                    <button mat-button type="button" (click)="reassigning.set(null)">Cancelar</button>
+                  </div>
+                }
               }
             </li>
           }
@@ -270,6 +303,11 @@ export class TabsPage {
   protected readonly recovering = signal<Tab | null>(null);
   protected readonly editingTable = signal<string | null>(null);
   protected readonly canRecover = computed(() => can(this.unit(), 'RECUPERAR_ACESSO_CONSUMIDOR'));
+  /** Gerente troca o garçom responsável (H20); os chamados em aberto da comanda acompanham. */
+  protected readonly canReassign = computed(() => can(this.unit(), 'REATRIBUIR_ATENDIMENTO'));
+  protected readonly reassigning = signal<string | null>(null);
+  protected readonly attendants = signal<Attendant[]>([]);
+  private readonly attendance = inject(AttendanceService);
   protected readonly secondsLeft = computed(() => {
     const current = this.shown();
     if (!current) {
@@ -392,6 +430,25 @@ export class TabsPage {
     this.run(this.service.changeTable(tab, this.tableForm.getRawValue().table.trim() || null), (saved) => {
       this.editingTable.set(null);
       this.notice.set(`Comanda ${saved.number}: ${saved.table ? 'mesa ' + saved.table : 'sem mesa'}.`);
+      this.load();
+    });
+  }
+
+  startReassign(tab: Tab): void {
+    this.reassigning.set(tab.id);
+    this.attendance
+      .attendants()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (people) => this.attendants.set(people),
+        error: (error: unknown) => this.failure.set(failureMessage(error)),
+      });
+  }
+
+  reassign(tab: Tab, person: Attendant): void {
+    this.run(this.service.reassign(tab, person.id), (saved) => {
+      this.reassigning.set(null);
+      this.notice.set(`Comanda ${saved.number}: responsável agora é ${saved.responsibleName ?? person.displayName}.`);
       this.load();
     });
   }

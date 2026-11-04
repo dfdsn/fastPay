@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import tech.malyah.fastpay.jobs.JobExecution;
@@ -36,9 +37,12 @@ class ProductionIntake implements JobHandler {
     private final JdbcProductionStore store;
     private final Clock clock;
     private final Changes changes;
+    private final ApplicationEventPublisher events;
 
-    ProductionIntake(ObjectProvider<Orders> orders, JdbcProductionStore store, Clock clock, Changes changes) {
+    ProductionIntake(ObjectProvider<Orders> orders, JdbcProductionStore store, Clock clock, Changes changes,
+            ApplicationEventPublisher events) {
         this.changes = changes;
+        this.events = events;
         this.orders = orders;
         this.store = store;
         this.clock = clock;
@@ -65,15 +69,22 @@ class ProductionIntake implements JobHandler {
             throw new JobFailure("Pedido do encaminhamento não encontrado na unidade.");
         }
         Instant now = clock.instant();
+        UUID tabId = orders.getObject().tabInCurrentUnit(orderId).orElse(null);
         int created = 0;
         for (ForwardedLine line : lines) {
-            if (store.receive(line.orderLineId(), line.sectorId(), line.quantity(), now)) {
+            UUID lineId = UUID.randomUUID();
+            if (store.receive(lineId, line.orderLineId(), line.sectorId(), line.quantity(), now)) {
                 created++;
+                if (line.sectorId() == null && tabId != null) {
+                    // Sem preparo nasce pronta: o aviso de item pronto vai para quem atende (H20), no mesmo commit.
+                    events.publishEvent(new ProductionLineChanged(lineId, ProductionLineChanged.Change.PRONTA,
+                            List.of(tabId), null, now));
+                }
             }
         }
         if (created > 0) {
             // Mesma transação do job: a equipe vê a produção e o encaminhamento concluído juntos.
-            changes.publishInCurrentTransaction(Topic.PRODUCAO, orders.getObject().tabInCurrentUnit(orderId).orElse(null));
+            changes.publishInCurrentTransaction(Topic.PRODUCAO, tabId);
         }
         log.info("Pedido {} encaminhado à produção ({} linhas novas de {})", orderId, created, lines.size());
     }

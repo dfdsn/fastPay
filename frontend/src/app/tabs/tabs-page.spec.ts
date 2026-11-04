@@ -18,6 +18,9 @@ const ANA: Tab = {
   settingsVersionId: 's-1',
   openedAt: '2026-11-03T20:00:00Z',
   guestLinked: false,
+  attendanceMode: 'GARCOM_RESPONSAVEL',
+  responsibleId: 'u-gabi',
+  responsibleName: 'Gabi',
   version: 0,
 };
 
@@ -89,6 +92,39 @@ describe('TabsPage', () => {
     const imagem = element().querySelector<HTMLImageElement>('.qr img')!;
     expect(imagem.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
     expect(imagem.alt).toBe('QR de acesso à comanda 1');
+  });
+
+  it('mostra o responsável; o gerente troca e a central não tem responsável (H20)', () => {
+    const central: Tab = {
+      ...ANA,
+      id: 't-2',
+      number: 2,
+      name: 'Bia',
+      attendanceMode: 'CENTRAL',
+      responsibleId: null,
+      responsibleName: null,
+    };
+    abrir(['OPERAR_COMANDA', 'REATRIBUIR_ATENDIMENTO'], [ANA, central]);
+    expect(texto()).toContain('responsável: Gabi');
+    expect(texto()).toContain('atendimento pela central');
+    const trocas = Array.from(element().querySelectorAll('button')).filter((b) =>
+      b.textContent?.includes('Trocar responsável'),
+    );
+    expect(trocas.length).toBe(1);
+    trocas[0].click();
+    http.expectOne('/api/v1/attendance/attendants').flush([
+      { id: 'u-gabi', displayName: 'Gabi' },
+      { id: 'u-hugo', displayName: 'Hugo' },
+    ]);
+    fixture.detectChanges();
+    expect(texto()).not.toContain('Passar para Gabi');
+    botao('Passar para Hugo').click();
+    const troca = http.expectOne('/api/v1/tabs/t-1/responsible');
+    expect(troca.request.body).toEqual({ responsibleId: 'u-hugo', version: 0 });
+    troca.flush({ ...ANA, responsibleId: 'u-hugo', responsibleName: 'Hugo', version: 1 });
+    http.expectOne('/api/v1/tabs').flush([{ ...ANA, responsibleName: 'Hugo' }]);
+    fixture.detectChanges();
+    expect(texto()).toContain('Comanda 1: responsável agora é Hugo.');
   });
 
   it('aviso de comanda relê a lista e fecha o QR quando o cliente confirma noutro aparelho', () => {

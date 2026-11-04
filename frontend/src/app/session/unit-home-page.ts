@@ -31,6 +31,7 @@ import { UnitContextService, can, roleLabel } from './unit-context.service';
           <nav aria-label="Administração da unidade" class="row">
             @if (canOperateTabs()) {
               <a mat-stroked-button routerLink="/comandas">Comandas</a>
+              <a mat-stroked-button routerLink="/atendimento">Atendimento</a>
               <a mat-stroked-button routerLink="/entregas">Entregas</a>
             }
             @if (canOperateProduction()) {
