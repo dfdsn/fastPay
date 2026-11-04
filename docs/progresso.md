@@ -97,8 +97,8 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H17 | Sincronização operacional SSE e reconexão | Concluída | PR #23, merge `e575de0` em `develop`, CI de `develop` run 41758795363 verde ([evidência](evidencias/H17-sincronizacao-sse.md)); T-03 da H17 aprovada por Diego em 04/11/2026 |
 | H18 | Fila de produção e entrega por linha | Concluída | PR #24, merge `d77b512` em `develop`, CI de `develop` run 41758906795 verde ([evidência](evidencias/H18-fila-producao-entrega.md)); T-03 da H18 aprovada por Diego em 04/11/2026 |
 | H19 | Operações em lote de produção | Concluída | PR #26, merge `1bdfa6e` em `develop`, CI de `develop` run 41768784263 verde ([evidência](evidencias/H19-lote-producao.md)); T-03 da H19 aprovada por Diego em 04/11/2026; caso "linha cancelada" entra no teste do lote com a H23 |
-| H20 | Atendimento responsável ou central | Não iniciada | Sem evidência; ver dependências/gates no backlog |
-| H21 | Problemas do consumidor e conclusão autorizada | Aguardando revisão | PR para `develop` aberto ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aprovada por Diego em 04/11/2026 |
+| H20 | Atendimento responsável ou central | Concluída | PR #28, merge `c06b7b8` em `develop`, CI de `develop` run 41855357662 verde ([evidência](evidencias/H20-atendimento-responsavel-central.md)); T-03 da H20 aprovada por Diego em 04/11/2026 |
+| H21 | Problemas do consumidor e conclusão autorizada | Concluída | PR #30, merge `157d591` em `develop`, CI de `develop` run 41871502419 verde ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aprovada por Diego em 04/11/2026 |
 | H22 | Composição, serviço e descontos exatos | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H23 | Cancelar quantidade e alertar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H24 | Desfazer entrega com histórico | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -572,7 +572,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H21 — Problemas do consumidor e conclusão autorizada
 
-- História e estado: H21, **aguardando revisão** (PR aberto para `develop`). T-03 da H21 aprovada por Diego em 04/11/2026 (seguir a opção recomendada).
+- História e estado: H21, **concluída** no código (critérios atendidos, merge em `develop` verificado, CI de `develop` verde). T-03 da H21 aprovada por Diego em 04/11/2026 (seguir a opção recomendada).
 - Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Cliente informa problema de um item da própria comanda ou da conta, com motivo; acompanha aberto, em atendimento e tratado, com a resolução (FR-24, UJ-03).
@@ -582,14 +582,14 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Pós-pagamento: problema permitido enquanto o acesso vale; não mexe em encerramento, pagamento ou saída; nasce encaminhado e só quem autoriza devolução conclui (FR-25).
   - Validação exigida: cliente de outra comanda, tratar sem permissão, cobrança bloqueada pelo contrato, correção sem concluir o chamado e caso pago encaminhado ao gerente.
 - Critérios faltantes / motivo: "cobrança em andamento" só pode ser exercitada com a cobrança real (H30); aqui fica provado o contrato que ela vai chamar. O prazo do acesso avulso (FR-11: problema suspende a expiração e a última resolução dá mais 7 dias) é gravado por quem encerra (H28–H32), porque hoje nenhuma comanda encerra; o caso pago foi testado encerrando a comanda direto no banco. Fora do escopo: bloqueio de transferência por problema (H25), limite de atraso de problemas de conta (FR-22) e cancelamento/desconto como correção (H22, H23).
-- Branch e commit reais: `feature/H21-problemas-consumidor` (a partir de `develop` `c06b7b8`); commit no PR.
-- PR, checks e merge real: PR da H21 aberto; checks da CI no PR; sem merge.
+- Branch e commit reais: `feature/H21-problemas-consumidor` (a partir de `develop` `c06b7b8`); commits `af5c476` (história), `29b1414` (teste do caso pago passa a usar o relógio da aplicação: na CI o relógio controlado estava mais de 7 dias à frente do banco), `1fe7f87`/`09c73bc`/`7755e76` (registro das decisões) e `4407626` (merge do `develop` com o PR #29).
+- PR, checks e merge real: [PR #30](https://github.com/dfdsn/fastPay/pull/30), checks verdes no commit `4407626` (backend, frontend, imagens e smoke Compose); merge por Diego em 04/11/2026 (`157d591`); CI de `develop` run 41871502419 verde.
 - Arquivos/migrations/contratos: `V17__problemas_do_consumidor.sql`; `attendance.ConsumerIssues`, `attendance.domain.IssueRules`, `JdbcIssueStore`, `GuestIssueController`, `/api/v1/attendance/issues/*`; `tabs.GuestCookie`, `GuestAccess.inTab`; `Orders.itemsOfTabInCurrentUnit`; `sync.Topic.PROBLEMA`; frontend `guest/guest-issues.ts`, `attendance/issues-panel.ts`; especificação §6; decisões T-03; [evidência](evidencias/H21-problemas-consumidor.md).
 - Testes: ver a evidência (backend 397 no contêiner Temurin 25 com PostgreSQL real; frontend 185 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); teste com celular real do cliente na homologação de Diego.
 - Decisões novas/alteradas: T-03 da H21 proposta (textos 5–300; um aberto por item e um da conta; itens sem valores; quem atende e quem conclui; resolução visível ao cliente; caso pago só gerente; equipe não abre em nome do cliente; 200 por leitura), aprovada por Diego em 04/11/2026. Depende da T-03 da H20 só na reatribuição (aprovada por Diego em 04/11/2026).
 - Bloqueios / quem resolve: nenhum da H21. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego revisa e faz o merge do PR; depois do merge, PR de reconciliação.
+- Próximo passo concreto: nenhum na H21. Próxima candidata elegível: H22 (dependências H14 e H16 concluídas; gate T-03 monetários), só quando Diego pedir.
 
 ## Registro de release (ainda nenhum)
 

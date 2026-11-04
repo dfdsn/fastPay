@@ -55,3 +55,5 @@ Nenhuma dependência nova.
 | `./scripts/verify.sh frontend` | Contêiner `node:24.18.0-trixie-slim`, npm 11.16.0 | idem | lint sem erros, 185 testes (36 arquivos), linhas 95,19% / branches 87,51%, build ok |
 
 Não executados: `compose-smoke.sh` e imagens (rodam na CI do PR); E2E Playwright (não configurado); teste com o celular do cliente na homologação de Diego. "Cobrança em andamento" depende da cobrança real (H30): aqui só o contrato que ela chamará.
+
+CI do PR #30: no commit `af5c476` o backend falhou em `problemaDepoisDoPagamentoPreservaQuitacaoEVaiAoGerente` (404 ao ler a comanda encerrada): o teste gravava `access_until` com `now()` do banco, e o relógio controlado dos testes, compartilhado no contexto Spring, já estava mais de 7 dias à frente. Corrigido em `29b1414` (datas pelo relógio da aplicação). Checks verdes no commit `4407626` (backend, frontend, imagens e smoke Compose); merge `157d591`; CI de `develop` run 41871502419 verde.
