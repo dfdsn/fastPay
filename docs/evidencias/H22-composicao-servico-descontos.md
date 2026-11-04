@@ -53,5 +53,7 @@ Nenhuma dependência nova.
 |---|---|---|---|
 | `./mvnw -B clean verify` (backend: JUnit, Modulith, enforcer, JaCoCo) | Contêiner `eclipse-temurin:25.0.4.1_1-jdk-noble`, Docker com PostgreSQL 18.6 (Testcontainers) | branch `feature/H22-composicao-servico-descontos` | Verde: 439 testes, 0 falhas |
 | `npm ci`, `npm run lint`, `npm run test:ci`, `npm run build` | Contêiner `node:24.18.0-trixie-slim` | mesma branch | Verde: lint sem erros, 192 testes em 38 arquivos, build gerado (aviso antigo em `team-page.ts`) |
+| CI do PR #32 (backend, frontend, imagens e smoke Compose) | GitHub Actions | `7c3f49f` | Verde |
+| CI de `develop` depois do merge | GitHub Actions, run 41884465186 | `2da7c4a` | Verde |
 
-Não executados: `compose-smoke.sh` e imagens (rodam na CI do PR); E2E Playwright (não configurado); celular real do cliente (homologação de Diego). A redução de consumo foi feita direto no banco porque o cancelamento é da H23; a cobrança real que respeita o bloqueio é da H30.
+Não executados localmente: `compose-smoke.sh` e imagens (verdes na CI do PR); E2E Playwright (não configurado); celular real do cliente (homologação de Diego). A redução de consumo foi feita direto no banco porque o cancelamento é da H23; a cobrança real que respeita o bloqueio é da H30.
