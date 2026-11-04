@@ -10,6 +10,7 @@ import { Tab } from '../tabs/tabs.service';
 import { draftStorageKey, loadDraft, saveDraft } from './order-draft';
 import { SentOrder } from './orders.service';
 import { TabOrdersPage } from './tab-orders-page';
+import { FakeEventSource, provideFakeEventSource } from '../live/live-testing';
 
 const ANA: Tab = {
   id: 't-1',
@@ -90,6 +91,7 @@ describe('TabOrdersPage', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideFakeEventSource(),
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: 't-1' }) } } },
       ],
@@ -263,5 +265,47 @@ describe('TabOrdersPage', () => {
     req.flush(pedido('PENDENTE'));
     recarregaPedidos([pedido('PENDENTE')]);
     expect(texto()).toContain('encaminhando à produção');
+  });
+
+  it('avisos da comanda relêem os pedidos e reconexão relê tudo, sem nunca enviar o rascunho', () => {
+    abrir();
+    botao('Adicionar Chopp').click();
+    fixture.detectChanges();
+    const conexao = FakeEventSource.last();
+    expect(conexao.url).toBe('/api/v1/sync/stream');
+    conexao.emit('ready', { cursor: '4', resync: false });
+
+    conexao.emit('change', { cursor: '5', topic: 'PEDIDO', tabId: 'outra' });
+    http.expectNone((r) => r.url === '/api/v1/orders');
+    conexao.emit('change', { cursor: '6', topic: 'PRODUCAO', tabId: 't-1' });
+    recarregaPedidos([pedido()]);
+    conexao.emit('change', { cursor: '7', topic: 'COMANDA', tabId: 't-1' });
+    http.expectOne('/api/v1/tabs/t-1').flush({ ...ANA, table: '9' });
+    fixture.detectChanges();
+    expect(texto()).toContain('Mesa 9');
+
+    // Queda e volta: relê comanda, catálogo e pedidos pelo cursor; o rascunho fica onde está.
+    conexao.fail();
+    expect(conexao.closed).toBe(true);
+    const polling = http.expectOne((r) => r.url === '/api/v1/sync/changes');
+    expect(polling.request.params.get('after')).toBe('7');
+    expect(polling.request.headers.get('X-Fastpay-Background')).toBe('1');
+    polling.flush({ cursor: '9', resync: true, changes: [] });
+    http.expectOne('/api/v1/tabs/t-1').flush(ANA);
+    http.expectOne((r) => r.url === '/api/v1/catalog').flush(CATALOGO);
+    recarregaPedidos([pedido()]);
+    expect(texto()).toContain('Sem conexão em tempo real');
+    http.expectNone((r) => r.url === '/api/v1/orders' && r.method === 'POST');
+    expect(loadDraft(CHAVE).lines).toHaveLength(1);
+  });
+
+  it('rascunho de antes (outra visita ou novo login) pede conferência antes de enviar', () => {
+    saveDraft(CHAVE, {
+      lines: [{ key: 'x', productId: 'p-chopp', name: 'Chopp', price: '9.90', quantity: 2, note: '' }],
+      pendingKey: null,
+    });
+    abrir();
+    expect(texto()).toContain('Rascunho guardado neste aparelho');
+    http.expectNone((r) => r.url === '/api/v1/orders' && r.method === 'POST');
   });
 });

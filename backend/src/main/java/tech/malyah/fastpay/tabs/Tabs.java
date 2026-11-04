@@ -17,6 +17,8 @@ import tech.malyah.fastpay.establishments.SettingsVersion;
 import tech.malyah.fastpay.establishments.UnitProfiles;
 import tech.malyah.fastpay.identity.Memberships;
 import tech.malyah.fastpay.identity.Permission;
+import tech.malyah.fastpay.sync.Changes;
+import tech.malyah.fastpay.sync.Topic;
 import tech.malyah.fastpay.tabs.domain.AccessTokens;
 import tech.malyah.fastpay.tabs.domain.QrSvg;
 import tech.malyah.fastpay.tabs.domain.TabRules;
@@ -82,11 +84,13 @@ public class Tabs {
     private final Clock clock;
     private final boolean production;
     private final String publicBaseUrl;
+    private final Changes changes;
 
     Tabs(Memberships memberships, EstablishmentSettings settings, UnitProfiles units, JdbcTabStore store,
             TabsProperties properties, Clock clock, @Value("${fastpay.environment}") String environment,
-            @Value("${fastpay.mail.public-base-url}") String publicBaseUrl) {
+            @Value("${fastpay.mail.public-base-url}") String publicBaseUrl, Changes changes) {
         this.memberships = memberships;
+        this.changes = changes;
         this.settings = settings;
         this.units = units;
         this.store = store;
@@ -127,6 +131,7 @@ public class Tabs {
                     version.id(), actorId, now);
             store.audit("comanda.aberta", tabId, actorId, "numero " + number.get() + "; configuracao v"
                     + version.number(), correlationId);
+            changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
             log.info("Comanda {} aberta na unidade {} por {}", tabId, establishmentId, actorId);
             return new Done<>(tab(store.tab(tabId).orElseThrow()));
         });
@@ -194,6 +199,7 @@ public class Tabs {
             }
             store.updateTable(tabId, version, label, actorId, clock.instant());
             store.audit("comanda.mesa_alterada", tabId, actorId, null, correlationId);
+            changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
             return new Done<>(tab(store.tab(tabId).orElseThrow()));
         });
     }
@@ -243,6 +249,7 @@ public class Tabs {
                     recovery.accountCheck().name(), recovery.reason());
             store.audit("acesso.recuperado", tabId, actorId, "conferencia: nome + " + recovery.accountCheck().name(),
                     correlationId);
+            changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
             log.info("Acesso do consumidor da comanda {} recuperado por {} (acesso anterior {} revogado)", tabId,
                     actorId, grant.get());
             return new Done<>(issued.qr());

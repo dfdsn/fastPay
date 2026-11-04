@@ -16,6 +16,8 @@ import tech.malyah.fastpay.jobs.JobHandler;
 import tech.malyah.fastpay.orders.Orders;
 import tech.malyah.fastpay.orders.Orders.ForwardedLine;
 import tech.malyah.fastpay.production.infrastructure.JdbcProductionStore;
+import tech.malyah.fastpay.sync.Changes;
+import tech.malyah.fastpay.sync.Topic;
 
 /**
  * Encaminhamento do pedido enviado à produção (H16, FR-15, FR-19). Roda no job gravado no commit do envio, no contexto
@@ -33,8 +35,10 @@ class ProductionIntake implements JobHandler {
     private final ObjectProvider<Orders> orders;
     private final JdbcProductionStore store;
     private final Clock clock;
+    private final Changes changes;
 
-    ProductionIntake(ObjectProvider<Orders> orders, JdbcProductionStore store, Clock clock) {
+    ProductionIntake(ObjectProvider<Orders> orders, JdbcProductionStore store, Clock clock, Changes changes) {
+        this.changes = changes;
         this.orders = orders;
         this.store = store;
         this.clock = clock;
@@ -66,6 +70,10 @@ class ProductionIntake implements JobHandler {
             if (store.receive(line.orderLineId(), line.sectorId(), line.quantity(), now)) {
                 created++;
             }
+        }
+        if (created > 0) {
+            // Mesma transação do job: a equipe vê a produção e o encaminhamento concluído juntos.
+            changes.publishInCurrentTransaction(Topic.PRODUCAO, orders.getObject().tabInCurrentUnit(orderId).orElse(null));
         }
         log.info("Pedido {} encaminhado à produção ({} linhas novas de {})", orderId, created, lines.size());
     }

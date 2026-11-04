@@ -13,6 +13,8 @@ import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { RouterLink } from '@angular/router';
 import { Observable, interval } from 'rxjs';
 
+import { LiveStatus } from '../live/live-status';
+import { LiveUpdatesService } from '../live/live-updates';
 import { UnitContextService, can, failureMessage, problemCode } from '../session/unit-context.service';
 import { AccountCheck, BindingQr, Tab, TabsService } from './tabs.service';
 
@@ -44,10 +46,12 @@ interface ShownQr {
     MatInputModule,
     MatProgressSpinnerModule,
     MatRadioModule,
+    LiveStatus,
   ],
   template: `
     <h1>Comandas</h1>
     <p><a routerLink="/inicio">Voltar ao início</a></p>
+    <fp-live-status [live]="live" />
     @if (state() === 'forbidden') {
       <p role="alert">Seu papel nesta unidade não opera comandas.</p>
     } @else {
@@ -254,6 +258,8 @@ export class TabsPage {
   private readonly unit = inject(UnitContextService).current;
   private readonly forms = inject(FormBuilder).nonNullable;
   private readonly now = signal(Date.now());
+  /** Avisos da unidade (H17): comanda aberta ou mudada por outra pessoa, cliente que confirmou o QR. */
+  protected readonly live = inject(LiveUpdatesService).forUnit(this.destroyRef);
 
   protected readonly state = signal<State>('loading');
   protected readonly tabs = signal<Tab[]>([]);
@@ -287,11 +293,29 @@ export class TabsPage {
     interval(1000)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.now.set(Date.now()));
+    this.live.signals.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((signal) => {
+      if (signal.kind === 'resync' || signal.topic === 'COMANDA') {
+        this.refresh();
+      }
+    });
     this.load();
   }
 
   load(): void {
     this.state.set('loading');
+    this.fetch();
+  }
+
+  /** Releitura por aviso do servidor: a lista continua na tela enquanto atualiza. */
+  private refresh(): void {
+    if (this.state() === 'ready') {
+      this.fetch();
+    } else if (this.state() === 'error') {
+      this.load();
+    }
+  }
+
+  private fetch(): void {
     this.service
       .active()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -299,6 +323,12 @@ export class TabsPage {
         next: (tabs) => {
           this.tabs.set(tabs);
           this.state.set('ready');
+          const shown = this.shown();
+          if (shown && tabs.some((t) => t.id === shown.tab.id && t.guestLinked)) {
+            // O cliente confirmou o QR em outro aparelho: o QR já não serve.
+            this.shown.set(null);
+            this.notice.set(`Cliente da comanda ${shown.tab.number} confirmou o acesso.`);
+          }
         },
         error: (error: unknown) =>
           this.state.set(problemCode(error) === 'PERMISSAO_NEGADA' ? 'forbidden' : 'error'),

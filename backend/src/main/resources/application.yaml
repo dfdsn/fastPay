@@ -37,6 +37,12 @@ spring:
   autoconfigure:
     # Sem usuário em memória: login só pela identidade da equipe (H08).
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  # Agendador compartilhado pela fila de jobs (H04) e pelo envio às conexões SSE (H17): um job demorado (SMTP) não
+  # pode atrasar os avisos em tempo real.
+  task:
+    scheduling:
+      pool:
+        size: 2
   jpa:
     open-in-view: false
     hibernate:
@@ -81,6 +87,17 @@ fastpay:
   # Suporte autorizado pelo dono (H11, FR-66): somente leitura, prazo máximo de cada concessão (P-16, aprovada).
   support:
     max-duration: 72h
+  # Sincronização operacional (H17, proposta T-03): SSE com avisos de mudança, polling quando o SSE não conecta.
+  # O envio às conexões roda a cada dispatch-interval; heartbeat e reconferência da sessão/acesso por conexão.
+  sync:
+    dispatch-interval: 1s
+    heartbeat-interval: 15s
+    recheck-interval: 10s
+    stream-lifetime: 30m
+    retention: 6h
+    max-replay: 500
+    max-streams-per-context: 5
+    max-streams: 1000
   # Comandas e acesso do consumidor avulso (H15). QR de vínculo de 2 min e uso único (D-17). O cookie só guarda o
   # acesso; a validade (até 7 dias depois da resolução final, FR-11) é sempre conferida no servidor.
   tabs:

@@ -1,11 +1,13 @@
 import { DatePipe } from '@angular/common';
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
+import { LiveStatus } from '../live/live-status';
+import { LiveUpdatesService } from '../live/live-updates';
 import { failureMessage } from '../session/unit-context.service';
 import { GuestService, GuestTab } from './guest.service';
 
@@ -15,13 +17,14 @@ import { GuestService, GuestTab } from './guest.service';
  */
 @Component({
   selector: 'fp-guest-tab-page',
-  imports: [DatePipe, MatButtonModule, MatCardModule, MatProgressSpinnerModule, RouterLink],
+  imports: [DatePipe, MatButtonModule, MatCardModule, MatProgressSpinnerModule, RouterLink, LiveStatus],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
         <mat-card-title><h1>Sua comanda</h1></mat-card-title>
       </mat-card-header>
       <mat-card-content>
+        <fp-live-status [live]="live" />
         <div role="status" aria-live="polite">
           @if (loading()) {
             <mat-progress-spinner mode="indeterminate" diameter="32" aria-hidden="true" />
@@ -66,13 +69,22 @@ export class GuestTabPage {
   protected readonly tab = signal<GuestTab | null>(null);
   protected readonly loading = signal(true);
   protected readonly failure = signal<string | null>(null);
+  /** Avisos só desta comanda (H17); acesso revogado ou vencido encerra a conexão e a tela relê para mostrar isso. */
+  protected readonly live = inject(LiveUpdatesService).forGuestTab(this.id, this.destroyRef);
 
   constructor() {
+    this.live.signals.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load(true));
+    effect(() => {
+      if (this.live.status() === 'encerrada') {
+        untracked(() => this.load(true));
+      }
+    });
     this.load();
   }
 
-  load(): void {
-    this.loading.set(true);
+  /** {@code quiet}: releitura por aviso, sem tirar a comanda da tela enquanto carrega. */
+  load(quiet = false): void {
+    this.loading.set(!quiet);
     this.service
       .tab(this.id)
       .pipe(takeUntilDestroyed(this.destroyRef))

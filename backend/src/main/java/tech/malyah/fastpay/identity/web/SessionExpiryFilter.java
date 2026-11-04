@@ -36,6 +36,13 @@ class SessionExpiryFilter extends OncePerRequestFilter implements Ordered {
 
     static final String BACKGROUND_HEADER = "X-Fastpay-Background";
 
+    /**
+     * Conexão SSE da equipe (H17): o EventSource do navegador não manda header, então o caminho já diz que é segundo
+     * plano. A conexão continua aberta sem passar por aqui de novo; quem a mantém reconfere a sessão
+     * ({@code identity.LiveSessions}).
+     */
+    static final String STREAM_PATH = "/api/v1/sync/stream";
+
     private static final Logger log = LoggerFactory.getLogger(SessionExpiryFilter.class);
 
     private final SessionContext session;
@@ -74,6 +81,10 @@ class SessionExpiryFilter extends OncePerRequestFilter implements Ordered {
         return SessionRepositoryFilter.DEFAULT_ORDER + 10;
     }
 
+    private static boolean background(HttpServletRequest request) {
+        return "1".equals(request.getHeader(BACKGROUND_HEADER)) || STREAM_PATH.equals(request.getRequestURI());
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
@@ -84,7 +95,7 @@ class SessionExpiryFilter extends OncePerRequestFilter implements Ordered {
                 session.signOut(request);
                 log.debug("Sessão encerrada por prazo vencido");
             } else {
-                if (!"1".equals(request.getHeader(BACKGROUND_HEADER))) {
+                if (!background(request)) {
                     session.recordActivity(request, window.get().touchedAt(now));
                 }
                 requireMfaIfNowNeeded(request, now);
