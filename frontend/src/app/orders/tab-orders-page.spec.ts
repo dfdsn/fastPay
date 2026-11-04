@@ -125,7 +125,11 @@ describe('TabOrdersPage', () => {
   }
 
   beforeEach(() => localStorage.clear());
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // A conta (H22) tem testes próprios; aqui basta que a tela a releia junto.
+    http.match('/api/v1/tabs/t-1/bill');
+    http.verify();
+  });
 
   it('monta o rascunho só no aparelho e envia o pedido inteiro com chave e preços vistos', () => {
     abrir();

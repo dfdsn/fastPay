@@ -297,6 +297,26 @@ public class Orders {
                 .map(i -> new TabItem(i.orderLineId(), i.productName(), i.quantity(), i.sentAt())).toList();
     }
 
+    /**
+     * Lançamento de consumo da comanda (H22, C da conta): produto, unidades ativas nesta comanda, preço do envio e total
+     * da linha (preço × unidades, 2 casas). Cancelamento (H23) e transferência (H25) mudam as unidades aqui.
+     */
+    public record ChargedLine(UUID orderLineId, String productName, int quantity, BigDecimal unitPrice,
+            BigDecimal lineTotal, Instant sentAt) {
+    }
+
+    /**
+     * Lançamentos ativos de consumo da comanda, dos mais antigos aos mais novos, na transação de unidade de quem chama
+     * (a comanda, o acesso e a permissão são conferidos por ele).
+     */
+    public List<ChargedLine> chargedLinesOfTabInCurrentUnit(UUID tabId) {
+        return store.chargedLines(tabId).stream()
+                .filter(l -> l.quantity() > 0)
+                .map(l -> new ChargedLine(l.orderLineId(), l.productName(), l.quantity(), OrderRules.money(l.unitPrice()),
+                        OrderRules.money(l.unitPrice().multiply(BigDecimal.valueOf(l.quantity()))), l.sentAt()))
+                .toList();
+    }
+
     private List<SentOrder> view(List<OrderRow> orders) {
         List<UUID> ids = orders.stream().map(OrderRow::id).toList();
         Map<UUID, List<SentLine>> lines = new LinkedHashMap<>();

@@ -8,6 +8,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { EMPTY, Observable, expand, reduce, timeout } from 'rxjs';
 
 import { CatalogService, Product } from '../catalog/catalog.service';
+import { BillPanel } from '../bills/bill-panel';
 import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
 import { UnitContextService, failureMessage, problemCode } from '../session/unit-context.service';
@@ -59,7 +60,15 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
  */
 @Component({
   selector: 'fp-tab-orders-page',
-  imports: [DatePipe, RouterLink, MatButtonModule, MatCardModule, MatProgressSpinnerModule, LiveStatus],
+  imports: [
+    DatePipe,
+    RouterLink,
+    MatButtonModule,
+    MatCardModule,
+    MatProgressSpinnerModule,
+    LiveStatus,
+    BillPanel,
+  ],
   template: `
     <p><a routerLink="/comandas">Voltar às comandas</a></p>
     <fp-live-status [live]="live" />
@@ -231,6 +240,8 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
         </mat-card>
       }
       <button mat-button type="button" (click)="loadOrders()">Atualizar pedidos</button>
+
+      <fp-bill-panel [tabId]="tabId" [refresh]="billRefreshes()" />
     }
   `,
   styles: `
@@ -299,7 +310,9 @@ export class TabOrdersPage {
   private readonly catalog = inject(CatalogService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly unit = inject(UnitContextService);
-  private readonly tabId = inject(ActivatedRoute).snapshot.paramMap.get('id') ?? '';
+  protected readonly tabId = inject(ActivatedRoute).snapshot.paramMap.get('id') ?? '';
+  /** Conta as releituras da conta (H22): pedido enviado, aviso de pedido ou de conta, reconexão. */
+  protected readonly billRefreshes = signal(0);
   private storageKey: string | null = null;
   /**
    * Avisos da unidade (H17): pedidos e produção desta comanda chegam sem recarregar. Reconectar ou voltar à tela
@@ -348,6 +361,8 @@ export class TabOrdersPage {
       } else if (signal.tabId === this.tabId) {
         if (signal.topic === 'COMANDA') {
           this.refreshTab();
+        } else if (signal.topic === 'CONTA') {
+          this.billRefreshes.update((n) => n + 1);
         } else {
           this.loadOrders();
         }
@@ -394,7 +409,10 @@ export class TabOrdersPage {
       .ofTab(this.tabId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (orders) => this.orders.set(orders),
+        next: (orders) => {
+          this.orders.set(orders);
+          this.billRefreshes.update((n) => n + 1);
+        },
         error: (error: unknown) => this.failure.set(failureMessage(error)),
       });
   }

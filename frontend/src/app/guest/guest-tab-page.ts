@@ -9,12 +9,14 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
 import { failureMessage } from '../session/unit-context.service';
+import { GuestBillPanel } from './guest-bill';
 import { GuestIssuesPanel } from './guest-issues';
 import { GuestService, GuestTab } from './guest.service';
 
 /**
  * Comanda do cliente avulso, sem login (H15, FR-09–FR-11). O servidor confere o acesso guardado neste aparelho; os
- * itens e a conta chegam com os pedidos (H16) e o fechamento (H28). O cliente informa e acompanha problemas (H21).
+ * itens e a conta, com os valores calculados no servidor, chegam com os pedidos (H22), e o cliente pode retirar o serviço;
+ * o fechamento é da H28. O cliente informa e acompanha problemas (H21).
  */
 @Component({
   selector: 'fp-guest-tab-page',
@@ -25,6 +27,7 @@ import { GuestService, GuestTab } from './guest.service';
     MatProgressSpinnerModule,
     RouterLink,
     LiveStatus,
+    GuestBillPanel,
     GuestIssuesPanel,
   ],
   template: `
@@ -49,8 +52,9 @@ import { GuestService, GuestTab } from './guest.service';
           <p><strong>{{ t.establishmentName }}</strong></p>
           <p>Comanda {{ t.number }} · {{ t.name }}</p>
           <p>{{ t.table ? 'Mesa ' + t.table : 'Sem mesa' }} · aberta às {{ t.openedAt | date: 'HH:mm' }}</p>
-          <p>{{ t.open ? 'Em atendimento.' : 'Encerrada.' }} Os pedidos aparecerão aqui.</p>
+          <p>{{ t.open ? 'Em atendimento.' : 'Encerrada.' }}</p>
           <button mat-stroked-button type="button" (click)="load()">Atualizar</button>
+          <fp-guest-bill [tabId]="t.tabId" [refresh]="refreshes()" />
           <fp-guest-issues [tabId]="t.tabId" [refresh]="refreshes()" />
         }
         <p><a routerLink="/minhas-comandas">Minhas comandas</a></p>
@@ -79,7 +83,7 @@ export class GuestTabPage {
   protected readonly tab = signal<GuestTab | null>(null);
   protected readonly loading = signal(true);
   protected readonly failure = signal<string | null>(null);
-  /** Conta as releituras por aviso: os problemas (H21) relêem junto. */
+  /** Conta as releituras por aviso: a conta (H22) e os problemas (H21) relêem junto. */
   protected readonly refreshes = signal(0);
   /** Avisos só desta comanda (H17); acesso revogado ou vencido encerra a conexão e a tela relê para mostrar isso. */
   protected readonly live = inject(LiveUpdatesService).forGuestTab(this.id, this.destroyRef);

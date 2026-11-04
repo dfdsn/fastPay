@@ -99,7 +99,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H19 | Operações em lote de produção | Concluída | PR #26, merge `1bdfa6e` em `develop`, CI de `develop` run 41768784263 verde ([evidência](evidencias/H19-lote-producao.md)); T-03 da H19 aprovada por Diego em 04/11/2026; caso "linha cancelada" entra no teste do lote com a H23 |
 | H20 | Atendimento responsável ou central | Concluída | PR #28, merge `c06b7b8` em `develop`, CI de `develop` run 41855357662 verde ([evidência](evidencias/H20-atendimento-responsavel-central.md)); T-03 da H20 aprovada por Diego em 04/11/2026 |
 | H21 | Problemas do consumidor e conclusão autorizada | Concluída | PR #30, merge `157d591` em `develop`, CI de `develop` run 41871502419 verde ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aprovada por Diego em 04/11/2026 |
-| H22 | Composição, serviço e descontos exatos | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H22 | Composição, serviço e descontos exatos | Aguardando revisão | Branch `feature/H22-composicao-servico-descontos`, PR para `develop` ([evidência](evidencias/H22-composicao-servico-descontos.md)); T-03 da H22 proposta, aguardando Diego |
 | H23 | Cancelar quantidade e alertar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H24 | Desfazer entrega com histórico | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H25 | Transferir unidades sem duplicar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -590,6 +590,27 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: T-03 da H21 proposta (textos 5–300; um aberto por item e um da conta; itens sem valores; quem atende e quem conclui; resolução visível ao cliente; caso pago só gerente; equipe não abre em nome do cliente; 200 por leitura), aprovada por Diego em 04/11/2026. Depende da T-03 da H20 só na reatribuição (aprovada por Diego em 04/11/2026).
 - Bloqueios / quem resolve: nenhum da H21. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
 - Próximo passo concreto: nenhum na H21. Próxima candidata elegível: H22 (dependências H14 e H16 concluídas; gate T-03 monetários), só quando Diego pedir.
+
+### H22 — Composição, serviço e descontos exatos
+
+- História e estado: H22, **aguardando revisão** (PR aberto para `develop`); T-03 da H22 proposta, aguardando Diego.
+- Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - C/D/K/S e total com BigDecimal e HALF_UP em 2 casas, D arredondado antes da base do serviço, base antes/depois do desconto e couvert na base só se configurado (PRD §10.2, FR-28, FR-68, especificação §7); total nunca negativo.
+  - Cliente retira ou devolve o serviço sem autorização, enquanto a comanda está aberta (FR-28); a equipe também, a pedido dele.
+  - Desconto um por comanda, em reais ou percentual sobre o consumo (nunca sobre o couvert), com motivo e autoria, formato aceito pela configuração vigente e limite da pessoa (FR-30, P-17); conceder de novo substitui; retirar com motivo.
+  - Redução do consumo limita o desconto fixo ao consumo e, se o percentual efetivo passa da autoridade de quem concedeu, marca revisão e bloqueia a cobrança até alguém com limite revisar, trocar ou retirar, sem impedir correção (FR-68, D-09); contratos `Bills.snapshotInCurrentUnit` e `Bills.blocksChargeInCurrentUnit` para H28/H30.
+  - Snapshot: serviço e couvert automático da versão capturada na abertura; desconto guarda consumo, valor e limite da concessão.
+  - Validação exigida: tabela de bases do serviço, centavos, retirada, desconto 100%, overflow/limite, redução pós-concessão e autorização no backend.
+- Critérios faltantes / motivo: a redução do consumo foi exercitada direto no banco, porque o cancelamento é da H23 (e a transferência da H25); "em fechamento" e "cobrança existente" passam a recusar mudanças quando existirem (H28, H30). Couvert manual, dispensa e contestação são da H26.
+- Branch e commit reais: `feature/H22-composicao-servico-descontos` (a partir de `develop` `7fc6aaa`).
+- PR, checks e merge real: PR para `develop` aberto; checks e merge a confirmar na reconciliação.
+- Arquivos/migrations/contratos: `V18__conta_desconto_servico.sql`; módulo `bills` (`Bills`, `domain.BillRules`, `JdbcBillStore`, `BillController`, `GuestBillController`); `Orders.chargedLinesOfTabInCurrentUnit`; `Tabs.forBillInCurrentUnit`; `sync.Topic.CONTA`; frontend `bills/bill-panel.ts`, `guest/guest-bill.ts`; especificação §6; decisões T-03; [evidência](evidencias/H22-composicao-servico-descontos.md).
+- Testes: ver a evidência (backend 439 no contêiner Temurin 25 com PostgreSQL real; frontend 192 no contêiner Node 24.18.0).
+- Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real do cliente na homologação de Diego.
+- Decisões novas/alteradas: T-03 da H22 proposta (formatos e limites de valor, motivo 5–300, formatos pela configuração vigente, substituição com desconto esperado, quem retira e quem revisa, só fixo entra em revisão, serviço pelo cliente ou pela equipe, couvert automático só, o que o cliente vê), aguardando Diego.
+- Bloqueios / quem resolve: T-03 da H22 (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego revisa o PR e a T-03 da H22; depois do merge, reconciliar este registro com o hash e a CI reais.
 
 ## Registro de release (ainda nenhum)
 
