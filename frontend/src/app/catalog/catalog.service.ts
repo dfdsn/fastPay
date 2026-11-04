@@ -7,6 +7,8 @@ import { AuthService } from '../auth/auth.service';
 export interface Sector {
   id: string;
   name: string;
+  /** Limite de atraso em minutos (H18, FR-22): passou disso desde o envio, a fila destaca o item. */
+  delayLimitMinutes: number;
   version: number;
 }
 
@@ -68,6 +70,16 @@ export class CatalogService {
     return this.auth.withCsrf(() =>
       this.http.put<Sector>(`/api/v1/catalog/sectors/${sector.id}`, {
         name,
+        version: sector.version,
+      }),
+    );
+  }
+
+  changeSectorDelay(sector: Sector, delayLimitMinutes: number): Observable<Sector> {
+    return this.auth.withCsrf(() =>
+      this.http.put<Sector>(`/api/v1/catalog/sectors/${sector.id}`, {
+        name: sector.name,
+        delayLimitMinutes,
         version: sector.version,
       }),
     );

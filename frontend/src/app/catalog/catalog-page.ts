@@ -81,7 +81,9 @@ interface CategoryGroup {
           </mat-card-header>
           <mat-card-content>
             <p class="hint">
-              Cada produto vai para um setor (cozinha, bar...) ou é marcado como sem preparo.
+              Cada produto vai para um setor (cozinha, bar...) ou é marcado como sem preparo. O
+              atraso é o tempo desde o envio a partir do qual a fila de produção destaca o item (de
+              1 a 240 minutos).
             </p>
             @if (data.sectors.length === 0) {
               <p>Nenhum setor cadastrado.</p>
@@ -105,6 +107,27 @@ interface CategoryGroup {
                     (click)="renameSector(sector)"
                   >
                     Renomear {{ sector.name }}
+                  </button>
+                  <mat-form-field appearance="outline" class="minutes">
+                    <mat-label>Atraso de {{ sector.name }} (min)</mat-label>
+                    <input
+                      matInput
+                      type="number"
+                      min="1"
+                      max="240"
+                      [value]="sector.delayLimitMinutes"
+                      (input)="
+                        delayDraft.set({ id: sector.id, minutes: $any($event.target).value })
+                      "
+                    />
+                  </mat-form-field>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    [disabled]="busy() || !delayChanged(sector)"
+                    (click)="changeSectorDelay(sector)"
+                  >
+                    Salvar atraso de {{ sector.name }}
                   </button>
                   <button
                     mat-stroked-button
@@ -356,6 +379,9 @@ interface CategoryGroup {
       gap: 8px;
       align-items: center;
     }
+    .minutes {
+      width: 160px;
+    }
     .list {
       list-style: none;
       padding: 0;
@@ -423,6 +449,7 @@ export class CatalogPage {
   protected readonly failure = signal<string | null>(null);
   protected readonly editing = signal<Product | null>(null);
   protected readonly sectorDraft = signal<{ id: string; name: string } | null>(null);
+  protected readonly delayDraft = signal<{ id: string; minutes: string } | null>(null);
 
   protected readonly manage = computed(() => can(this.unit(), 'GERIR_CATALOGO'));
   protected readonly changeAvailability = computed(() =>
@@ -512,6 +539,28 @@ export class CatalogPage {
     const name = this.sectorDraft()?.name.trim() ?? sector.name;
     this.run(this.service.renameSector(sector, name), `Setor renomeado para ${name}.`, () =>
       this.sectorDraft.set(null),
+    );
+  }
+
+  protected delayChanged(sector: Sector): boolean {
+    const draft = this.delayDraft();
+    return (
+      draft?.id === sector.id &&
+      draft.minutes !== '' &&
+      Number(draft.minutes) !== sector.delayLimitMinutes
+    );
+  }
+
+  protected changeSectorDelay(sector: Sector): void {
+    const minutes = Number(this.delayDraft()?.minutes);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
+      this.failure.set('Informe o atraso em minutos inteiros, de 1 a 240.');
+      return;
+    }
+    this.run(
+      this.service.changeSectorDelay(sector, minutes),
+      `Atraso de ${sector.name}: ${minutes} min.`,
+      () => this.delayDraft.set(null),
     );
   }
 

@@ -8,7 +8,7 @@ import { CatalogPage } from './catalog-page';
 import { CatalogListing } from './catalog.service';
 
 const CATALOGO: CatalogListing = {
-  sectors: [{ id: 's-cozinha', name: 'Cozinha', version: 0 }],
+  sectors: [{ id: 's-cozinha', name: 'Cozinha', delayLimitMinutes: 15, version: 0 }],
   products: [
     {
       id: 'p-agua',
@@ -198,19 +198,32 @@ describe('CatalogPage', () => {
     botao('Renomear Cozinha')!.click();
     const renomear = http.expectOne('/api/v1/catalog/sectors/s-cozinha');
     expect(renomear.request.body).toEqual({ name: 'Cozinha quente', version: 0 });
-    renomear.flush({ id: 's-cozinha', name: 'Cozinha quente', version: 1 });
+    renomear.flush({ id: 's-cozinha', name: 'Cozinha quente', delayLimitMinutes: 15, version: 1 });
+    responderCatalogo();
+
+    // Limite de atraso do setor (H18): só envia quando muda, com nome e versão lidos.
+    expect(botao('Salvar atraso de Cozinha')!.disabled).toBe(true);
+    digitar('Atraso de Cozinha (min)', '0');
+    fixture.detectChanges();
+    botao('Salvar atraso de Cozinha')!.click();
+    fixture.detectChanges();
+    expect(alerta()).toContain('de 1 a 240');
+    digitar('Atraso de Cozinha (min)', '25');
+    fixture.detectChanges();
+    botao('Salvar atraso de Cozinha')!.click();
+    const atraso = http.expectOne('/api/v1/catalog/sectors/s-cozinha');
+    expect(atraso.request.body).toEqual({ name: 'Cozinha', delayLimitMinutes: 25, version: 0 });
+    atraso.flush({ id: 's-cozinha', name: 'Cozinha', delayLimitMinutes: 25, version: 1 });
     responderCatalogo();
 
     botao('Arquivar Cozinha')!.click();
-    http
-      .expectOne('/api/v1/catalog/sectors/s-cozinha/archive')
-      .flush(
-        {
-          code: 'SETOR_EM_USO',
-          detail: 'Há produtos ativos neste setor. Mude o setor deles ou arquive-os antes.',
-        },
-        { status: 409, statusText: 'Conflict' },
-      );
+    http.expectOne('/api/v1/catalog/sectors/s-cozinha/archive').flush(
+      {
+        code: 'SETOR_EM_USO',
+        detail: 'Há produtos ativos neste setor. Mude o setor deles ou arquive-os antes.',
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
     fixture.detectChanges();
     expect(alerta()).toContain('Há produtos ativos neste setor');
   });

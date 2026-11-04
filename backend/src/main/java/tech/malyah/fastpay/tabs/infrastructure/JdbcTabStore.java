@@ -189,6 +189,21 @@ public class JdbcTabStore {
                 """, UUID.randomUUID(), action, subjectId, actorId, detail, correlationId);
     }
 
+    /** Identificação da comanda para a produção e a entrega (H18). */
+    public record LabelRow(UUID id, int number, String displayName, String tableLabel, UUID openedBy) {
+    }
+
+    public List<LabelRow> labels(List<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT id, number, display_name, table_label, opened_by FROM tab WHERE id = ANY (?)",
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", ids.toArray())),
+                (rs, n) -> new LabelRow(rs.getObject("id", UUID.class), rs.getInt("number"),
+                        rs.getString("display_name"), rs.getString("table_label"),
+                        rs.getObject("opened_by", UUID.class)));
+    }
+
     private static TabRow tab(ResultSet rs, int n) throws SQLException {
         return new TabRow(rs.getObject("id", UUID.class), rs.getObject("visit_id", UUID.class), rs.getInt("number"),
                 rs.getString("display_name"), rs.getString("table_label"),

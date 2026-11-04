@@ -2,7 +2,9 @@ package tech.malyah.fastpay.tabs;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -164,6 +166,18 @@ public class Tabs {
     /** A comanda (ativa ou encerrada) existe na unidade da transação de quem chama (H16). */
     public boolean existsInCurrentUnit(UUID tabId) {
         return store.tab(tabId).isPresent();
+    }
+
+    /** Comanda como a produção e a entrega a identificam (H18, FR-18). {@code openedBy}: quem abriu. */
+    public record Label(UUID id, int number, String name, String table, UUID openedBy) {
+    }
+
+    /** Identificação das comandas, na transação de unidade de quem chama (a permissão é conferida por ele). */
+    public Map<UUID, Label> labelsInCurrentUnit(List<UUID> tabIds) {
+        Map<UUID, Label> labels = new LinkedHashMap<>();
+        store.labels(tabIds).forEach(r -> labels.put(r.id(),
+                new Label(r.id(), r.number(), r.displayName(), r.tableLabel(), r.openedBy())));
+        return labels;
     }
 
     /** Comandas ativas da unidade, por número. */

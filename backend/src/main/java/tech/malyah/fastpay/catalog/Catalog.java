@@ -47,7 +47,8 @@ public class Catalog {
     /** Produtos por página na consulta (D-13). */
     public static final int PAGE_SIZE = 100;
 
-    public record Sector(UUID id, String name, long version) {
+    /** {@code delayLimitMinutes}: limite de atraso do setor (H18, FR-22), só destaque visual. */
+    public record Sector(UUID id, String name, int delayLimitMinutes, long version) {
     }
 
     /** {@code price} vazio para quem não vê valores (produção). {@code sectorId} vazio: dispensa produção. */
@@ -135,29 +136,57 @@ public class Catalog {
         return found;
     }
 
+    /** Setor como a produção o mostra (H18): nome, limite de atraso e se foi arquivado depois do envio. */
+    public record SectorSettings(UUID id, String name, int delayLimitMinutes, boolean archived) {
+    }
+
+    /** Setores pelos ids, arquivados inclusive, na transação de unidade de quem chama. */
+    public java.util.Map<UUID, SectorSettings> sectorsInCurrentUnit(List<UUID> sectorIds) {
+        java.util.Map<UUID, SectorSettings> found = new java.util.LinkedHashMap<>();
+        for (SectorRow row : store.sectors(sectorIds)) {
+            found.put(row.id(), new SectorSettings(row.id(), row.name(), row.delayLimitMinutes(), row.archived()));
+        }
+        return found;
+    }
+
     // Setores
 
-    public Outcome<Sector> createSector(UUID actorId, UUID establishmentId, String name, String correlationId) {
+    /** Cria o setor; sem limite de atraso informado, usa o padrão ({@link CatalogRules#DELAY_LIMIT_DEFAULT}). */
+    public Outcome<Sector> createSector(UUID actorId, UUID establishmentId, String name, Integer delayLimitMinutes,
+            String correlationId) {
         CatalogRules.Checked<String> checked = CatalogRules.sectorName(name);
         if (checked instanceof CatalogRules.Rejected<String> r) {
             return new Invalid<>(r.invalid().field(), r.invalid().message());
         }
+        CatalogRules.Checked<Integer> limit = CatalogRules.delayLimit(
+                delayLimitMinutes == null ? CatalogRules.DELAY_LIMIT_DEFAULT : delayLimitMinutes);
+        if (limit instanceof CatalogRules.Rejected<Integer> r) {
+            return new Invalid<>(r.invalid().field(), r.invalid().message());
+        }
         String valid = ((CatalogRules.Valid<String>) checked).value();
+        int minutes = ((CatalogRules.Valid<Integer>) limit).value();
         return manage(actorId, establishmentId, me -> {
             if (store.activeSectorNamed(valid, null)) {
                 return new Refused<>(Refusal.NOME_EM_USO);
             }
             UUID id = UUID.randomUUID();
-            store.insertSector(id, valid, actorId, clock.instant());
-            store.audit("setor.criado", id, actorId, null, correlationId);
+            store.insertSector(id, valid, minutes, actorId, clock.instant());
+            store.audit("setor.criado", id, actorId, "atraso " + minutes + " min", correlationId);
             return new Done<>(sector(store.activeSector(id).orElseThrow()));
         });
     }
 
-    public Outcome<Sector> renameSector(UUID actorId, UUID establishmentId, UUID sectorId, long version, String name,
-            String correlationId) {
+    /**
+     * Renomeia o setor e/ou troca o limite de atraso (H18, FR-22). Sem limite informado, mantém o atual.
+     */
+    public Outcome<Sector> updateSector(UUID actorId, UUID establishmentId, UUID sectorId, long version, String name,
+            Integer delayLimitMinutes, String correlationId) {
         CatalogRules.Checked<String> checked = CatalogRules.sectorName(name);
         if (checked instanceof CatalogRules.Rejected<String> r) {
+            return new Invalid<>(r.invalid().field(), r.invalid().message());
+        }
+        if (delayLimitMinutes != null
+                && CatalogRules.delayLimit(delayLimitMinutes) instanceof CatalogRules.Rejected<Integer> r) {
             return new Invalid<>(r.invalid().field(), r.invalid().message());
         }
         String valid = ((CatalogRules.Valid<String>) checked).value();
@@ -166,17 +195,27 @@ public class Catalog {
             if (current.isEmpty()) {
                 return new Refused<>(Refusal.NAO_ENCONTRADO);
             }
-            if (current.get().version() != version) {
+            SectorRow before = current.get();
+            if (before.version() != version) {
                 return new Refused<>(Refusal.VERSAO_DESATUALIZADA);
             }
-            if (current.get().name().equals(valid)) {
-                return new Done<>(sector(current.get()));
+            int minutes = delayLimitMinutes == null ? before.delayLimitMinutes() : delayLimitMinutes;
+            boolean renamed = !before.name().equals(valid);
+            boolean limitChanged = before.delayLimitMinutes() != minutes;
+            if (!renamed && !limitChanged) {
+                return new Done<>(sector(before));
             }
-            if (store.activeSectorNamed(valid, sectorId)) {
+            if (renamed && store.activeSectorNamed(valid, sectorId)) {
                 return new Refused<>(Refusal.NOME_EM_USO);
             }
-            store.renameSector(sectorId, version, valid, actorId, clock.instant());
-            store.audit("setor.renomeado", sectorId, actorId, null, correlationId);
+            store.updateSector(sectorId, version, valid, minutes, actorId, clock.instant());
+            if (renamed) {
+                store.audit("setor.renomeado", sectorId, actorId, null, correlationId);
+            }
+            if (limitChanged) {
+                store.audit("setor.atraso_alterado", sectorId, actorId,
+                        before.delayLimitMinutes() + ">" + minutes + " min", correlationId);
+            }
             return new Done<>(sector(store.activeSector(sectorId).orElseThrow()));
         });
     }
@@ -197,7 +236,8 @@ public class Catalog {
             }
             store.archiveSector(sectorId, version, actorId, clock.instant());
             store.audit("setor.arquivado", sectorId, actorId, null, correlationId);
-            return new Done<>(new Sector(sectorId, current.get().name(), version + 1));
+            return new Done<>(new Sector(sectorId, current.get().name(), current.get().delayLimitMinutes(),
+                    version + 1));
         });
     }
 
@@ -383,7 +423,7 @@ public class Catalog {
     }
 
     private static Sector sector(SectorRow row) {
-        return new Sector(row.id(), row.name(), row.version());
+        return new Sector(row.id(), row.name(), row.delayLimitMinutes(), row.version());
     }
 
     private static Product product(ProductRow row, boolean prices) {

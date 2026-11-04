@@ -77,6 +77,18 @@ public class JdbcMembershipStore {
                 """, JdbcMembershipStore::unit, identityId).stream().findFirst();
     }
 
+    /** Contexto de unidade: nomes das identidades com vínculo (ativo ou não) na unidade. */
+    public List<IdentitySummary> memberNames(List<UUID> identityIds) {
+        if (identityIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("""
+                SELECT u.id, u.display_name FROM membership m JOIN user_identity u ON u.id = m.identity_id
+                 WHERE m.establishment_id = current_establishment_id() AND m.identity_id = ANY (?)
+                """, ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", identityIds.toArray())),
+                (rs, n) -> new IdentitySummary(rs.getObject("id", UUID.class), rs.getString("display_name")));
+    }
+
     /** Contexto de unidade: a equipe, ativos primeiro, por nome e id. */
     public List<MemberRow> members() {
         return jdbc.query("""
