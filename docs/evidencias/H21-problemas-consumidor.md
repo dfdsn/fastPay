@@ -15,7 +15,7 @@ Registro sanitizado. Claude Code, 04/11/2026, sessão em nuvem (Linux) com Docke
 
 Nenhuma dependência nova.
 
-## 2. Proposta aguardando Diego (T-03 da H21)
+## 2. T-03 da H21 (aprovada por Diego em 04/11/2026, opção recomendada)
 
 | Proposta | Valor |
 |---|---|

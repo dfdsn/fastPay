@@ -98,7 +98,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H18 | Fila de produção e entrega por linha | Concluída | PR #24, merge `d77b512` em `develop`, CI de `develop` run 41758906795 verde ([evidência](evidencias/H18-fila-producao-entrega.md)); T-03 da H18 aprovada por Diego em 04/11/2026 |
 | H19 | Operações em lote de produção | Concluída | PR #26, merge `1bdfa6e` em `develop`, CI de `develop` run 41768784263 verde ([evidência](evidencias/H19-lote-producao.md)); T-03 da H19 aprovada por Diego em 04/11/2026; caso "linha cancelada" entra no teste do lote com a H23 |
 | H20 | Atendimento responsável ou central | Não iniciada | Sem evidência; ver dependências/gates no backlog |
-| H21 | Problemas do consumidor e conclusão autorizada | Aguardando revisão | PR para `develop` aberto ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aguardando Diego |
+| H21 | Problemas do consumidor e conclusão autorizada | Aguardando revisão | PR para `develop` aberto ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aprovada por Diego em 04/11/2026 |
 | H22 | Composição, serviço e descontos exatos | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H23 | Cancelar quantidade e alertar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H24 | Desfazer entrega com histórico | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -572,7 +572,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H21 — Problemas do consumidor e conclusão autorizada
 
-- História e estado: H21, **aguardando revisão** (PR aberto para `develop`). T-03 da H21 proposta, aguardando Diego.
+- História e estado: H21, **aguardando revisão** (PR aberto para `develop`). T-03 da H21 aprovada por Diego em 04/11/2026 (seguir a opção recomendada).
 - Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Cliente informa problema de um item da própria comanda ou da conta, com motivo; acompanha aberto, em atendimento e tratado, com a resolução (FR-24, UJ-03).
@@ -587,9 +587,9 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Arquivos/migrations/contratos: `V17__problemas_do_consumidor.sql`; `attendance.ConsumerIssues`, `attendance.domain.IssueRules`, `JdbcIssueStore`, `GuestIssueController`, `/api/v1/attendance/issues/*`; `tabs.GuestCookie`, `GuestAccess.inTab`; `Orders.itemsOfTabInCurrentUnit`; `sync.Topic.PROBLEMA`; frontend `guest/guest-issues.ts`, `attendance/issues-panel.ts`; especificação §6; decisões T-03; [evidência](evidencias/H21-problemas-consumidor.md).
 - Testes: ver a evidência (backend 397 no contêiner Temurin 25 com PostgreSQL real; frontend 185 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); teste com celular real do cliente na homologação de Diego.
-- Decisões novas/alteradas: T-03 da H21 proposta (textos 5–300; um aberto por item e um da conta; itens sem valores; quem atende e quem conclui; resolução visível ao cliente; caso pago só gerente; equipe não abre em nome do cliente; 200 por leitura), aguardando Diego. Depende da T-03 da H20 só na reatribuição.
-- Bloqueios / quem resolve: decisão T-03 da H21 (Diego). T-03 da H20 segue aguardando Diego. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego decide a T-03 da H21, revisa e faz o merge do PR; depois do merge, PR de reconciliação.
+- Decisões novas/alteradas: T-03 da H21 proposta (textos 5–300; um aberto por item e um da conta; itens sem valores; quem atende e quem conclui; resolução visível ao cliente; caso pago só gerente; equipe não abre em nome do cliente; 200 por leitura), aprovada por Diego em 04/11/2026. Depende da T-03 da H20 só na reatribuição.
+- Bloqueios / quem resolve: T-03 da H20 segue aguardando Diego. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego revisa e faz o merge do PR; depois do merge, PR de reconciliação.
 
 ## Registro de release (ainda nenhum)
 
