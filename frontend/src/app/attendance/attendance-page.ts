@@ -17,10 +17,12 @@ import {
   problemCode,
 } from '../session/unit-context.service';
 import { TabsService } from '../tabs/tabs.service';
+import { IssuesPanel } from './issues-panel';
 import {
   AttendanceCall,
   AttendanceService,
   Attendant,
+  ConsumerIssue,
   KIND_LABEL,
 } from './attendance.service';
 
@@ -42,10 +44,19 @@ const STALE = new Set([
  * que são seus, os da central ainda sem dono e os de outras pessoas, que você pode ajudar a entregar. Na central,
  * "Assumir" fica com o chamado de forma exclusiva. O gerente reatribui: na central o chamado, no garçom responsável a
  * comanda inteira. Ler não conclui nada: a entrega conclui o aviso de pronto. Não há botão de chamar atendimento.
+ * Problemas do consumidor (H21) ficam abaixo, em {@link IssuesPanel}.
  */
 @Component({
   selector: 'fp-attendance-page',
-  imports: [NgTemplateOutlet, RouterLink, MatButtonModule, MatProgressSpinnerModule, LiveStatus, SoundToggle],
+  imports: [
+    NgTemplateOutlet,
+    RouterLink,
+    MatButtonModule,
+    MatProgressSpinnerModule,
+    LiveStatus,
+    SoundToggle,
+    IssuesPanel,
+  ],
   template: `
     <h1>Atendimento</h1>
     <p><a routerLink="/inicio">Voltar ao início</a></p>
@@ -63,7 +74,7 @@ const STALE = new Set([
         } @else if (state() === 'ready') {
           <p>
             Com você: {{ mine().length }} · Na central, sem dono: {{ unowned().length }} · Com outras
-            pessoas: {{ others().length }}
+            pessoas: {{ others().length }} · Problemas: {{ issues().length }}
           </p>
         }
         @if (notice(); as message) {
@@ -107,6 +118,7 @@ const STALE = new Set([
             <ng-container *ngTemplateOutlet="item; context: { $implicit: call }" />
           }
         </ul>
+        <fp-issues-panel [issues]="issues()" [now]="now()" (changed)="refresh()" />
         <button mat-button type="button" (click)="load()">Atualizar</button>
       }
     }
@@ -233,12 +245,14 @@ export class AttendancePage {
   private offset = 0;
   /** Chamados já vistos nesta tela: os que chegam depois ganham o sinal de novo (e o som, se ligado). */
   private seen: Set<string> | null = null;
-  private readonly now = signal(Date.now());
+  protected readonly now = signal(Date.now());
   /** Avisos da unidade (H17): chamado novo, assumido, reatribuído ou concluído; item pronto ou entregue. */
   protected readonly live = inject(LiveUpdatesService).forUnit(this.destroyRef);
 
   protected readonly state = signal<State>('loading');
   protected readonly calls = signal<AttendanceCall[]>([]);
+  /** Problemas do consumidor ainda não tratados (H21). */
+  protected readonly issues = signal<ConsumerIssue[]>([]);
   protected readonly fresh = signal<ReadonlySet<string>>(new Set());
   protected readonly busy = signal(false);
   protected readonly notice = signal<string | null>(null);
@@ -260,6 +274,7 @@ export class AttendancePage {
       if (
         signal.kind === 'resync' ||
         signal.topic === 'ATENDIMENTO' ||
+        signal.topic === 'PROBLEMA' ||
         signal.topic === 'PRODUCAO'
       ) {
         this.refresh();
@@ -349,7 +364,7 @@ export class AttendancePage {
   }
 
   /** Releitura por aviso do servidor: a fila continua na tela enquanto atualiza. */
-  private refresh(): void {
+  protected refresh(): void {
     if (this.state() === 'ready') {
       this.fetch();
     } else if (this.state() === 'error') {
@@ -366,6 +381,7 @@ export class AttendancePage {
           this.offset = Date.parse(queue.now) - Date.now();
           this.now.set(Date.now() + this.offset);
           this.calls.set(queue.calls);
+          this.issues.set(queue.issues ?? []);
           this.markFresh(queue.calls);
           this.state.set('ready');
         },

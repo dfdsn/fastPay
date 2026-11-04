@@ -9,5 +9,7 @@ public enum Topic {
     /** Linhas recebidas ou mudadas na produção (mensagens internas: o consumidor não recebe). */
     PRODUCAO,
     /** Chamado de atendimento criado, assumido, reatribuído ou concluído; responsável da comanda trocado (H20). */
-    ATENDIMENTO
+    ATENDIMENTO,
+    /** Problema do consumidor informado, atendido, encaminhado ou tratado (H21). Vai à equipe e ao consumidor. */
+    PROBLEMA
 }

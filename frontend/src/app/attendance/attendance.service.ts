@@ -27,9 +27,35 @@ export interface AttendanceCall {
   version: number;
 }
 
+export type IssueStatus = 'ABERTO' | 'EM_ATENDIMENTO' | 'TRATADO';
+export type Correction = 'SEM_CORRECAO' | 'CORRECAO_REALIZADA';
+
+/**
+ * Problema do consumidor ainda não tratado (H21). {@code item} nulo: problema da conta. {@code owner}: o garçom
+ * responsável da comanda ou, na central, quem atende. {@code afterClosure}: chegou com a conta já encerrada (paga).
+ */
+export interface ConsumerIssue {
+  id: string;
+  status: IssueStatus;
+  mode: AttendanceMode;
+  tab: { id: string; number: number; name: string; table: string | null };
+  item: { orderLineId: string; productName: string | null } | null;
+  description: string;
+  afterClosure: boolean;
+  owner: { id: string; name: string } | null;
+  mine: boolean;
+  attendedBy: { id: string; name: string } | null;
+  forwarded: boolean;
+  createdAt: string;
+  attendedAt: string | null;
+  forwardedAt: string | null;
+  version: number;
+}
+
 export interface AttendanceQueue {
   now: string;
   calls: AttendanceCall[];
+  issues: ConsumerIssue[];
 }
 
 export interface Attendant {
@@ -64,6 +90,43 @@ export class AttendanceService {
 
   attendants(): Observable<Attendant[]> {
     return this.http.get<Attendant[]>('/api/v1/attendance/attendants');
+  }
+
+  attendIssue(issue: ConsumerIssue): Observable<ConsumerIssue> {
+    return this.auth.withCsrf(() =>
+      this.http.post<ConsumerIssue>(`/api/v1/attendance/issues/${issue.id}/attend`, {}),
+    );
+  }
+
+  forwardIssue(issue: ConsumerIssue): Observable<ConsumerIssue> {
+    return this.auth.withCsrf(() =>
+      this.http.post<ConsumerIssue>(`/api/v1/attendance/issues/${issue.id}/forward`, {
+        version: issue.version,
+      }),
+    );
+  }
+
+  concludeIssue(issue: ConsumerIssue, resolution: string, correction: Correction): Observable<ConsumerIssue> {
+    return this.auth.withCsrf(() =>
+      this.http.post<ConsumerIssue>(`/api/v1/attendance/issues/${issue.id}/conclude`, {
+        version: issue.version,
+        resolution,
+        correction,
+      }),
+    );
+  }
+
+  assignIssue(issue: ConsumerIssue, assigneeId: string): Observable<ConsumerIssue> {
+    return this.auth.withCsrf(() =>
+      this.http.post<ConsumerIssue>(`/api/v1/attendance/issues/${issue.id}/assign`, {
+        assigneeId,
+        version: issue.version,
+      }),
+    );
+  }
+
+  issueAttendants(): Observable<Attendant[]> {
+    return this.http.get<Attendant[]>('/api/v1/attendance/issue-attendants');
   }
 }
 

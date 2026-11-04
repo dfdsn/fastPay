@@ -23,6 +23,42 @@ export interface GuestTab {
   open: boolean;
 }
 
+export type IssueStatus = 'ABERTO' | 'EM_ATENDIMENTO' | 'TRATADO';
+
+/** Item da comanda que o cliente pode apontar num problema (H21): sem valores. */
+export interface GuestItem {
+  orderLineId: string;
+  productName: string;
+  quantity: number;
+  sentAt: string;
+}
+
+/** Problema como o cliente o vê (H21). {@code item} nulo: problema da conta. */
+export interface GuestIssue {
+  id: string;
+  item: { orderLineId: string; productName: string | null } | null;
+  description: string;
+  status: IssueStatus;
+  afterClosure: boolean;
+  createdAt: string;
+  attendedAt: string | null;
+  concludedAt: string | null;
+  resolution: string | null;
+}
+
+export interface GuestIssues {
+  now: string;
+  closed: boolean;
+  items: GuestItem[];
+  issues: GuestIssue[];
+}
+
+export const ISSUE_STATUS_LABEL: Record<IssueStatus, string> = {
+  ABERTO: 'Aberto',
+  EM_ATENDIMENTO: 'Em atendimento',
+  TRATADO: 'Tratado',
+};
+
 /**
  * Cliente sem login (H15). O token do QR vai no corpo, nunca na URL; o acesso confirmado fica num cookie do servidor
  * (HttpOnly), que esta tela não lê.
@@ -50,5 +86,16 @@ export class GuestService {
 
   tab(id: string): Observable<GuestTab> {
     return this.http.get<GuestTab>(`/api/v1/guest/tabs/${id}`);
+  }
+
+  issues(tabId: string): Observable<GuestIssues> {
+    return this.http.get<GuestIssues>(`/api/v1/guest/tabs/${tabId}/issues`);
+  }
+
+  /** {@code orderLineId} nulo: problema da conta. */
+  report(tabId: string, orderLineId: string | null, description: string): Observable<GuestIssue> {
+    return this.auth.withCsrf(() =>
+      this.http.post<GuestIssue>(`/api/v1/guest/tabs/${tabId}/issues`, { orderLineId, description }),
+    );
   }
 }
