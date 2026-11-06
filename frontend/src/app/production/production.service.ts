@@ -13,6 +13,8 @@ export interface Destination {
   name: string;
   table: string | null;
   quantity: number;
+  /** Comanda já encerrada (H24): a entrega dela não se desfaz, registra-se ocorrência. */
+  closed?: boolean;
 }
 
 /**
@@ -84,6 +86,16 @@ export interface Acknowledged {
   alreadyAcknowledged: boolean;
 }
 
+/** Ocorrência de entrega registrada (H24): a linha como está, sem mudança. */
+export interface DeliveryOccurrence {
+  eventId: string;
+  line: ProductionLine;
+}
+
+/** Motivo de desfazer entrega ou de ocorrência (H24): de 5 a 300 caracteres, conferido também no servidor. */
+export const CORRECTION_REASON_MIN = 5;
+export const CORRECTION_REASON_MAX = 300;
+
 export type ProductionAction = 'start' | 'ready' | 'impossible/withdraw' | 'deliver';
 
 /** Ação de um lote da produção (H19): só as etapas de preparo; entregar e sinalizar seguem uma linha por vez. */
@@ -153,6 +165,31 @@ export class ProductionService {
     );
   }
 
+  /** Entregues mais recentes (H24), para quem pode desfazer a entrega. */
+  delivered(): Observable<ProductionBoard> {
+    return this.http.get<ProductionBoard>('/api/v1/production/delivered');
+  }
+
+  /** Volta a linha entregue para pronta, com motivo (H24); só com todas as comandas abertas. */
+  undoDelivery(line: ProductionLine, reason: string): Observable<ProductionLine> {
+    return this.auth.withCsrf(() =>
+      this.http.post<ProductionLine>(`/api/v1/production/lines/${line.id}/undo-delivery`, {
+        version: line.version,
+        reason,
+      }),
+    );
+  }
+
+  /** Registra a ocorrência de entrega com comanda já encerrada (H24): nada é reaberto nem devolvido. */
+  deliveryOccurrence(line: ProductionLine, reason: string): Observable<DeliveryOccurrence> {
+    return this.auth.withCsrf(() =>
+      this.http.post<DeliveryOccurrence>(`/api/v1/production/lines/${line.id}/delivery-occurrence`, {
+        version: line.version,
+        reason,
+      }),
+    );
+  }
+
   impossible(line: ProductionLine, reason: string): Observable<ProductionLine> {
     return this.auth.withCsrf(() =>
       this.http.post<ProductionLine>(`/api/v1/production/lines/${line.id}/impossible`, {
@@ -173,7 +210,9 @@ export const STATUS_LABEL: Record<ProductionStatus, string> = {
 
 /** "Comanda 12 · Ana · mesa 5", com a quantidade quando a linha vai para mais de um destino. */
 export function destinationLabel(d: Destination, showQuantity: boolean): string {
-  const base = `Comanda ${d.number} · ${d.name} · ${d.table ? 'mesa ' + d.table : 'sem mesa'}`;
+  const base =
+    `Comanda ${d.number} · ${d.name} · ${d.table ? 'mesa ' + d.table : 'sem mesa'}` +
+    (d.closed ? ' · encerrada' : '');
   return showQuantity ? `${base} (${d.quantity})` : base;
 }
 

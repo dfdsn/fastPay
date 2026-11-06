@@ -5,7 +5,7 @@ import { provideRouter } from '@angular/router';
 
 import { comCookieCsrf } from '../auth/auth-testing';
 import { FakeEventSource, provideFakeEventSource } from '../live/live-testing';
-import { UnitContextService } from '../session/unit-context.service';
+import { Permission, UnitContextService } from '../session/unit-context.service';
 import { DeliveriesPage } from './deliveries-page';
 import { ProductionLine } from './production.service';
 import { linha } from './production-testing';
@@ -48,7 +48,7 @@ describe('DeliveriesPage (H18)', () => {
     Array.from(element().querySelectorAll('button')).find((b) => b.textContent?.includes(rotulo));
   const entregas = () => http.expectOne('/api/v1/production/deliveries');
 
-  function abrir(lines: ProductionLine[]): void {
+  function abrir(lines: ProductionLine[], permissions: Permission[] = ['OPERAR_COMANDA']): void {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date(AGORA));
     comCookieCsrf(true);
@@ -65,14 +65,30 @@ describe('DeliveriesPage (H18)', () => {
       establishmentId: 'a',
       name: 'Bar da Praia',
       role: 'GARCOM',
-      permissions: ['OPERAR_COMANDA'],
+      permissions,
     });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(DeliveriesPage);
     fixture.detectChanges();
     entregas().flush({ now: AGORA, lines });
+    if (permissions.includes('DESFAZER_ENTREGA')) {
+      entregues().flush({ now: AGORA, lines: delivered });
+    }
     fixture.detectChanges();
   }
+
+  let delivered: ProductionLine[] = [];
+  const entregues = () => http.expectOne('/api/v1/production/delivered');
+  const ENTREGUE = linha({
+    id: 'l-9',
+    productName: 'Caipirinha',
+    quantity: 2,
+    status: 'ENTREGUE',
+    readyAt: '2026-11-04T20:10:00Z',
+    deliveredAt: '2026-11-04T20:15:00Z',
+    statusSince: '2026-11-04T20:15:00Z',
+    version: 3,
+  });
 
   afterEach(() => {
     http.verify();
@@ -129,5 +145,87 @@ describe('DeliveriesPage (H18)', () => {
     entregas().flush({ now: AGORA, lines: [BATATA] });
     fixture.detectChanges();
     expect(texto()).toContain('Prontos para entregar (1)');
+  });
+
+  it('sem a permissão não mostra entregues nem pede a lista (H24)', () => {
+    delivered = [ENTREGUE];
+    abrir([]);
+    expect(texto()).not.toContain('Entregues recentemente');
+    http.expectNone('/api/v1/production/delivered');
+  });
+
+  it('desfaz a entrega com motivo e a linha volta para pronto (H24)', () => {
+    delivered = [ENTREGUE];
+    abrir([], ['OPERAR_COMANDA', 'DESFAZER_ENTREGA']);
+    expect(texto()).toContain('Entregues recentemente (1)');
+    expect(texto()).toContain('Entregue há 5 min');
+    botao('Desfazer entrega de Caipirinha')!.click();
+    fixture.detectChanges();
+    const motivo = element().querySelector<HTMLInputElement>('input[aria-label="Motivo para Caipirinha"]')!;
+    motivo.value = 'ops';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Confirmar desfazer')!.click();
+    fixture.detectChanges();
+    expect(texto()).toContain('Informe o motivo, com 5 a 300 caracteres.');
+    http.expectNone((r) => r.url.endsWith('/undo-delivery'));
+
+    motivo.value = 'Entregou na mesa errada';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Confirmar desfazer')!.click();
+    const req = http.expectOne('/api/v1/production/lines/l-9/undo-delivery');
+    expect(req.request.body).toEqual({ version: 3, reason: 'Entregou na mesa errada' });
+    const pronta = { ...ENTREGUE, status: 'PRONTO' as const, deliveredAt: null, version: 4 };
+    req.flush(pronta);
+    entregas().flush({ now: AGORA, lines: [pronta] });
+    entregues().flush({ now: AGORA, lines: [] });
+    fixture.detectChanges();
+    expect(texto()).toContain('Entrega de 2 × Caipirinha desfeita: o item voltou para pronto.');
+    expect(botao('Entregar 2 × Caipirinha')).toBeDefined();
+    expect(texto()).toContain('Nenhuma entrega recente.');
+  });
+
+  it('com comanda encerrada só registra ocorrência; recusa relê a lista (H24)', () => {
+    const encerrada = {
+      ...ENTREGUE,
+      destinations: [
+        { tabId: 't-1', number: 12, name: 'Ana', table: '5', quantity: 1, closed: false },
+        { tabId: 't-2', number: 13, name: 'Bia', table: null, quantity: 1, closed: true },
+      ],
+    };
+    delivered = [encerrada];
+    abrir([], ['OPERAR_COMANDA', 'DESFAZER_ENTREGA']);
+    expect(texto()).toContain('Comanda 13 · Bia · sem mesa · encerrada (1)');
+    expect(botao('Desfazer entrega de Caipirinha')).toBeUndefined();
+    botao('Ocorrência de Caipirinha')!.click();
+    fixture.detectChanges();
+    expect(texto()).toContain('nada é reaberto nem devolvido');
+    const motivo = element().querySelector<HTMLInputElement>('input[aria-label="Motivo para Caipirinha"]')!;
+    motivo.value = 'Bia recebeu bebida errada';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Registrar ocorrência')!.click();
+    const req = http.expectOne('/api/v1/production/lines/l-9/delivery-occurrence');
+    expect(req.request.body).toEqual({ version: 3, reason: 'Bia recebeu bebida errada' });
+    req.flush({ eventId: 'e-1', line: encerrada });
+    entregas().flush({ now: AGORA, lines: [] });
+    entregues().flush({ now: AGORA, lines: [encerrada] });
+    fixture.detectChanges();
+    expect(texto()).toContain('Ocorrência registrada para 2 × Caipirinha.');
+
+    // Outra pessoa já desfez ou a situação mudou: a recusa aparece e a tela relê.
+    botao('Ocorrência de Caipirinha')!.click();
+    fixture.detectChanges();
+    const outro = element().querySelector<HTMLInputElement>('input[aria-label="Motivo para Caipirinha"]')!;
+    outro.value = 'Bia recebeu bebida errada';
+    outro.dispatchEvent(new Event('input'));
+    botao('Registrar ocorrência')!.click();
+    http.expectOne('/api/v1/production/lines/l-9/delivery-occurrence').flush(
+      { code: 'VERSAO_DESATUALIZADA', detail: 'Este item mudou desde que a tela foi carregada.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+    entregas().flush({ now: AGORA, lines: [] });
+    entregues().flush({ now: AGORA, lines: [] });
+    fixture.detectChanges();
+    expect(texto()).toContain('Este item mudou desde que a tela foi carregada.');
+    expect(element().querySelector('input[aria-label="Motivo para Caipirinha"]')).toBeNull();
   });
 });

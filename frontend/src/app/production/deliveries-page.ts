@@ -4,12 +4,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RouterLink } from '@angular/router';
-import { interval } from 'rxjs';
+import { Observable, interval } from 'rxjs';
 
 import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
-import { failureMessage, problemCode } from '../session/unit-context.service';
+import { UnitContextService, can, failureMessage, problemCode } from '../session/unit-context.service';
 import {
+  CORRECTION_REASON_MAX,
+  CORRECTION_REASON_MIN,
   ProductionLine,
   ProductionService,
   STATUS_LABEL,
@@ -20,18 +22,31 @@ import {
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
+/** Correção aberta numa linha entregue (H24): desfazer (comandas abertas) ou ocorrência (alguma encerrada). */
+interface Correcting {
+  line: ProductionLine;
+  kind: 'undo' | 'occurrence';
+  reason: string;
+}
+
 const STALE = new Set([
   'VERSAO_DESATUALIZADA',
   'ETAPA_INVALIDA',
   'LINHA_NAO_ENCONTRADA',
   'LINHA_IMPOSSIVEL',
+  'ITEM_NAO_ENTREGUE',
+  'ITEM_CANCELADO',
+  'COMANDA_ENCERRADA',
+  'ENTREGA_PODE_SER_DESFEITA',
 ]);
 
 /**
  * Entregas (H18, FR-19, FR-21, D-06): o que está pronto, em duas classes (com preparo e sem preparo), e o que a
  * produção sinalizou como impossível de atender. Entregar confirma a linha inteira para todos os destinos mostrados,
  * sem entrega parcial; se os destinos mudaram desde a leitura (transferência, cancelamento), o servidor recusa e a
- * tela mostra os novos para confirmar de novo.
+ * tela mostra os novos para confirmar de novo. Quem pode desfazer entrega (H24, FR-70) vê também as entregues mais
+ * recentes: com todas as comandas abertas, desfaz com motivo e a linha volta a pronta; com alguma encerrada, só
+ * registra a ocorrência, sem reabrir nem devolver.
  */
 @Component({
   selector: 'fp-deliveries-page',
@@ -104,6 +119,65 @@ const STALE = new Set([
             <ng-container *ngTemplateOutlet="item; context: { $implicit: line }" />
           }
         </ul>
+
+        @if (canCorrect()) {
+          <h2>Entregues recentemente ({{ delivered().length }})</h2>
+          @if (delivered().length === 0) {
+            <p>Nenhuma entrega recente.</p>
+          }
+          <ul class="lines" aria-label="Entregues recentemente">
+            @for (line of delivered(); track line.id) {
+              <li>
+                <div>
+                  <strong>{{ line.quantity }} × {{ line.productName }}</strong>
+                  @if (line.sectorName) {
+                    · {{ line.sectorName }}
+                  }
+                </div>
+                <div>Para: {{ destinations(line) }}</div>
+                <div>Entregue há {{ since(line.deliveredAt ?? line.statusSince) }}</div>
+                @if (correcting()?.line?.id === line.id) {
+                  <form class="row" (submit)="$event.preventDefault(); confirmCorrection()">
+                    @if (correcting()!.kind === 'occurrence') {
+                      <p class="grow">
+                        Uma comanda já foi encerrada: a entrega não será desfeita, nada é reaberto nem devolvido.
+                        Devolução, se couber, é feita pelo gerente.
+                      </p>
+                    }
+                    <label class="grow">
+                      Motivo
+                      <input
+                        type="text"
+                        [maxLength]="reasonMax"
+                        [value]="correcting()!.reason"
+                        [attr.aria-label]="'Motivo para ' + line.productName"
+                        (input)="setReason($any($event.target).value)"
+                      />
+                    </label>
+                    <button mat-flat-button type="submit" [disabled]="busy()">
+                      {{ correcting()!.kind === 'undo' ? 'Confirmar desfazer' : 'Registrar ocorrência' }}
+                    </button>
+                    <button mat-button type="button" [disabled]="busy()" (click)="correcting.set(null)">
+                      Voltar
+                    </button>
+                  </form>
+                } @else if (line.quantity > 0) {
+                  <div class="row">
+                    @if (anyClosed(line)) {
+                      <button mat-stroked-button type="button" [disabled]="busy()" (click)="startCorrection(line)">
+                        Ocorrência de {{ line.productName }}
+                      </button>
+                    } @else {
+                      <button mat-stroked-button type="button" [disabled]="busy()" (click)="startCorrection(line)">
+                        Desfazer entrega de {{ line.productName }}
+                      </button>
+                    }
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
         <button mat-button type="button" (click)="load()">Atualizar</button>
       }
     }
@@ -164,6 +238,12 @@ const STALE = new Set([
     .lines li.blocked {
       background: #fdecea;
     }
+    .grow {
+      flex: 1 1 240px;
+    }
+    .grow input {
+      width: 100%;
+    }
     .note,
     .problem {
       font-weight: 500;
@@ -181,6 +261,7 @@ const STALE = new Set([
 export class DeliveriesPage {
   private readonly service = inject(ProductionService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly unit = inject(UnitContextService);
   private offset = 0;
   private readonly now = signal(Date.now());
   /** Avisos da unidade (H17): item pronto, entregue em outro aparelho, impossibilidade sinalizada. */
@@ -192,6 +273,12 @@ export class DeliveriesPage {
   protected readonly busy = signal(false);
   protected readonly notice = signal<string | null>(null);
   protected readonly failure = signal<string | null>(null);
+  protected readonly reasonMax = CORRECTION_REASON_MAX;
+  /** Entregues recentes (H24), só para quem pode desfazer. */
+  protected readonly delivered = signal<ProductionLine[]>([]);
+  protected readonly correcting = signal<Correcting | null>(null);
+  /** Só quem tem a permissão vê a seção; o servidor confere de novo (CA-04). */
+  protected readonly canCorrect = computed(() => can(this.unit.current(), 'DESFAZER_ENTREGA'));
   protected readonly problems = computed(() => this.lines().filter((l) => l.impossible));
   protected readonly prepared = computed(() =>
     this.lines().filter((l) => !l.impossible && l.status === 'PRONTO' && l.sectorId !== null),
@@ -255,6 +342,65 @@ export class DeliveriesPage {
       });
   }
 
+  protected anyClosed(line: ProductionLine): boolean {
+    return line.destinations.some((d) => d.closed);
+  }
+
+  startCorrection(line: ProductionLine): void {
+    this.failure.set(null);
+    this.notice.set(null);
+    this.correcting.set({ line, kind: this.anyClosed(line) ? 'occurrence' : 'undo', reason: '' });
+  }
+
+  setReason(value: string): void {
+    const c = this.correcting();
+    if (c) {
+      this.correcting.set({ ...c, reason: value });
+    }
+  }
+
+  /**
+   * Desfaz a entrega (a linha volta a pronta e reaparece acima) ou registra a ocorrência (H24, FR-70). Se a situação
+   * mudou desde a leitura (outra entrega, comanda encerrada), o servidor recusa e a tela relê.
+   */
+  confirmCorrection(): void {
+    const c = this.correcting();
+    if (!c) {
+      return;
+    }
+    const reason = c.reason.trim();
+    if (reason.length < CORRECTION_REASON_MIN || reason.length > CORRECTION_REASON_MAX) {
+      this.failure.set(`Informe o motivo, com ${CORRECTION_REASON_MIN} a ${CORRECTION_REASON_MAX} caracteres.`);
+      return;
+    }
+    this.busy.set(true);
+    this.failure.set(null);
+    const request: Observable<unknown> =
+      c.kind === 'undo'
+        ? this.service.undoDelivery(c.line, reason)
+        : this.service.deliveryOccurrence(c.line, reason);
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.correcting.set(null);
+        this.notice.set(
+          c.kind === 'undo'
+            ? `Entrega de ${c.line.quantity} × ${c.line.productName} desfeita: o item voltou para pronto.`
+            : `Ocorrência registrada para ${c.line.quantity} × ${c.line.productName}.`,
+        );
+        this.fetch();
+      },
+      error: (error: unknown) => {
+        this.busy.set(false);
+        this.failure.set(failureMessage(error));
+        if (STALE.has(problemCode(error) ?? '')) {
+          this.correcting.set(null);
+          this.fetch();
+        }
+      },
+    });
+  }
+
   private refresh(): void {
     if (this.state() === 'ready') {
       this.fetch();
@@ -277,5 +423,15 @@ export class DeliveriesPage {
         error: (error: unknown) =>
           this.state.set(problemCode(error) === 'PERMISSAO_NEGADA' ? 'forbidden' : 'error'),
       });
+    if (this.canCorrect()) {
+      this.service
+        .delivered()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (board) => this.delivered.set(board.lines),
+          // Sem a permissão agora (revogada), a seção some; o resto da tela continua.
+          error: () => this.delivered.set([]),
+        });
+    }
   }
 }

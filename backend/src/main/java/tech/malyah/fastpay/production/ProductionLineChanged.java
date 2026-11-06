@@ -21,7 +21,9 @@ public record ProductionLineChanged(UUID lineId, Change change, List<UUID> tabId
         /** Produção retirou a sinalização. */
         IMPOSSIVEL_RETIRADO,
         /** Todas as unidades canceladas antes da entrega (H23): a linha terminou. */
-        CANCELADA
+        CANCELADA,
+        /** A entrega foi desfeita (H24): a linha voltou a pronta e precisa ser entregue de novo. */
+        ENTREGA_DESFEITA
     }
 
     public ProductionLineChanged {

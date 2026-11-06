@@ -36,7 +36,14 @@ public final class ProductionRules {
         /** Produção retira a sinalização (por exemplo, o insumo chegou). */
         IMPOSSIVEL_RETIRADO,
         /** Quem tem a permissão cancela unidades da linha (H23); não é etapa da produção, ver {@link #cancel}. */
-        CANCELADO
+        CANCELADO,
+        /** Gerente ou permissão específica volta a linha entregue para pronta (H24); ver {@link #undoDelivery}. */
+        ENTREGA_DESFEITA,
+        /**
+         * Entrega errada com comanda de destino já encerrada (H24): fica registrada, sem mudar a linha, a conta ou o
+         * pagamento e sem devolução automática.
+         */
+        OCORRENCIA_ENTREGA
     }
 
     /** Situação lida da linha travada. */
@@ -84,7 +91,7 @@ public final class ProductionRules {
                     ? new Next(line.status(), true) : new Refused(Refusal.ETAPA_INVALIDA);
             case IMPOSSIVEL_RETIRADO -> line.impossible()
                     ? new Next(line.status(), false) : new Refused(Refusal.ETAPA_INVALIDA);
-            case CANCELADO -> new Refused(Refusal.ETAPA_INVALIDA);
+            case CANCELADO, ENTREGA_DESFEITA, OCORRENCIA_ENTREGA -> new Refused(Refusal.ETAPA_INVALIDA);
         };
     }
 
@@ -134,6 +141,37 @@ public final class ProductionRules {
         Status to = total && line.status() != Status.ENTREGUE ? Status.CANCELADA : line.status();
         boolean ack = line.hasSector() && (line.status() == Status.EM_PREPARO || line.status() == Status.PRONTO);
         return new CancelPlan(to, after, ack, total && line.impossible());
+    }
+
+    /** Por que a entrega não pode ser desfeita (H24, FR-70, D-07). */
+    public enum UndoBlock {
+        /** A linha não está entregue. */
+        NAO_ENTREGUE,
+        /** Todas as unidades foram canceladas depois da entrega: não há o que voltar a entregar. */
+        SEM_UNIDADES_ATIVAS,
+        /**
+         * Alguma comanda com unidades ativas da linha está encerrada (paga): não se reabre nem se devolve por aqui;
+         * cabe registrar a ocorrência ({@link Action#OCORRENCIA_ENTREGA}).
+         */
+        COMANDA_ENCERRADA
+    }
+
+    /**
+     * Desfazer a entrega (H24, FR-70, D-07): só a linha entregue, com unidades ativas, e com todas as comandas dessas
+     * unidades abertas. Fechamento em andamento (H28) e cobrança existente (H30) entram aqui com as suas histórias.
+     *
+     * @param remaining unidades que ainda contam (original menos canceladas)
+     * @param anyDestinationClosed alguma comanda com unidades ativas da linha está encerrada
+     * @return {@code null} quando pode desfazer
+     */
+    public static UndoBlock undoDelivery(Status status, int remaining, boolean anyDestinationClosed) {
+        if (status != Status.ENTREGUE) {
+            return UndoBlock.NAO_ENTREGUE;
+        }
+        if (remaining < 1) {
+            return UndoBlock.SEM_UNIDADES_ATIVAS;
+        }
+        return anyDestinationClosed ? UndoBlock.COMANDA_ENCERRADA : null;
     }
 
     private static boolean beforeReady(Status status) {

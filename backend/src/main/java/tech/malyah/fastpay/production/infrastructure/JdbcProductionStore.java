@@ -21,6 +21,9 @@ public class JdbcProductionStore {
     /** Linhas por consulta de fila: a tela mostra as mais antigas primeiro. */
     public static final int PAGE = 200;
 
+    /** Entregues recentes por consulta (H24): o que ainda costuma ser corrigido na hora. */
+    public static final int DELIVERED_PAGE = 50;
+
     private final JdbcTemplate jdbc;
 
     JdbcProductionStore(JdbcTemplate jdbc) {
@@ -94,6 +97,38 @@ public class JdbcProductionStore {
                 """, JdbcProductionStore::line, PAGE);
     }
 
+    /** Entregues mais recentes (H24), da entrega mais nova à mais antiga. */
+    public List<LineRow> delivered() {
+        return jdbc.query("SELECT " + COLUMNS + """
+                  FROM production_line
+                 WHERE status = 'ENTREGUE'
+                 ORDER BY delivered_at DESC, id
+                 LIMIT ?
+                """, JdbcProductionStore::line, DELIVERED_PAGE);
+    }
+
+    /**
+     * Desfaz a entrega da linha travada (H24): volta a pronta; o instante do pronto e os do preparo ficam, o da entrega
+     * é limpo (a próxima entrega válida grava o seu).
+     */
+    public void undoDelivery(UUID id, long version, Instant now) {
+        requireOne(jdbc.update("""
+                UPDATE production_line SET status = 'PRONTO', status_since = ?, delivered_at = NULL,
+                                           version = version + 1
+                 WHERE id = ? AND version = ? AND status = 'ENTREGUE'
+                """, Timestamp.from(now), id, version));
+    }
+
+    /** O passo ENTREGUE mais recente da linha: a entrega que vale até ser desfeita (H24). */
+    public Optional<UUID> lastDelivery(UUID lineId) {
+        return jdbc.query("""
+                SELECT id FROM production_event
+                 WHERE production_line_id = ? AND action = 'ENTREGUE'
+                 ORDER BY line_version DESC
+                 LIMIT 1
+                """, (rs, n) -> rs.getObject("id", UUID.class), lineId).stream().findFirst();
+    }
+
     public Optional<LineRow> line(UUID id) {
         return jdbc.query("SELECT " + COLUMNS + " FROM production_line WHERE id = ?", JdbcProductionStore::line, id)
                 .stream().findFirst();
@@ -164,13 +199,29 @@ public class JdbcProductionStore {
 
     public void event(UUID lineId, ProductionRules.Action action, Status from, Status to, String reason,
             long lineVersion, UUID actorId, Instant now, String correlationId) {
+        event(UUID.randomUUID(), lineId, action, from, to, reason, lineVersion, null, actorId, now, correlationId);
+    }
+
+    /**
+     * Passo do histórico com id escolhido por quem chama. {@code invalidates}: a entrega cuja amostra de tempo deixa de
+     * valer (só no desfazer, H24).
+     */
+    public void event(UUID id, UUID lineId, ProductionRules.Action action, Status from, Status to, String reason,
+            long lineVersion, UUID invalidates, UUID actorId, Instant now, String correlationId) {
         jdbc.update("""
                 INSERT INTO production_event (id, establishment_id, production_line_id, action, from_status,
-                                              to_status, reason, line_version, performed_by, performed_at,
-                                              correlation_id)
-                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, UUID.randomUUID(), lineId, action.name(), from.name(), to.name(), reason, lineVersion, actorId,
+                                              to_status, reason, line_version, invalidates_event_id, performed_by,
+                                              performed_at, correlation_id)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, id, lineId, action.name(), from.name(), to.name(), reason, lineVersion, invalidates, actorId,
                 Timestamp.from(now), correlationId);
+    }
+
+    public void audit(String action, UUID subjectId, UUID actorId, String detail, String correlationId) {
+        jdbc.update("""
+                INSERT INTO audit_event (id, establishment_id, action, subject_id, actor_id, detail, correlation_id)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), action, subjectId, actorId, detail, correlationId);
     }
 
     /**
