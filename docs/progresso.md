@@ -101,7 +101,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H21 | Problemas do consumidor e conclusão autorizada | Concluída | PR #30, merge `157d591` em `develop`, CI de `develop` run 41871502419 verde ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aprovada por Diego em 04/11/2026 |
 | H22 | Composição, serviço e descontos exatos | Concluída | PR #32, merge `2da7c4a` em `develop`, CI de `develop` run 41884465186 verde ([evidência](evidencias/H22-composicao-servico-descontos.md)); T-03 da H22 aprovada em 04/11/2026 (delegada por Diego, opção recomendada) |
 | H23 | Cancelar quantidade e alertar produção | Aguardando revisão | Branch `feature/H23-cancelar-quantidade`, PR para `develop` aberto ([evidência](evidencias/H23-cancelamento-quantidade.md)); T-03 da H23 aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido"); inclui o caso "linha cancelada" do lote da H19 e a revisão de desconto da H22 com o cancelamento real |
-| H24 | Desfazer entrega com histórico | Aguardando revisão | Branch `feature/H24-desfazer-entrega`, PR para `develop` aberto ([evidência](evidencias/H24-desfazer-entrega.md)); T-03 da H24 proposta em 06/11/2026, aguardando Diego |
+| H24 | Desfazer entrega com histórico | Aguardando revisão | Branch `feature/H24-desfazer-entrega`, PR para `develop` aberto ([evidência](evidencias/H24-desfazer-entrega.md)); T-03 da H24 aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto") |
 | H25 | Transferir unidades sem duplicar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H26 | Continuação de visita e ajustes de couvert | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H27 | Google opcional e histórico do consumidor | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -635,7 +635,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H24 — Desfazer entrega com histórico
 
-- História e estado: H24, **aguardando revisão** (PR aberto para `develop`). T-03 da H24 proposta em 06/11/2026, aguardando aprovação de Diego.
+- História e estado: H24, **aguardando revisão** (PR aberto para `develop`). T-03 da H24 aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto").
 - Data/hora e agente: 06/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Gerente, administrador ou garçom com a delegação `DESFAZER_ENTREGA` volta a linha entregue para pronta, com motivo, quando todas as comandas com unidades ativas dela estão abertas (FR-70, D-07, CA-04).
@@ -648,9 +648,9 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Arquivos/migrations/contratos: `V20__desfazer_entrega.sql`; `production.DeliveryCorrections`, `DeliveryCorrectionController`, `ProductionRules.undoDelivery`, `JdbcProductionStore`; `ProductionLineChanged.ENTREGA_DESFEITA` e `attendance.ProductionCalls`; `Tabs.Label.closed` e `Production.Destination.closed`; frontend `production/deliveries-page.ts`; especificação §6; decisões T-03; [evidência](evidencias/H24-desfazer-entrega.md).
 - Testes: ver a evidência (backend 449 no contêiner Temurin 25 com PostgreSQL real; frontend 199 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real na homologação de Diego.
-- Decisões novas/alteradas: T-03 da H24 proposta (quem desfaz, motivo 5–300, lista das 50 entregas mais recentes, sem prazo enquanto as comandas estão abertas, aviso novo de item pronto, ocorrência só com comanda encerrada e sem devolução automática, tudo cancelado não desfaz, versão lida contra concorrência), aguardando Diego.
-- Bloqueios / quem resolve: aprovação da T-03 e revisão e merge do PR (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego aprova a T-03, revisa e faz o merge do PR; depois do merge, reconciliação dos docs. Próxima elegível depois da H24: H25 (transferir unidades; gate P-10), só quando Diego pedir.
+- Decisões novas/alteradas: T-03 da H24 proposta (quem desfaz, motivo 5–300, lista das 50 entregas mais recentes, sem prazo enquanto as comandas estão abertas, aviso novo de item pronto, ocorrência só com comanda encerrada e sem devolução automática, tudo cancelado não desfaz, versão lida contra concorrência), aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto").
+- Bloqueios / quem resolve: revisão e merge do PR (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego revisa e faz o merge do PR; depois do merge, reconciliação dos docs. Próxima elegível depois da H24: H25 (transferir unidades; gate P-10), só quando Diego pedir.
 
 ## Registro de release (ainda nenhum)
 

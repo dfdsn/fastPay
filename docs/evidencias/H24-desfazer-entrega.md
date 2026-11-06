@@ -15,7 +15,7 @@ Registro sanitizado. Claude Code, 06/11/2026, sessão em nuvem (Linux) com Docke
 
 Nenhuma dependência nova.
 
-## 2. T-03 da H24 (proposta em 06/11/2026, aguardando aprovação de Diego)
+## 2. T-03 da H24 (proposta em 06/11/2026, aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto"))
 
 | Proposta | Valor |
 |---|---|
