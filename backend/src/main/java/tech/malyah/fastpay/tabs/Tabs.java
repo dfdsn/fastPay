@@ -196,10 +196,11 @@ public class Tabs {
     /**
      * Comanda como a produção, a entrega e o atendimento a identificam (H18, FR-18, H20). {@code openedBy}: quem abriu;
      * {@code attendanceMode}: a modalidade capturada na abertura; {@code responsibleId}: o garçom responsável atual,
-     * nulo na central.
+     * nulo na central. {@code closed}: encerrada (H24 confere antes de oferecer desfazer a entrega; a decisão é tomada
+     * com a comanda travada).
      */
     public record Label(UUID id, int number, String name, String table, UUID openedBy, AttendanceMode attendanceMode,
-            UUID responsibleId) {
+            UUID responsibleId, boolean closed) {
     }
 
     /** Identificação das comandas, na transação de unidade de quem chama (a permissão é conferida por ele). */
@@ -207,7 +208,7 @@ public class Tabs {
         Map<UUID, Label> labels = new LinkedHashMap<>();
         store.labels(tabIds).forEach(r -> labels.put(r.id(),
                 new Label(r.id(), r.number(), r.displayName(), r.tableLabel(), r.openedBy(),
-                        AttendanceMode.valueOf(r.attendanceMode()), r.responsibleId())));
+                        AttendanceMode.valueOf(r.attendanceMode()), r.responsibleId(), r.closed())));
         return labels;
     }
 

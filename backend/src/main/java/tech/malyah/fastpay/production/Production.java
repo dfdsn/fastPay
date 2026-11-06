@@ -54,8 +54,11 @@ public class Production {
 
     private static final Logger log = LoggerFactory.getLogger(Production.class);
 
-    /** Destino da linha: unidades numa comanda, identificada por número, nome e mesa. */
-    public record Destination(UUID tabId, int number, String name, String table, int quantity) {
+    /**
+     * Destino da linha: unidades numa comanda, identificada por número, nome e mesa. {@code closed}: a comanda já foi
+     * encerrada (H24: a entrega dela não se desfaz, registra-se ocorrência).
+     */
+    public record Destination(UUID tabId, int number, String name, String table, int quantity, boolean closed) {
     }
 
     /**
@@ -128,6 +131,21 @@ public class Production {
     public Board deliveries(UUID actorId, UUID establishmentId) {
         return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_COMANDA,
                 me -> board(store.deliveries()));
+    }
+
+    /**
+     * Entregues mais recentes (H24, FR-70), para quem pode desfazer a entrega ({@link Permission#DESFAZER_ENTREGA}):
+     * cada linha traz os destinos e se a comanda de cada um já foi encerrada.
+     */
+    public Board delivered(UUID actorId, UUID establishmentId) {
+        return memberships.inUnit(actorId, establishmentId, Permission.DESFAZER_ENTREGA,
+                me -> {
+                    Board board = board(store.delivered());
+                    // Das entregas mais recentes às mais antigas.
+                    List<Line> lines = new ArrayList<>(board.lines());
+                    lines.sort(Comparator.comparing(Line::deliveredAt).reversed().thenComparing(Line::id));
+                    return new Board(board.now(), List.copyOf(lines));
+                });
     }
 
     /**
@@ -326,6 +344,8 @@ public class Production {
             case IMPOSSIVEL -> store.markImpossible(lineId, version, reason, actorId, now);
             case IMPOSSIVEL_RETIRADO -> store.clearImpossible(lineId, version);
             case CANCELADO -> throw new IllegalStateException("Cancelamento passa por Cancellations.");
+            case ENTREGA_DESFEITA, OCORRENCIA_ENTREGA ->
+                throw new IllegalStateException("Correção de entrega passa por DeliveryCorrections.");
         }
         store.event(lineId, action, current.status(), to, reason, version + 1, actorId, now, correlationId);
         Line line = board(List.of(store.line(lineId).orElseThrow())).lines().getFirst();
@@ -339,6 +359,8 @@ public class Production {
             case IMPOSSIVEL_RETIRADO -> ProductionLineChanged.Change.IMPOSSIVEL_RETIRADO;
             case INICIADO -> null;
             case CANCELADO -> throw new IllegalStateException("Cancelamento passa por Cancellations.");
+            case ENTREGA_DESFEITA, OCORRENCIA_ENTREGA ->
+                throw new IllegalStateException("Correção de entrega passa por DeliveryCorrections.");
         };
         if (change != null) {
             // Avisos do atendimento (H20) no mesmo commit da mudança.
@@ -382,7 +404,7 @@ public class Production {
                 // Alocação zerada por cancelamento (H23) não é destino.
                 if (label != null && a.quantity() > 0) {
                     destinations.add(new Destination(label.id(), label.number(), label.name(), label.table(),
-                            a.quantity()));
+                            a.quantity(), label.closed()));
                 }
             }
             positions.put(row.id(), detail.position());

@@ -112,6 +112,23 @@ class ProductionRulesTest {
         assertThat(ProductionRules.late(Status.CANCELADA, Instant.EPOCH, 15, Instant.now())).isFalse();
     }
 
+    @Test
+    void desfazerEntregaSoEntregueComUnidadesAtivasEComandasAbertas() {
+        assertThat(ProductionRules.undoDelivery(Status.ENTREGUE, 2, false)).isNull();
+        assertThat(ProductionRules.undoDelivery(Status.ENTREGUE, 2, true))
+                .isEqualTo(ProductionRules.UndoBlock.COMANDA_ENCERRADA);
+        // Tudo cancelado depois da entrega: não há o que entregar de novo, mesmo com comanda encerrada.
+        assertThat(ProductionRules.undoDelivery(Status.ENTREGUE, 0, true))
+                .isEqualTo(ProductionRules.UndoBlock.SEM_UNIDADES_ATIVAS);
+        for (Status s : new Status[] {Status.AGUARDANDO_PREPARO, Status.EM_PREPARO, Status.PRONTO,
+                Status.CANCELADA}) {
+            assertThat(ProductionRules.undoDelivery(s, 1, false)).isEqualTo(ProductionRules.UndoBlock.NAO_ENTREGUE);
+        }
+        // Não são etapas da produção: passam pelo próprio caminho.
+        assertThat(decide(Status.ENTREGUE, Action.ENTREGA_DESFEITA)).isEqualTo(etapaInvalida());
+        assertThat(decide(Status.ENTREGUE, Action.OCORRENCIA_ENTREGA)).isEqualTo(etapaInvalida());
+    }
+
     private static ProductionRules.Decision decide(Status status, Action action) {
         return ProductionRules.decide(new Line(status, true, false), action);
     }

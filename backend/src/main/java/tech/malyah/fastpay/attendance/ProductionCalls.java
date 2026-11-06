@@ -39,7 +39,8 @@ class ProductionCalls {
     @EventListener
     void on(ProductionLineChanged event) {
         switch (event.change()) {
-            case PRONTA -> open(event, CallKind.ITEM_PRONTO);
+            // H24: a entrega desfeita volta a ser um item pronto a entregar, com aviso novo.
+            case PRONTA, ENTREGA_DESFEITA -> open(event, CallKind.ITEM_PRONTO);
             case IMPOSSIVEL -> open(event, CallKind.IMPOSSIBILIDADE);
             case ENTREGUE -> conclude(event, CallKind.ITEM_PRONTO, "ENTREGUE");
             case IMPOSSIVEL_RETIRADO -> conclude(event, CallKind.IMPOSSIBILIDADE, "SINALIZACAO_RETIRADA");

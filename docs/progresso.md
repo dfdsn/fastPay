@@ -101,7 +101,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H21 | Problemas do consumidor e conclusão autorizada | Concluída | PR #30, merge `157d591` em `develop`, CI de `develop` run 41871502419 verde ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aprovada por Diego em 04/11/2026 |
 | H22 | Composição, serviço e descontos exatos | Concluída | PR #32, merge `2da7c4a` em `develop`, CI de `develop` run 41884465186 verde ([evidência](evidencias/H22-composicao-servico-descontos.md)); T-03 da H22 aprovada em 04/11/2026 (delegada por Diego, opção recomendada) |
 | H23 | Cancelar quantidade e alertar produção | Concluída | PR #35, merge `9ff79c1` em `develop`, CI de `develop` run 42268110634 verde ([evidência](evidencias/H23-cancelamento-quantidade.md)); T-03 da H23 aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido"); inclui o caso "linha cancelada" do lote da H19 e a revisão de desconto da H22 com o cancelamento real |
-| H24 | Desfazer entrega com histórico | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H24 | Desfazer entrega com histórico | Aguardando revisão | Branch `feature/H24-desfazer-entrega`, PR para `develop` aberto ([evidência](evidencias/H24-desfazer-entrega.md)); T-03 da H24 aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto") |
 | H25 | Transferir unidades sem duplicar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H26 | Continuação de visita e ajustes de couvert | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H27 | Google opcional e histórico do consumidor | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -632,6 +632,25 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: T-03 da H23 proposta (quem cancela, motivo 5–300, ciência só em preparo/pronto com setor e por qualquer pessoa da produção, quantidade vista na tela contra correções simultâneas, cancelamento total encerra a linha, item ainda não recebido recusado, comanda encerrada orienta devolução, problema não é concluído, lista de ciência até 200 com som), aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido").
 - Bloqueios / quem resolve: nenhum da H23. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
 - Próximo passo concreto: nenhum na H23. Próxima candidata elegível: H24 (desfazer entrega; dependências H18 e H23 concluídas), só quando Diego pedir.
+
+### H24 — Desfazer entrega com histórico
+
+- História e estado: H24, **aguardando revisão** (PR aberto para `develop`). T-03 da H24 aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto").
+- Data/hora e agente: 06/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - Gerente, administrador ou garçom com a delegação `DESFAZER_ENTREGA` volta a linha entregue para pronta, com motivo, quando todas as comandas com unidades ativas dela estão abertas (FR-70, D-07, CA-04).
+  - A linha volta às entregas com aviso novo de item pronto; o histórico guarda a entrega e o desfazer, que invalida a amostra da entrega errada sem apagar nada; a nova entrega válida redefine o tempo (FR-75).
+  - Com alguma comanda encerrada (paga) não se desfaz: registra-se ocorrência no histórico da linha, sem reabrir, sem mexer na conta e sem devolução automática.
+  - Validação exigida: destinos múltiplos com um fechado, corrida com o fechamento (trava da comanda), permissão revogada e nova entrega substituindo a amostra antiga.
+- Critérios faltantes / motivo: destinos múltiplos foram montados dividindo a alocação direto no banco (a transferência é da H25) e a comanda paga encerrando-a no banco (fechamento e pagamento são da H28/H30); "em fechamento" (H28) e cobrança existente (H30) devem impedir desfazer quando existirem. A métrica que usa a amostra válida é da H43.
+- Branch e commit reais: `feature/H24-desfazer-entrega` (a partir de `develop` `9ff79c1`); commits no PR.
+- PR, checks e merge real: PR para `develop` aberto; checks e merge a registrar na reconciliação.
+- Arquivos/migrations/contratos: `V20__desfazer_entrega.sql`; `production.DeliveryCorrections`, `DeliveryCorrectionController`, `ProductionRules.undoDelivery`, `JdbcProductionStore`; `ProductionLineChanged.ENTREGA_DESFEITA` e `attendance.ProductionCalls`; `Tabs.Label.closed` e `Production.Destination.closed`; frontend `production/deliveries-page.ts`; especificação §6; decisões T-03; [evidência](evidencias/H24-desfazer-entrega.md).
+- Testes: ver a evidência (backend 449 no contêiner Temurin 25 com PostgreSQL real; frontend 199 no contêiner Node 24.18.0).
+- Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real na homologação de Diego.
+- Decisões novas/alteradas: T-03 da H24 proposta (quem desfaz, motivo 5–300, lista das 50 entregas mais recentes, sem prazo enquanto as comandas estão abertas, aviso novo de item pronto, ocorrência só com comanda encerrada e sem devolução automática, tudo cancelado não desfaz, versão lida contra concorrência), aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto").
+- Bloqueios / quem resolve: revisão e merge do PR (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego revisa e faz o merge do PR; depois do merge, reconciliação dos docs. Próxima elegível depois da H24: H25 (transferir unidades; gate P-10), só quando Diego pedir.
 
 ## Registro de release (ainda nenhum)
 

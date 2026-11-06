@@ -202,7 +202,7 @@ public class JdbcTabStore {
 
     /** Identificação da comanda para a produção e a entrega (H18). */
     public record LabelRow(UUID id, int number, String displayName, String tableLabel, UUID openedBy,
-            String attendanceMode, UUID responsibleId) {
+            String attendanceMode, UUID responsibleId, boolean closed) {
     }
 
     public List<LabelRow> labels(List<UUID> ids) {
@@ -210,14 +210,15 @@ public class JdbcTabStore {
             return List.of();
         }
         return jdbc.query("""
-                SELECT t.id, t.number, t.display_name, t.table_label, t.opened_by, t.responsible_id, v.attendance_mode
+                SELECT t.id, t.number, t.display_name, t.table_label, t.opened_by, t.responsible_id, v.attendance_mode,
+                       t.closed_at IS NOT NULL AS closed
                   FROM tab t JOIN unit_settings_version v ON v.id = t.settings_version_id
                  WHERE t.id = ANY (?)
                 """, ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", ids.toArray())),
                 (rs, n) -> new LabelRow(rs.getObject("id", UUID.class), rs.getInt("number"),
                         rs.getString("display_name"), rs.getString("table_label"),
                         rs.getObject("opened_by", UUID.class), rs.getString("attendance_mode"),
-                        rs.getObject("responsible_id", UUID.class)));
+                        rs.getObject("responsible_id", UUID.class), rs.getBoolean("closed")));
     }
 
     private static TabRow tab(ResultSet rs, int n) throws SQLException {
