@@ -19,7 +19,9 @@ public final class ProductionRules {
     public static final int BATCH_MAX = 50;
 
     public enum Status {
-        AGUARDANDO_PREPARO, EM_PREPARO, PRONTO, ENTREGUE
+        AGUARDANDO_PREPARO, EM_PREPARO, PRONTO, ENTREGUE,
+        /** Todas as unidades canceladas antes da entrega (H23, FR-20): a linha terminou. */
+        CANCELADA
     }
 
     public enum Action {
@@ -32,7 +34,9 @@ public final class ProductionRules {
         /** Produção sinaliza que não é possível atender, com motivo. */
         IMPOSSIVEL,
         /** Produção retira a sinalização (por exemplo, o insumo chegou). */
-        IMPOSSIVEL_RETIRADO
+        IMPOSSIVEL_RETIRADO,
+        /** Quem tem a permissão cancela unidades da linha (H23); não é etapa da produção, ver {@link #cancel}. */
+        CANCELADO
     }
 
     /** Situação lida da linha travada. */
@@ -80,6 +84,7 @@ public final class ProductionRules {
                     ? new Next(line.status(), true) : new Refused(Refusal.ETAPA_INVALIDA);
             case IMPOSSIVEL_RETIRADO -> line.impossible()
                     ? new Next(line.status(), false) : new Refused(Refusal.ETAPA_INVALIDA);
+            case CANCELADO -> new Refused(Refusal.ETAPA_INVALIDA);
         };
     }
 
@@ -99,10 +104,36 @@ public final class ProductionRules {
      * limite (linha sem setor) nunca atrasa.
      */
     public static boolean late(Status status, Instant sentAt, Integer limitMinutes, Instant now) {
-        if (status == Status.ENTREGUE || limitMinutes == null) {
+        if (status == Status.ENTREGUE || status == Status.CANCELADA || limitMinutes == null) {
             return false;
         }
         return Duration.between(sentAt, now).compareTo(Duration.ofMinutes(limitMinutes)) > 0;
+    }
+
+    /**
+     * Efeito de cancelar unidades na linha (H23, FR-20, D-06). {@code to}: a etapa depois do cancelamento (a mesma, ou
+     * {@link Status#CANCELADA} quando não sobra nada e a linha ainda não foi entregue; entregue continua entregue, com
+     * o histórico). {@code requiresAck}: a produção precisa dar ciência (em preparo ou pronto, com setor); aguardando
+     * preparo a fila só é ajustada. {@code clearsImpossible}: o cancelamento total resolve a sinalização.
+     */
+    public record CancelPlan(Status to, int cancelledAfter, boolean requiresAck, boolean clearsImpossible) {
+    }
+
+    /**
+     * @param quantity unidades originais da linha
+     * @param cancelledBefore unidades já canceladas (todas as comandas)
+     * @param cancelNow unidades a cancelar agora, já conferidas contra as ativas na comanda
+     */
+    public static CancelPlan cancel(Line line, int quantity, int cancelledBefore, int cancelNow) {
+        if (cancelNow < 1 || cancelledBefore < 0 || cancelledBefore + cancelNow > quantity
+                || line.status() == Status.CANCELADA) {
+            throw new IllegalArgumentException("Cancelamento acima do que resta na linha.");
+        }
+        int after = cancelledBefore + cancelNow;
+        boolean total = after == quantity;
+        Status to = total && line.status() != Status.ENTREGUE ? Status.CANCELADA : line.status();
+        boolean ack = line.hasSector() && (line.status() == Status.EM_PREPARO || line.status() == Status.PRONTO);
+        return new CancelPlan(to, after, ack, total && line.impossible());
     }
 
     private static boolean beforeReady(Status status) {

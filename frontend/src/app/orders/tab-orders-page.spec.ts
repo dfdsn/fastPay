@@ -70,6 +70,8 @@ function pedido(forwarding: SentOrder['forwarding'] = 'CONCLUIDO'): SentOrder {
         lineTotal: '19.80',
         note: 'gelado',
         sectorId: null,
+        activeQuantity: 2,
+        cancelledQuantity: 0,
       },
     ],
   };
@@ -261,6 +263,66 @@ describe('TabOrdersPage', () => {
     expect(texto()).toContain('não recebe mais pedidos');
     expect(loadDraft(CHAVE)).toMatchObject({ pendingKey: null });
     expect(loadDraft(CHAVE).lines).toHaveLength(1);
+  });
+
+  it('cancela unidades com motivo e mostra enviado, cancelado e restante (H23)', () => {
+    abrir([pedido()], ['OPERAR_COMANDA', 'CANCELAR_ITEM']);
+    botao('Cancelar Chopp').click();
+    fixture.detectChanges();
+    const motivo = element().querySelector<HTMLInputElement>('input[aria-label="Motivo do cancelamento de Chopp"]')!;
+    motivo.value = 'ops';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Confirmar cancelamento').click();
+    fixture.detectChanges();
+    expect(texto()).toContain('Informe o motivo, com 5 a 300 caracteres.');
+    http.expectNone((r) => r.url.endsWith('/cancel'));
+
+    motivo.value = 'Cliente desistiu';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Confirmar cancelamento').click();
+    const req = http.expectOne('/api/v1/tabs/t-1/items/l-1/cancel');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ quantity: 1, expectedQuantity: 2, reason: 'Cliente desistiu' });
+    req.flush({
+      cancellationId: 'c-1',
+      orderLineId: 'l-1',
+      tabId: 't-1',
+      productName: 'Chopp',
+      quantity: 1,
+      originalQuantity: 2,
+      cancelledQuantity: 1,
+      remainingInTab: 1,
+      requiresAck: true,
+    });
+    const depois = pedido();
+    depois.lines[0] = { ...depois.lines[0], activeQuantity: 1, cancelledQuantity: 1 };
+    recarregaPedidos([depois]);
+    expect(texto()).toContain('1 × Chopp cancelado(s); restam 1. A produção foi avisada.');
+    expect(texto()).toContain('1× Chopp');
+    expect(texto()).toContain('enviado 2, cancelado 1, restante 1');
+  });
+
+  it('sem permissão de cancelar não mostra o botão; quantidade mudada mostra a recusa e relê (H23)', () => {
+    abrir([pedido()]);
+    expect(element().textContent).not.toContain('Cancelar Chopp');
+    TestBed.inject(UnitContextService).current.update((u) => u && { ...u, permissions: ['CANCELAR_ITEM'] });
+    fixture.detectChanges();
+    botao('Cancelar Chopp').click();
+    fixture.detectChanges();
+    const motivo = element().querySelector<HTMLInputElement>('input[aria-label="Motivo do cancelamento de Chopp"]')!;
+    motivo.value = 'Cliente desistiu';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Confirmar cancelamento').click();
+    http.expectOne('/api/v1/tabs/t-1/items/l-1/cancel').flush(
+      {
+        code: 'QUANTIDADE_DESATUALIZADA',
+        detail: 'A quantidade deste item mudou desde que a tela foi carregada. Confira e tente de novo.',
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
+    recarregaPedidos([pedido()]);
+    expect(texto()).toContain('A quantidade deste item mudou');
+    expect(element().querySelector('form.cancel')).toBeNull();
   });
 
   it('mostra falha de encaminhamento e reenvia à produção sem novo pedido', () => {

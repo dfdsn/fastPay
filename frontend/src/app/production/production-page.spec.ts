@@ -7,8 +7,8 @@ import { comCookieCsrf } from '../auth/auth-testing';
 import { FakeEventSource, provideFakeEventSource } from '../live/live-testing';
 import { UnitContextService } from '../session/unit-context.service';
 import { ProductionPage } from './production-page';
-import { ProductionLine } from './production.service';
-import { linha } from './production-testing';
+import { CancellationNotice, ProductionLine } from './production.service';
+import { cancelamento, linha } from './production-testing';
 
 const AGORA = '2026-11-04T20:05:00Z';
 
@@ -19,9 +19,21 @@ describe('ProductionPage (H18)', () => {
   const texto = () => element().textContent ?? '';
   const botao = (rotulo: string) =>
     Array.from(element().querySelectorAll('button')).find((b) => b.textContent?.includes(rotulo));
-  const fila = () => http.expectOne((r) => r.url === '/api/v1/production/queue');
+  /** Toda leitura da fila lê junto os cancelamentos que esperam ciência (H23). */
+  const fila = () => {
+    const req = http.expectOne((r) => r.url === '/api/v1/production/queue');
+    const avisos = http.expectOne((r) => r.url === '/api/v1/production/cancellations');
+    return {
+      request: req.request,
+      avisos: avisos.request,
+      flush: (body: { now: string; lines: ProductionLine[] }, cancellations: CancellationNotice[] = []) => {
+        req.flush(body);
+        avisos.flush({ now: body.now, cancellations });
+      },
+    };
+  };
 
-  function abrir(lines: ProductionLine[], now = AGORA): void {
+  function abrir(lines: ProductionLine[], now = AGORA, cancellations: CancellationNotice[] = []): void {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date(now));
     comCookieCsrf(true);
@@ -57,7 +69,7 @@ describe('ProductionPage (H18)', () => {
         total: 0,
         pricesVisible: false,
       });
-    fila().flush({ now, lines });
+    fila().flush({ now, lines }, cancellations);
     fixture.detectChanges();
   }
 
@@ -155,7 +167,51 @@ describe('ProductionPage (H18)', () => {
     conexao.emit('change', { cursor: '2', topic: 'COMANDA', tabId: 't-1' });
     http.expectNone((r) => r.url === '/api/v1/production/queue');
     conexao.emit('change', { cursor: '3', topic: 'PRODUCAO', tabId: 't-1' });
-    expect(fila().request.params.get('sectorId')).toBe('s-bar');
+    const releitura = fila();
+    expect(releitura.request.params.get('sectorId')).toBe('s-bar');
+    expect(releitura.avisos.params.get('sectorId')).toBe('s-bar');
+    releitura.flush({ now: AGORA, lines: [] });
+  });
+
+  it('mostra o cancelamento em preparo para dar ciência e a linha com enviado e cancelado (H23)', () => {
+    abrir(
+      [linha({ status: 'EM_PREPARO', quantity: 2, cancelledQuantity: 1 })],
+      AGORA,
+      [cancelamento()],
+    );
+    expect(texto()).toContain('Cancelamentos para dar ciência (1)');
+    expect(texto()).toContain('Cancelado: 1 × Batata frita');
+    expect(texto()).toContain('estava em preparo');
+    expect(texto()).toContain('Agora são 2 de 3.');
+    expect(texto()).toContain('Motivo: Cliente desistiu · por Gui Gerente');
+    expect(texto()).toContain('2 × Batata frita');
+    expect(texto()).toContain('enviado 3, cancelado 1');
+
+    botao('Ciente do cancelamento de Batata frita')!.click();
+    const ciencia = http.expectOne('/api/v1/production/cancellations/c-1/acknowledge');
+    expect(ciencia.request.method).toBe('POST');
+    ciencia.flush({
+      cancellation: cancelamento({ acknowledgedBy: 'Paulo Produção', acknowledgedAt: AGORA }),
+      alreadyAcknowledged: false,
+    });
+    fila().flush({ now: AGORA, lines: [linha({ status: 'EM_PREPARO', quantity: 2, cancelledQuantity: 1 })] });
+    fixture.detectChanges();
+    expect(texto()).toContain('Ciência registrada: cancelamento de Batata frita.');
+    expect(texto()).not.toContain('Cancelamentos para dar ciência');
+  });
+
+  it('ciência repetida diz quem já tinha visto e cancelamento total pede parar o preparo (H23)', () => {
+    abrir([], AGORA, [cancelamento({ status: 'CANCELADA', remaining: 0, stage: 'PRONTO' })]);
+    expect(texto()).toContain('Não sobrou nada desta linha: pare o preparo.');
+    expect(texto()).toContain('estava pronto');
+    botao('Ciente do cancelamento')!.click();
+    http.expectOne('/api/v1/production/cancellations/c-1/acknowledge').flush({
+      cancellation: cancelamento({ acknowledgedBy: 'Bia Bar', acknowledgedAt: AGORA }),
+      alreadyAcknowledged: true,
+    });
+    fila().flush({ now: AGORA, lines: [] });
+    fixture.detectChanges();
+    expect(texto()).toContain('já tinha ciência de Bia Bar');
   });
 
   it('item que chega depois ganha o sinal visual de novo até ser iniciado', () => {
@@ -283,7 +339,12 @@ describe('ProductionPage (H18)', () => {
     http
       .expectOne((r) => r.url === '/api/v1/catalog')
       .flush({ sectors: [], products: [], categories: [] });
-    fila().flush({ code: 'PERMISSAO_NEGADA' }, { status: 403, statusText: 'Forbidden' });
+    http
+      .expectOne((r) => r.url === '/api/v1/production/queue')
+      .flush({ code: 'PERMISSAO_NEGADA' }, { status: 403, statusText: 'Forbidden' });
+    http
+      .expectOne((r) => r.url === '/api/v1/production/cancellations')
+      .flush({ code: 'PERMISSAO_NEGADA' }, { status: 403, statusText: 'Forbidden' });
     fixture.detectChanges();
     expect(texto()).toContain('Seu papel nesta unidade não opera a produção.');
   });

@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 
 import { AuthService } from '../auth/auth.service';
 
-export type ProductionStatus = 'AGUARDANDO_PREPARO' | 'EM_PREPARO' | 'PRONTO' | 'ENTREGUE';
+export type ProductionStatus = 'AGUARDANDO_PREPARO' | 'EM_PREPARO' | 'PRONTO' | 'ENTREGUE' | 'CANCELADA';
 
 /** Unidades da linha numa comanda. */
 export interface Destination {
@@ -26,7 +26,10 @@ export interface ProductionLine {
   sectorName: string | null;
   delayLimitMinutes: number | null;
   productName: string;
+  /** Unidades que ainda contam; {@code originalQuantity} e {@code cancelledQuantity}: enviado e cancelado (H23). */
   quantity: number;
+  originalQuantity: number;
+  cancelledQuantity: number;
   note: string | null;
   status: ProductionStatus;
   sentAt: string;
@@ -45,6 +48,40 @@ export interface ProductionLine {
 export interface ProductionBoard {
   now: string;
   lines: ProductionLine[];
+}
+
+/**
+ * Cancelamento que espera a ciência da produção (H23, FR-20): feito em preparo ou pronto. {@code stage}: a etapa na
+ * hora do cancelamento; {@code status} e {@code remaining}: a linha agora (CANCELADA quando não sobrou nada).
+ */
+export interface CancellationNotice {
+  id: string;
+  productionLineId: string;
+  productName: string;
+  sectorId: string | null;
+  sectorName: string | null;
+  stage: ProductionStatus;
+  status: ProductionStatus;
+  quantity: number;
+  originalQuantity: number;
+  cancelledQuantity: number;
+  remaining: number;
+  reason: string;
+  cancelledBy: string | null;
+  cancelledAt: string;
+  tab: { id: string; number: number; name: string; table: string | null };
+  acknowledgedBy: string | null;
+  acknowledgedAt: string | null;
+}
+
+export interface CancellationNotices {
+  now: string;
+  cancellations: CancellationNotice[];
+}
+
+export interface Acknowledged {
+  cancellation: CancellationNotice;
+  alreadyAcknowledged: boolean;
 }
 
 export type ProductionAction = 'start' | 'ready' | 'impossible/withdraw' | 'deliver';
@@ -103,6 +140,19 @@ export class ProductionService {
     );
   }
 
+  /** Cancelamentos que esperam ciência (H23), de um setor ou de todos. */
+  cancellations(sectorId: string | null): Observable<CancellationNotices> {
+    const params = sectorId ? new HttpParams().set('sectorId', sectorId) : undefined;
+    return this.http.get<CancellationNotices>('/api/v1/production/cancellations', { params });
+  }
+
+  /** Ciência do cancelamento; repetir (ou outra pessoa já ter dado) não muda nada. */
+  acknowledge(id: string): Observable<Acknowledged> {
+    return this.auth.withCsrf(() =>
+      this.http.post<Acknowledged>(`/api/v1/production/cancellations/${id}/acknowledge`, null),
+    );
+  }
+
   impossible(line: ProductionLine, reason: string): Observable<ProductionLine> {
     return this.auth.withCsrf(() =>
       this.http.post<ProductionLine>(`/api/v1/production/lines/${line.id}/impossible`, {
@@ -118,6 +168,7 @@ export const STATUS_LABEL: Record<ProductionStatus, string> = {
   EM_PREPARO: 'Em preparo',
   PRONTO: 'Pronto',
   ENTREGUE: 'Entregue',
+  CANCELADA: 'Cancelado',
 };
 
 /** "Comanda 12 · Ana · mesa 5", com a quantidade quando a linha vai para mais de um destino. */

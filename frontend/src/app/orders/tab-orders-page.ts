@@ -29,7 +29,18 @@ import {
   reais,
   saveDraft,
 } from './order-draft';
-import { Forwarding, OrdersService, ReviewProblem, SentOrder } from './orders.service';
+import { Forwarding, OrdersService, ReviewProblem, SentLine, SentOrder } from './orders.service';
+
+/** Motivo do cancelamento (H23): de 5 a 300 caracteres, conferido também no servidor. */
+export const CANCEL_REASON_MIN = 5;
+export const CANCEL_REASON_MAX = 300;
+
+/** Cancelamento em edição: o item, quantas unidades e o motivo. */
+interface Cancelling {
+  line: SentLine;
+  quantity: number;
+  reason: string;
+}
 
 type State = 'loading' | 'ready' | 'forbidden' | 'missing' | 'error';
 
@@ -223,10 +234,51 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
             <ul class="sent">
               @for (line of order.lines; track line.id) {
                 <li>
-                  {{ line.quantity }}× {{ line.productName }} · {{ money(line.unitPrice) }} cada ·
-                  {{ money(line.lineTotal) }}
+                  <span [class.cancelled]="line.activeQuantity === 0">
+                    {{ line.activeQuantity }}× {{ line.productName }} · {{ money(line.unitPrice) }} cada ·
+                    {{ money(activeTotal(line)) }}
+                  </span>
                   @if (line.note) {
                     <span class="muted"> · {{ line.note }}</span>
+                  }
+                  @if (line.cancelledQuantity > 0) {
+                    <span class="warning">
+                      · enviado {{ line.quantity }}, cancelado {{ line.cancelledQuantity }}, restante
+                      {{ line.activeQuantity }}
+                    </span>
+                  }
+                  @if (cancelling()?.line?.id === line.id) {
+                    <form class="row cancel" (submit)="$event.preventDefault(); confirmCancel()">
+                      <label>
+                        Cancelar quantas
+                        <input
+                          type="number"
+                          min="1"
+                          [max]="line.activeQuantity"
+                          [value]="cancelling()!.quantity"
+                          [attr.aria-label]="'Unidades de ' + line.productName + ' a cancelar'"
+                          (change)="setCancelQuantity($any($event.target).value)"
+                        />
+                      </label>
+                      <label class="grow">
+                        Motivo
+                        <input
+                          type="text"
+                          [maxLength]="reasonMax"
+                          [value]="cancelling()!.reason"
+                          [attr.aria-label]="'Motivo do cancelamento de ' + line.productName"
+                          (input)="setCancelReason($any($event.target).value)"
+                        />
+                      </label>
+                      <button mat-flat-button type="submit" [disabled]="busy()">Confirmar cancelamento</button>
+                      <button mat-button type="button" [disabled]="busy()" (click)="cancelling.set(null)">
+                        Voltar
+                      </button>
+                    </form>
+                  } @else if (line.activeQuantity > 0 && canCancel()) {
+                    <button mat-button type="button" [disabled]="busy()" (click)="startCancel(line)">
+                      Cancelar {{ line.productName }}
+                    </button>
                   }
                 </li>
               }
@@ -281,6 +333,12 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
       gap: 8px;
       align-items: center;
     }
+    .cancelled {
+      text-decoration: line-through;
+    }
+    form.cancel {
+      margin: 4px 0 8px;
+    }
     .flagged {
       background: rgba(179, 38, 30, 0.06);
     }
@@ -323,6 +381,13 @@ export class TabOrdersPage {
   protected readonly maxLines = MAX_LINES;
   protected readonly maxQuantity = MAX_QUANTITY;
   protected readonly noteMax = NOTE_MAX;
+  protected readonly reasonMax = CANCEL_REASON_MAX;
+  /** Cancelamento aberto num item enviado (H23). */
+  protected readonly cancelling = signal<Cancelling | null>(null);
+  /** Só quem tem a permissão de cancelar vê o botão; o servidor confere de novo (CA-04). */
+  protected readonly canCancel = computed(
+    () => this.unit.current()?.permissions?.includes('CANCELAR_ITEM') ?? false,
+  );
 
   protected readonly state = signal<State>('loading');
   protected readonly tab = signal<Tab | null>(null);
@@ -558,6 +623,67 @@ export class TabOrdersPage {
         } else {
           this.failure.set('Ainda sem resposta do servidor. Confira de novo quando a conexão voltar.');
         }
+      },
+    });
+  }
+
+  /** Total das unidades que ainda contam (preço do envio × ativas), em reais. */
+  protected activeTotal(line: SentLine): string {
+    return (Math.round(Number(line.unitPrice) * 100) * line.activeQuantity / 100).toFixed(2);
+  }
+
+  startCancel(line: SentLine): void {
+    this.failure.set(null);
+    this.cancelling.set({ line, quantity: 1, reason: '' });
+  }
+
+  setCancelQuantity(value: string): void {
+    const c = this.cancelling();
+    if (c) {
+      this.cancelling.set({ ...c, quantity: Math.trunc(Number(value)) });
+    }
+  }
+
+  setCancelReason(value: string): void {
+    const c = this.cancelling();
+    if (c) {
+      this.cancelling.set({ ...c, reason: value });
+    }
+  }
+
+  /**
+   * Cancela unidades inteiras do item (H23, FR-20): a conta muda na hora; em preparo ou pronto, a produção é avisada e
+   * dá ciência sem que a correção espere por ela.
+   */
+  confirmCancel(): void {
+    const c = this.cancelling();
+    if (!c) {
+      return;
+    }
+    const reason = c.reason.trim();
+    if (!Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > c.line.activeQuantity) {
+      this.failure.set(`Cancele de 1 a ${c.line.activeQuantity} unidade(s).`);
+      return;
+    }
+    if (reason.length < CANCEL_REASON_MIN || reason.length > CANCEL_REASON_MAX) {
+      this.failure.set(`Informe o motivo, com ${CANCEL_REASON_MIN} a ${CANCEL_REASON_MAX} caracteres.`);
+      return;
+    }
+    this.run(this.service.cancel(this.tabId, c.line.id, c.quantity, c.line.activeQuantity, reason), {
+      next: (done) => {
+        this.cancelling.set(null);
+        this.notice.set(
+          `${c.quantity} × ${done.productName} cancelado(s); restam ${done.remainingInTab}.` +
+            (done.requiresAck ? ' A produção foi avisada.' : ''),
+        );
+        this.loadOrders();
+      },
+      error: (error) => {
+        this.failure.set(failureMessage(error));
+        if (problemCode(error) !== 'DADOS_INVALIDOS') {
+          this.cancelling.set(null);
+        }
+        this.loadOrders();
       },
     });
   }
