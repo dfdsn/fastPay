@@ -96,11 +96,11 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H16 | Rascunho, envio atômico e preço capturado | Concluída | PR #21, merge `da4e270` em `develop`, CI de `develop` run 41715851513 verde ([evidência](evidencias/H16-rascunho-envio-preco.md)); T-03 da H16 aprovada por Diego em 03/11/2026 |
 | H17 | Sincronização operacional SSE e reconexão | Concluída | PR #23, merge `e575de0` em `develop`, CI de `develop` run 41758795363 verde ([evidência](evidencias/H17-sincronizacao-sse.md)); T-03 da H17 aprovada por Diego em 04/11/2026 |
 | H18 | Fila de produção e entrega por linha | Concluída | PR #24, merge `d77b512` em `develop`, CI de `develop` run 41758906795 verde ([evidência](evidencias/H18-fila-producao-entrega.md)); T-03 da H18 aprovada por Diego em 04/11/2026 |
-| H19 | Operações em lote de produção | Concluída | PR #26, merge `1bdfa6e` em `develop`, CI de `develop` run 41768784263 verde ([evidência](evidencias/H19-lote-producao.md)); T-03 da H19 aprovada por Diego em 04/11/2026; caso "linha cancelada" entra no teste do lote com a H23 |
+| H19 | Operações em lote de produção | Concluída | PR #26, merge `1bdfa6e` em `develop`, CI de `develop` run 41768784263 verde ([evidência](evidencias/H19-lote-producao.md)); T-03 da H19 aprovada por Diego em 04/11/2026; caso "linha cancelada" coberto pela H23 (PR #35) |
 | H20 | Atendimento responsável ou central | Concluída | PR #28, merge `c06b7b8` em `develop`, CI de `develop` run 41855357662 verde ([evidência](evidencias/H20-atendimento-responsavel-central.md)); T-03 da H20 aprovada por Diego em 04/11/2026 |
 | H21 | Problemas do consumidor e conclusão autorizada | Concluída | PR #30, merge `157d591` em `develop`, CI de `develop` run 41871502419 verde ([evidência](evidencias/H21-problemas-consumidor.md)); T-03 da H21 aprovada por Diego em 04/11/2026 |
 | H22 | Composição, serviço e descontos exatos | Concluída | PR #32, merge `2da7c4a` em `develop`, CI de `develop` run 41884465186 verde ([evidência](evidencias/H22-composicao-servico-descontos.md)); T-03 da H22 aprovada em 04/11/2026 (delegada por Diego, opção recomendada) |
-| H23 | Cancelar quantidade e alertar produção | Aguardando revisão | Branch `feature/H23-cancelar-quantidade`, PR para `develop` aberto ([evidência](evidencias/H23-cancelamento-quantidade.md)); T-03 da H23 aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido"); inclui o caso "linha cancelada" do lote da H19 e a revisão de desconto da H22 com o cancelamento real |
+| H23 | Cancelar quantidade e alertar produção | Concluída | PR #35, merge `9ff79c1` em `develop`, CI de `develop` run 42268110634 verde ([evidência](evidencias/H23-cancelamento-quantidade.md)); T-03 da H23 aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido"); inclui o caso "linha cancelada" do lote da H19 e a revisão de desconto da H22 com o cancelamento real |
 | H24 | Desfazer entrega com histórico | Aguardando revisão | Branch `feature/H24-desfazer-entrega`, PR para `develop` aberto ([evidência](evidencias/H24-desfazer-entrega.md)); T-03 da H24 aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto") |
 | H25 | Transferir unidades sem duplicar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H26 | Continuação de visita e ajustes de couvert | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -614,7 +614,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H23 — Cancelar quantidade e alertar produção
 
-- História e estado: H23, **aguardando revisão** (PR aberto para `develop`). T-03 da H23 aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido").
+- História e estado: H23, **concluída** (critérios atendidos, merge em `develop` verificado, CI de `develop` verde). T-03 da H23 aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido").
 - Data/hora e agente: 04/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Quem tem `CANCELAR_ITEM` cancela unidades inteiras, parcial ou total, em qualquer etapa, com motivo (FR-20, CA-04); original, cancelado e restante aparecem na comanda e na produção.
@@ -625,13 +625,13 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Pendências de outras histórias fechadas aqui: o lote da H19 com linha cancelada (falha `ETAPA_INVALIDA` sem impedir as demais) e o aviso de impossibilidade da H20 terminando pelo cancelamento.
 - Critérios faltantes / motivo: "pagamento existente" foi exercitado com a comanda encerrada direto no banco, porque o pagamento é da H30; "em fechamento" (H28) e cobrança existente (H30) devem recusar o cancelamento quando existirem. A devolução em si é da história de devoluções.
 - Branch e commit reais: `feature/H23-cancelar-quantidade` (a partir de `develop` `585f2c1`, com `develop` `68d672c` mesclada depois do PR #34); commits no PR.
-- PR, checks e merge real: PR para `develop` aberto; checks e merge a registrar na reconciliação.
+- PR, checks e merge real: [PR #35](https://github.com/dfdsn/fastPay/pull/35), checks verdes no commit `0c1c5d5` (backend, frontend, imagens e smoke Compose); merge por Diego em 06/11/2026 (`9ff79c1`); CI de `develop` run 42268110634 verde.
 - Arquivos/migrations/contratos: `V19__cancelamento_de_itens.sql`; `production.Cancellations`, `JdbcCancellationStore`, `CancellationController`, `ProductionRules.cancel`; `Orders.cancelTargetInCurrentUnit`/`cancelInCurrentUnit`; `ProductionLineChanged.CANCELADA` e `attendance.ProductionCalls`; frontend `orders/tab-orders-page.ts`, `production/production-page.ts`; especificação §6; decisões T-03; [evidência](evidencias/H23-cancelamento-quantidade.md).
 - Testes: ver a evidência (backend 444 no contêiner Temurin 25 com PostgreSQL real; frontend 196 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular e tela da cozinha reais na homologação de Diego.
 - Decisões novas/alteradas: T-03 da H23 proposta (quem cancela, motivo 5–300, ciência só em preparo/pronto com setor e por qualquer pessoa da produção, quantidade vista na tela contra correções simultâneas, cancelamento total encerra a linha, item ainda não recebido recusado, comanda encerrada orienta devolução, problema não é concluído, lista de ciência até 200 com som), aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido").
-- Bloqueios / quem resolve: revisão e merge do PR (Diego). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: Diego revisa e faz o merge do PR; depois do merge, reconciliação dos docs. Próximas elegíveis depois da H23: H24 (desfazer entrega), só quando Diego pedir.
+- Bloqueios / quem resolve: nenhum da H23. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: nenhum na H23. Próxima candidata elegível: H24 (desfazer entrega; dependências H18 e H23 concluídas), só quando Diego pedir.
 
 ### H24 — Desfazer entrega com histórico
 
