@@ -8,7 +8,7 @@ import { CatalogListing, Product } from '../catalog/catalog.service';
 import { Permission, UnitContextService } from '../session/unit-context.service';
 import { Tab } from '../tabs/tabs.service';
 import { draftStorageKey, loadDraft, saveDraft } from './order-draft';
-import { SentOrder } from './orders.service';
+import { ReceivedLine, SentOrder } from './orders.service';
 import { TabOrdersPage } from './tab-orders-page';
 import { FakeEventSource, provideFakeEventSource } from '../live/live-testing';
 
@@ -72,6 +72,8 @@ function pedido(forwarding: SentOrder['forwarding'] = 'CONCLUIDO'): SentOrder {
         sectorId: null,
         activeQuantity: 2,
         cancelledQuantity: 0,
+        inTabQuantity: 2,
+        transferredQuantity: 0,
       },
     ],
   };
@@ -89,7 +91,13 @@ describe('TabOrdersPage', () => {
       b.textContent?.includes(rotulo),
     )!;
 
-  function abrir(pedidos: SentOrder[] = [], permissions: Permission[] = ['OPERAR_COMANDA']): void {
+  const recebidos = (r: { url: string }) => r.url === '/api/v1/orders/received';
+
+  function abrir(
+    pedidos: SentOrder[] = [],
+    permissions: Permission[] = ['OPERAR_COMANDA'],
+    recebidosDaComanda: ReceivedLine[] = [],
+  ): void {
     comCookieCsrf(true);
     TestBed.configureTestingModule({
       imports: [TabOrdersPage],
@@ -114,6 +122,7 @@ describe('TabOrdersPage', () => {
     http.expectOne('/api/v1/tabs/t-1').flush(ANA);
     http.expectOne((r) => r.url === '/api/v1/catalog').flush(CATALOGO);
     http.expectOne((r) => r.url === '/api/v1/orders' && r.method === 'GET').flush(pedidos);
+    http.expectOne(recebidos).flush(recebidosDaComanda);
     fixture.detectChanges();
   }
 
@@ -121,8 +130,9 @@ describe('TabOrdersPage', () => {
     return http.expectOne((r) => r.url === '/api/v1/orders' && r.method === 'POST');
   }
 
-  function recarregaPedidos(pedidos: SentOrder[]): void {
+  function recarregaPedidos(pedidos: SentOrder[], recebidosDaComanda: ReceivedLine[] = []): void {
     http.expectOne((r) => r.url === '/api/v1/orders' && r.method === 'GET').flush(pedidos);
+    http.expectOne(recebidos).flush(recebidosDaComanda);
     fixture.detectChanges();
   }
 
@@ -295,7 +305,7 @@ describe('TabOrdersPage', () => {
       requiresAck: true,
     });
     const depois = pedido();
-    depois.lines[0] = { ...depois.lines[0], activeQuantity: 1, cancelledQuantity: 1 };
+    depois.lines[0] = { ...depois.lines[0], activeQuantity: 1, cancelledQuantity: 1, inTabQuantity: 1 };
     recarregaPedidos([depois]);
     expect(texto()).toContain('1 × Chopp cancelado(s); restam 1. A produção foi avisada.');
     expect(texto()).toContain('1× Chopp');
@@ -323,6 +333,98 @@ describe('TabOrdersPage', () => {
     recarregaPedidos([pedido()]);
     expect(texto()).toContain('A quantidade deste item mudou');
     expect(element().querySelector('form.cancel')).toBeNull();
+  });
+
+  it('transfere unidades para outra comanda aberta com motivo e mostra o que ficou e o que saiu (H25)', () => {
+    abrir([pedido()], ['OPERAR_COMANDA']);
+    expect(element().textContent).not.toContain('Transferir Chopp');
+    TestBed.inject(UnitContextService).current.update(
+      (u) => u && { ...u, permissions: ['OPERAR_COMANDA', 'TRANSFERIR_UNIDADES'] },
+    );
+    fixture.detectChanges();
+    botao('Transferir Chopp').click();
+    http.expectOne('/api/v1/tabs').flush([ANA, { ...ANA, id: 't-2', number: 8, name: 'Bia', table: null }]);
+    fixture.detectChanges();
+    const destino = element().querySelector<HTMLSelectElement>(
+      'select[aria-label="Comanda de destino de Chopp"]',
+    )!;
+    // A própria comanda não aparece como destino.
+    expect(Array.from(destino.options).map((o) => o.textContent?.trim())).toEqual([
+      'Escolha a comanda',
+      'Comanda 8 · Bia',
+    ]);
+    const motivo = element().querySelector<HTMLInputElement>(
+      'input[aria-label="Motivo da transferência de Chopp"]',
+    )!;
+    motivo.value = 'Dividiu com a amiga';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Confirmar transferência').click();
+    fixture.detectChanges();
+    expect(texto()).toContain('Escolha a comanda de destino.');
+    http.expectNone((r) => r.url.endsWith('/transfer'));
+
+    destino.value = 't-2';
+    destino.dispatchEvent(new Event('change'));
+    botao('Confirmar transferência').click();
+    const req = http.expectOne('/api/v1/tabs/t-1/items/l-1/transfer');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      toTabId: 't-2',
+      quantity: 1,
+      expectedQuantity: 2,
+      reason: 'Dividiu com a amiga',
+    });
+    req.flush({
+      transferId: 'x-1',
+      orderLineId: 'l-1',
+      productName: 'Chopp',
+      fromTabId: 't-1',
+      toTabId: 't-2',
+      quantity: 1,
+      remainingInFrom: 1,
+      quantityInTo: 1,
+      status: 'PRONTO',
+      version: 3,
+    });
+    const depois = pedido();
+    depois.lines[0] = { ...depois.lines[0], inTabQuantity: 1, transferredQuantity: 1 };
+    recarregaPedidos([depois]);
+    expect(texto()).toContain('1 × Chopp transferido(s) para a comanda 8 · Bia; restam 1 nesta.');
+    expect(texto()).toContain('1× Chopp');
+    expect(texto()).toContain('1 transferida(s) para outras comandas');
+    expect(element().querySelector('form.cancel')).toBeNull();
+  });
+
+  it('mostra os itens recebidos de outra comanda, com origem, e permite corrigi-los aqui (H25)', () => {
+    const recebido: ReceivedLine = {
+      id: 'l-9',
+      productName: 'Batata',
+      unitPrice: '35.90',
+      quantity: 2,
+      lineTotal: '71.80',
+      note: null,
+      sectorId: 's-1',
+      sentAt: '2026-11-03T20:05:00Z',
+      origin: { id: 't-2', number: 8, name: 'Bia', table: null },
+    };
+    abrir([], ['OPERAR_COMANDA', 'CANCELAR_ITEM', 'TRANSFERIR_UNIDADES'], [recebido]);
+    expect(texto()).toContain('Recebidos de outras comandas (1)');
+    expect(texto()).toContain('2× Batata');
+    expect(texto()).toContain('de Comanda 8 · Bia');
+    botao('Cancelar Batata').click();
+    fixture.detectChanges();
+    const motivo = element().querySelector<HTMLInputElement>('input[aria-label="Motivo do cancelamento de Batata"]')!;
+    motivo.value = 'Cliente desistiu';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Confirmar cancelamento').click();
+    const req = http.expectOne('/api/v1/tabs/t-1/items/l-9/cancel');
+    expect(req.request.body).toEqual({ quantity: 1, expectedQuantity: 2, reason: 'Cliente desistiu' });
+    req.flush(
+      { code: 'PROBLEMA_NO_ITEM', detail: 'Há um problema do consumidor em aberto sobre este item.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+    recarregaPedidos([], [recebido]);
+    expect(texto()).toContain('Há um problema do consumidor em aberto sobre este item.');
   });
 
   it('mostra falha de encaminhamento e reenvia à produção sem novo pedido', () => {

@@ -23,7 +23,12 @@ public record ProductionLineChanged(UUID lineId, Change change, List<UUID> tabId
         /** Todas as unidades canceladas antes da entrega (H23): a linha terminou. */
         CANCELADA,
         /** A entrega foi desfeita (H24): a linha voltou a pronta e precisa ser entregue de novo. */
-        ENTREGA_DESFEITA
+        ENTREGA_DESFEITA,
+        /**
+         * Unidades transferidas entre comandas (H25). {@code tabIds}: as comandas que ficaram com unidades ativas da
+         * linha; avisos em aberto passam para elas e terminam nas que ficaram sem unidades.
+         */
+        TRANSFERIDA
     }
 
     public ProductionLineChanged {

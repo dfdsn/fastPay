@@ -102,7 +102,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H22 | Composição, serviço e descontos exatos | Concluída | PR #32, merge `2da7c4a` em `develop`, CI de `develop` run 41884465186 verde ([evidência](evidencias/H22-composicao-servico-descontos.md)); T-03 da H22 aprovada em 04/11/2026 (delegada por Diego, opção recomendada) |
 | H23 | Cancelar quantidade e alertar produção | Concluída | PR #35, merge `9ff79c1` em `develop`, CI de `develop` run 42268110634 verde ([evidência](evidencias/H23-cancelamento-quantidade.md)); T-03 da H23 aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido"); inclui o caso "linha cancelada" do lote da H19 e a revisão de desconto da H22 com o cancelamento real |
 | H24 | Desfazer entrega com histórico | Concluída | PR #37, merge `30706e9` em `develop`, CI de `develop` run 42283001366 verde ([evidência](evidencias/H24-desfazer-entrega.md)); T-03 da H24 aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto") |
-| H25 | Transferir unidades sem duplicar produção | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H25 | Transferir unidades sem duplicar produção | Aguardando revisão | Branch `feature/H25-transferir-unidades`, PR para `develop` ([evidência](evidencias/H25-transferir-unidades.md)); T-03 da H25 proposta, aguardando Diego |
 | H26 | Continuação de visita e ajustes de couvert | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H27 | Google opcional e histórico do consumidor | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H28 | Conferência, bloqueio e reabertura | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -651,6 +651,26 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: T-03 da H24 proposta (quem desfaz, motivo 5–300, lista das 50 entregas mais recentes, sem prazo enquanto as comandas estão abertas, aviso novo de item pronto, ocorrência só com comanda encerrada e sem devolução automática, tudo cancelado não desfaz, versão lida contra concorrência), aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto").
 - Bloqueios / quem resolve: nenhum da H24. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
 - Próximo passo concreto: nenhum na H24. Próxima candidata elegível: H25 (transferir unidades; dependências H21–H24 concluídas, gate P-10), só quando Diego pedir.
+
+### H25 — Transferir unidades sem duplicar produção
+
+- História e estado: H25, **aguardando revisão** (PR aberto para `develop`). Gate P-10 já resolvido (D-05, D-08–D-12). T-03 da H25 proposta, aguardando Diego.
+- Data/hora e agente: 06/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - Quem tem `TRANSFERIR_UNIDADES` transfere unidades inteiras, parte ou todas, de um item entre comandas abertas da mesma unidade, com motivo, numa transação só (FR-17, RN-01, CA-10, D-05).
+  - Linha enviada, preço do envio, observação, produção e etapas preservados; só as alocações mudam; a versão da linha sobe e a entrega com os destinos de antes é recusada; as duas contas mudam no mesmo commit.
+  - Problema do item bloqueia o item; problema da conta bloqueia entradas e saídas da comanda; desconto reavaliado nas duas contas (revisão bloqueia só a cobrança).
+  - Validação exigida: rollback entre contas, lock em ordem, divisão de 3 unidades em 2 + 1 com produção única, tentativa fora da unidade, linha entregue e conflito de destinos na entrega.
+  - Pendência de outras histórias fechada aqui: o cancelamento (H23) passa a usar as unidades da própria comanda, e itens recebidos por transferência aparecem e podem ser corrigidos na comanda de destino.
+- Critérios faltantes / motivo: comandas encerradas foram simuladas encerrando-as no banco (fechamento e pagamento são da H28/H30); "em fechamento" (H28) e cobrança existente (H30) devem recusar a transferência quando existirem. O ranking sem duplicar (CA-10) é da H43; aqui fica garantido que a linha e a produção continuam uma só.
+- Branch e commit reais: `feature/H25-transferir-unidades` (a partir de `develop` `ef8e519`); commits no PR.
+- PR, checks e merge real: PR aberto; checks e merge a registrar depois do merge.
+- Arquivos/migrations/contratos: `V21__transferencia_de_unidades.sql`; `production.Transfers`, `production.TransferGuard`, `TransferController`, `JdbcTransferStore`, `JdbcProductionStore.transfer`; `Orders.transferInCurrentUnit`, `Orders.receivedOfTab`, `SentLine.inTabQuantity`/`transferredQuantity`; `attendance.IssueTransferGuard` e `ProductionCalls` (`ProductionLineChanged.TRANSFERIDA`); frontend `orders/tab-orders-page.ts`; especificação §6; decisões T-03; [evidência](evidencias/H25-transferir-unidades.md).
+- Testes: ver a evidência (backend 454 no contêiner Temurin 25 com PostgreSQL real; frontend 201 no contêiner Node 24.18.0).
+- Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real na homologação de Diego.
+- Decisões novas/alteradas: T-03 da H25 proposta (quem transfere, motivo 5–300, destino entre as comandas abertas, qualquer etapa inclusive entregue, bloqueio por problema do item e da conta, desconto reavaliado nas duas, avisos seguindo as unidades, trava em ordem de id, sem "desfazer"), aguardando Diego.
+- Bloqueios / quem resolve: Diego revisa o PR e a T-03. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego revisa e faz o merge do PR da H25; depois, reconciliar o progresso com o hash real.
 
 ## Registro de release (ainda nenhum)
 

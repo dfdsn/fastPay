@@ -43,7 +43,12 @@ public final class ProductionRules {
          * Entrega errada com comanda de destino já encerrada (H24): fica registrada, sem mudar a linha, a conta ou o
          * pagamento e sem devolução automática.
          */
-        OCORRENCIA_ENTREGA
+        OCORRENCIA_ENTREGA,
+        /**
+         * Quem tem a permissão transfere unidades da linha para outra comanda (H25): só as alocações mudam; a etapa, o
+         * preço e a produção ficam.
+         */
+        TRANSFERIDO
     }
 
     /** Situação lida da linha travada. */
@@ -91,7 +96,7 @@ public final class ProductionRules {
                     ? new Next(line.status(), true) : new Refused(Refusal.ETAPA_INVALIDA);
             case IMPOSSIVEL_RETIRADO -> line.impossible()
                     ? new Next(line.status(), false) : new Refused(Refusal.ETAPA_INVALIDA);
-            case CANCELADO, ENTREGA_DESFEITA, OCORRENCIA_ENTREGA -> new Refused(Refusal.ETAPA_INVALIDA);
+            case CANCELADO, ENTREGA_DESFEITA, OCORRENCIA_ENTREGA, TRANSFERIDO -> new Refused(Refusal.ETAPA_INVALIDA);
         };
     }
 

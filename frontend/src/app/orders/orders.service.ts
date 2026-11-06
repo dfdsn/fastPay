@@ -18,9 +18,39 @@ export interface SentLine {
   lineTotal: string;
   note: string | null;
   sectorId: string | null;
-  /** Unidades que ainda contam (H23); {@code quantity} é o enviado. */
+  /** Unidades que ainda contam em todas as comandas (H23); {@code quantity} é o enviado. */
   activeQuantity: number;
   cancelledQuantity: number;
+  /** Unidades ativas nesta comanda e as transferidas para outras (H25). */
+  inTabQuantity: number;
+  transferredQuantity: number;
+}
+
+/** Item de pedido de outra comanda com unidades ativas nesta: recebido por transferência (H25). */
+export interface ReceivedLine {
+  id: string;
+  productName: string;
+  unitPrice: string;
+  quantity: number;
+  lineTotal: string;
+  note: string | null;
+  sectorId: string | null;
+  sentAt: string;
+  origin: { id: string; number: number; name: string; table: string | null } | null;
+}
+
+/** Resultado da transferência (H25): unidades que ficaram na origem e as que o destino tem agora. */
+export interface Transferred {
+  transferId: string;
+  orderLineId: string;
+  productName: string;
+  fromTabId: string;
+  toTabId: string;
+  quantity: number;
+  remainingInFrom: number;
+  quantityInTo: number;
+  status: string;
+  version: number;
 }
 
 /** Resultado do cancelamento (H23): unidades da linha agora e se a produção precisa dar ciência. */
@@ -94,6 +124,33 @@ export class OrdersService {
   cancel(tabId: string, orderLineId: string, quantity: number, expectedQuantity: number, reason: string): Observable<Cancelled> {
     return this.auth.withCsrf(() =>
       this.http.post<Cancelled>(`/api/v1/tabs/${tabId}/items/${orderLineId}/cancel`, {
+        quantity,
+        expectedQuantity,
+        reason,
+      }),
+    );
+  }
+
+  /** Itens recebidos de outras comandas por transferência (H25). */
+  receivedOfTab(tabId: string): Observable<ReceivedLine[]> {
+    return this.http.get<ReceivedLine[]>('/api/v1/orders/received', { params: new HttpParams().set('tabId', tabId) });
+  }
+
+  /**
+   * Transfere unidades inteiras de um item para outra comanda aberta (H25, permissão de transferir).
+   * {@code expectedQuantity}: as unidades mostradas nesta comanda; mudou, o servidor recusa e a tela relê.
+   */
+  transfer(
+    tabId: string,
+    orderLineId: string,
+    toTabId: string,
+    quantity: number,
+    expectedQuantity: number,
+    reason: string,
+  ): Observable<Transferred> {
+    return this.auth.withCsrf(() =>
+      this.http.post<Transferred>(`/api/v1/tabs/${tabId}/items/${orderLineId}/transfer`, {
+        toTabId,
         quantity,
         expectedQuantity,
         reason,
