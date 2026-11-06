@@ -6,7 +6,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -168,22 +167,6 @@ public class JdbcOrderStore {
                 tabId);
     }
 
-    /** Unidades ativas por linha (H23): a soma das alocações em todas as comandas. */
-    public Map<UUID, Integer> activeUnits(List<UUID> lineIds) {
-        Map<UUID, Integer> units = new HashMap<>();
-        if (lineIds.isEmpty()) {
-            return units;
-        }
-        jdbc.query("""
-                SELECT order_line_id, sum(quantity)::int AS quantity FROM tab_allocation
-                 WHERE order_line_id = ANY (?) GROUP BY order_line_id
-                """, ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", lineIds.toArray())),
-                (ResultSet rs) -> {
-                    units.put(rs.getObject("order_line_id", UUID.class), rs.getInt("quantity"));
-                });
-        return units;
-    }
-
     public record CancelTargetRow(UUID orderLineId, String productName, int quantity, int activeInTab,
             UUID sectorId) {
     }
@@ -219,6 +202,53 @@ public class JdbcOrderStore {
         if (updated != 1) {
             throw new IllegalStateException("Alocação mudou com a comanda travada.");
         }
+    }
+
+    /**
+     * Soma unidades à alocação da linha na comanda de destino (H25): a existente (mesmo zerada), ou uma nova. Uma
+     * alocação por linha e comanda, para o destino aparecer uma vez só na produção.
+     */
+    public void addToAllocation(UUID orderLineId, UUID tabId, int quantity, Instant now) {
+        List<AllocationIdRow> existing = jdbc.query("""
+                SELECT id, quantity FROM tab_allocation
+                 WHERE order_line_id = ? AND tab_id = ?
+                 ORDER BY created_at DESC, id DESC LIMIT 1
+                """, (rs, n) -> new AllocationIdRow(rs.getObject("id", UUID.class), rs.getInt("quantity")),
+                orderLineId, tabId);
+        if (existing.isEmpty()) {
+            jdbc.update("""
+                    INSERT INTO tab_allocation (id, establishment_id, order_line_id, tab_id, quantity, created_at)
+                    VALUES (?, current_establishment_id(), ?, ?, ?, ?)
+                    """, UUID.randomUUID(), orderLineId, tabId, quantity, Timestamp.from(now));
+            return;
+        }
+        AllocationIdRow a = existing.getFirst();
+        reduceAllocation(a.id(), a.quantity(), a.quantity() + quantity);
+    }
+
+    /**
+     * Linhas de pedidos de outras comandas com unidades alocadas nesta (H25: recebidas por transferência), com a
+     * comanda de origem do pedido.
+     */
+    public record ReceivedLineRow(UUID orderLineId, UUID originTabId, String productName, BigDecimal unitPrice,
+            int quantity, String note, UUID sectorId, Instant sentAt) {
+    }
+
+    public List<ReceivedLineRow> receivedLines(UUID tabId) {
+        return jdbc.query("""
+                SELECT l.id, o.tab_id AS origin, l.product_name, l.unit_price, sum(a.quantity)::int AS quantity,
+                       l.note, l.sector_id, o.sent_at, l.position
+                  FROM tab_allocation a
+                  JOIN order_line l ON l.establishment_id = a.establishment_id AND l.id = a.order_line_id
+                  JOIN customer_order o ON o.establishment_id = l.establishment_id AND o.id = l.order_id
+                 WHERE a.tab_id = ? AND o.tab_id <> a.tab_id
+                 GROUP BY l.id, o.tab_id, l.product_name, l.unit_price, l.note, l.sector_id, o.sent_at, l.position
+                HAVING sum(a.quantity) > 0
+                 ORDER BY o.sent_at, l.position, l.id
+                """, (rs, n) -> new ReceivedLineRow(rs.getObject("id", UUID.class),
+                rs.getObject("origin", UUID.class), rs.getString("product_name"), rs.getBigDecimal("unit_price"),
+                rs.getInt("quantity"), rs.getString("note"), rs.getObject("sector_id", UUID.class),
+                rs.getTimestamp("sent_at").toInstant()), tabId);
     }
 
     private static OrderRow order(ResultSet rs, int n) throws SQLException {

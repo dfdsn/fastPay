@@ -63,6 +63,12 @@ class OrderController {
         return respond(orders.ofTab(session.requireIdentity(request), session.requireSelectedUnit(request), tabId));
     }
 
+    @GetMapping("/received")
+    List<Orders.ReceivedLine> received(@RequestParam UUID tabId, HttpServletRequest request) {
+        return respond(orders.receivedOfTab(session.requireIdentity(request), session.requireSelectedUnit(request),
+                tabId));
+    }
+
     @PostMapping("/{id}/forwarding/retry")
     Orders.SentOrder retry(@PathVariable UUID id, HttpServletRequest request) {
         UUID actor = session.requireIdentity(request);

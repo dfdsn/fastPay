@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
@@ -29,15 +29,31 @@ import {
   reais,
   saveDraft,
 } from './order-draft';
-import { Forwarding, OrdersService, ReviewProblem, SentLine, SentOrder } from './orders.service';
+import { Forwarding, OrdersService, ReceivedLine, ReviewProblem, SentOrder } from './orders.service';
 
 /** Motivo do cancelamento (H23): de 5 a 300 caracteres, conferido também no servidor. */
 export const CANCEL_REASON_MIN = 5;
 export const CANCEL_REASON_MAX = 300;
 
+/** Item com unidades ativas nesta comanda, como as correções o veem (H23, H25). */
+export interface TabItem {
+  id: string;
+  productName: string;
+  /** Unidades ativas nesta comanda. */
+  inTab: number;
+}
+
 /** Cancelamento em edição: o item, quantas unidades e o motivo. */
 interface Cancelling {
-  line: SentLine;
+  line: TabItem;
+  quantity: number;
+  reason: string;
+}
+
+/** Transferência em edição (H25): o item, a comanda de destino, quantas unidades e o motivo. */
+interface Transferring {
+  line: TabItem;
+  toTabId: string;
   quantity: number;
   reason: string;
 }
@@ -73,6 +89,7 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
   selector: 'fp-tab-orders-page',
   imports: [
     DatePipe,
+    NgTemplateOutlet,
     RouterLink,
     MatButtonModule,
     MatCardModule,
@@ -234,9 +251,9 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
             <ul class="sent">
               @for (line of order.lines; track line.id) {
                 <li>
-                  <span [class.cancelled]="line.activeQuantity === 0">
-                    {{ line.activeQuantity }}× {{ line.productName }} · {{ money(line.unitPrice) }} cada ·
-                    {{ money(activeTotal(line)) }}
+                  <span [class.cancelled]="line.inTabQuantity === 0">
+                    {{ line.inTabQuantity }}× {{ line.productName }} · {{ money(line.unitPrice) }} cada ·
+                    {{ money(activeTotal(line.unitPrice, line.inTabQuantity)) }}
                   </span>
                   @if (line.note) {
                     <span class="muted"> · {{ line.note }}</span>
@@ -247,39 +264,12 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
                       {{ line.activeQuantity }}
                     </span>
                   }
-                  @if (cancelling()?.line?.id === line.id) {
-                    <form class="row cancel" (submit)="$event.preventDefault(); confirmCancel()">
-                      <label>
-                        Cancelar quantas
-                        <input
-                          type="number"
-                          min="1"
-                          [max]="line.activeQuantity"
-                          [value]="cancelling()!.quantity"
-                          [attr.aria-label]="'Unidades de ' + line.productName + ' a cancelar'"
-                          (change)="setCancelQuantity($any($event.target).value)"
-                        />
-                      </label>
-                      <label class="grow">
-                        Motivo
-                        <input
-                          type="text"
-                          [maxLength]="reasonMax"
-                          [value]="cancelling()!.reason"
-                          [attr.aria-label]="'Motivo do cancelamento de ' + line.productName"
-                          (input)="setCancelReason($any($event.target).value)"
-                        />
-                      </label>
-                      <button mat-flat-button type="submit" [disabled]="busy()">Confirmar cancelamento</button>
-                      <button mat-button type="button" [disabled]="busy()" (click)="cancelling.set(null)">
-                        Voltar
-                      </button>
-                    </form>
-                  } @else if (line.activeQuantity > 0 && canCancel()) {
-                    <button mat-button type="button" [disabled]="busy()" (click)="startCancel(line)">
-                      Cancelar {{ line.productName }}
-                    </button>
+                  @if (line.transferredQuantity > 0) {
+                    <span class="warning"> · {{ line.transferredQuantity }} transferida(s) para outras comandas</span>
                   }
+                  <ng-container
+                    *ngTemplateOutlet="corrections; context: { $implicit: item(line.id, line.productName, line.inTabQuantity) }"
+                  />
                 </li>
               }
             </ul>
@@ -291,7 +281,109 @@ const FORWARDING_LABELS: Record<Forwarding, string> = {
           </mat-card-content>
         </mat-card>
       }
+      @if (received().length > 0) {
+        <h2>Recebidos de outras comandas ({{ received().length }})</h2>
+        <ul class="sent">
+          @for (line of received(); track line.id) {
+            <li>
+              <span>
+                {{ line.quantity }}× {{ line.productName }} · {{ money(line.unitPrice) }} cada ·
+                {{ money(line.lineTotal) }}
+              </span>
+              @if (line.note) {
+                <span class="muted"> · {{ line.note }}</span>
+              }
+              @if (line.origin; as o) {
+                <span class="muted"> · de Comanda {{ o.number }} · {{ o.name }}</span>
+              }
+              <ng-container
+                *ngTemplateOutlet="corrections; context: { $implicit: item(line.id, line.productName, line.quantity) }"
+              />
+            </li>
+          }
+        </ul>
+      }
       <button mat-button type="button" (click)="loadOrders()">Atualizar pedidos</button>
+
+      <ng-template #corrections let-line>
+        @if (cancelling()?.line?.id === line.id) {
+          <form class="row cancel" (submit)="$event.preventDefault(); confirmCancel()">
+            <label>
+              Cancelar quantas
+              <input
+                type="number"
+                min="1"
+                [max]="line.inTab"
+                [value]="cancelling()!.quantity"
+                [attr.aria-label]="'Unidades de ' + line.productName + ' a cancelar'"
+                (change)="setCancelQuantity($any($event.target).value)"
+              />
+            </label>
+            <label class="grow">
+              Motivo
+              <input
+                type="text"
+                [maxLength]="reasonMax"
+                [value]="cancelling()!.reason"
+                [attr.aria-label]="'Motivo do cancelamento de ' + line.productName"
+                (input)="setCancelReason($any($event.target).value)"
+              />
+            </label>
+            <button mat-flat-button type="submit" [disabled]="busy()">Confirmar cancelamento</button>
+            <button mat-button type="button" [disabled]="busy()" (click)="cancelling.set(null)">Voltar</button>
+          </form>
+        } @else if (transferring()?.line?.id === line.id) {
+          <form class="row cancel" (submit)="$event.preventDefault(); confirmTransfer()">
+            <label>
+              Para
+              <select
+                [value]="transferring()!.toTabId"
+                [attr.aria-label]="'Comanda de destino de ' + line.productName"
+                (change)="setTransferTarget($any($event.target).value)"
+              >
+                <option value="">Escolha a comanda</option>
+                @for (t of destinations(); track t.id) {
+                  <option [value]="t.id">Comanda {{ t.number }} · {{ t.name }}{{ t.table ? ' · mesa ' + t.table : '' }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              Quantas
+              <input
+                type="number"
+                min="1"
+                [max]="line.inTab"
+                [value]="transferring()!.quantity"
+                [attr.aria-label]="'Unidades de ' + line.productName + ' a transferir'"
+                (change)="setTransferQuantity($any($event.target).value)"
+              />
+            </label>
+            <label class="grow">
+              Motivo
+              <input
+                type="text"
+                [maxLength]="reasonMax"
+                [value]="transferring()!.reason"
+                [attr.aria-label]="'Motivo da transferência de ' + line.productName"
+                (input)="setTransferReason($any($event.target).value)"
+              />
+            </label>
+            <button mat-flat-button type="submit" [disabled]="busy()">Confirmar transferência</button>
+            <button mat-button type="button" [disabled]="busy()" (click)="transferring.set(null)">Voltar</button>
+          </form>
+        } @else if (line.inTab > 0) {
+          @if (canCancel()) {
+            <button mat-button type="button" [disabled]="busy()" (click)="startCancel(line)">
+              Cancelar {{ line.productName }}
+            </button>
+          }
+          @if (canTransfer()) {
+            <button mat-button type="button" [disabled]="busy()" (click)="startTransfer(line)">
+              Transferir {{ line.productName }}
+            </button>
+          }
+        }
+      </ng-template>
 
       <fp-bill-panel [tabId]="tabId" [refresh]="billRefreshes()" />
     }
@@ -388,11 +480,19 @@ export class TabOrdersPage {
   protected readonly canCancel = computed(
     () => this.unit.current()?.permissions?.includes('CANCELAR_ITEM') ?? false,
   );
+  /** Transferência aberta num item (H25) e as comandas abertas para onde pode ir (menos esta). */
+  protected readonly transferring = signal<Transferring | null>(null);
+  protected readonly destinations = signal<Tab[]>([]);
+  protected readonly canTransfer = computed(
+    () => this.unit.current()?.permissions?.includes('TRANSFERIR_UNIDADES') ?? false,
+  );
 
   protected readonly state = signal<State>('loading');
   protected readonly tab = signal<Tab | null>(null);
   protected readonly products = signal<Product[]>([]);
   protected readonly orders = signal<SentOrder[]>([]);
+  /** Itens de outras comandas recebidos por transferência (H25). */
+  protected readonly received = signal<ReceivedLine[]>([]);
   protected readonly draft = signal<Draft>(emptyDraft());
   protected readonly busy = signal(false);
   protected readonly notice = signal<string | null>(null);
@@ -409,6 +509,7 @@ export class TabOrdersPage {
       this.storageKey = null;
       this.draft.set(emptyDraft());
       this.orders.set([]);
+      this.received.set([]);
       this.products.set([]);
     });
     this.destroyRef.onDestroy(cancel);
@@ -478,6 +579,13 @@ export class TabOrdersPage {
           this.orders.set(orders);
           this.billRefreshes.update((n) => n + 1);
         },
+        error: (error: unknown) => this.failure.set(failureMessage(error)),
+      });
+    this.service
+      .receivedOfTab(this.tabId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (received) => this.received.set(received),
         error: (error: unknown) => this.failure.set(failureMessage(error)),
       });
   }
@@ -627,13 +735,19 @@ export class TabOrdersPage {
     });
   }
 
-  /** Total das unidades que ainda contam (preço do envio × ativas), em reais. */
-  protected activeTotal(line: SentLine): string {
-    return (Math.round(Number(line.unitPrice) * 100) * line.activeQuantity / 100).toFixed(2);
+  /** Total das unidades que contam nesta comanda (preço do envio × unidades), em reais. */
+  protected activeTotal(unitPrice: string, units: number): string {
+    return ((Math.round(Number(unitPrice) * 100) * units) / 100).toFixed(2);
   }
 
-  startCancel(line: SentLine): void {
+  /** O item como as correções o veem (enviado daqui ou recebido de outra comanda). */
+  protected item(id: string, productName: string, inTab: number): TabItem {
+    return { id, productName, inTab };
+  }
+
+  startCancel(line: TabItem): void {
     this.failure.set(null);
+    this.transferring.set(null);
     this.cancelling.set({ line, quantity: 1, reason: '' });
   }
 
@@ -661,15 +775,15 @@ export class TabOrdersPage {
       return;
     }
     const reason = c.reason.trim();
-    if (!Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > c.line.activeQuantity) {
-      this.failure.set(`Cancele de 1 a ${c.line.activeQuantity} unidade(s).`);
+    if (!Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > c.line.inTab) {
+      this.failure.set(`Cancele de 1 a ${c.line.inTab} unidade(s).`);
       return;
     }
     if (reason.length < CANCEL_REASON_MIN || reason.length > CANCEL_REASON_MAX) {
       this.failure.set(`Informe o motivo, com ${CANCEL_REASON_MIN} a ${CANCEL_REASON_MAX} caracteres.`);
       return;
     }
-    this.run(this.service.cancel(this.tabId, c.line.id, c.quantity, c.line.activeQuantity, reason), {
+    this.run(this.service.cancel(this.tabId, c.line.id, c.quantity, c.line.inTab, reason), {
       next: (done) => {
         this.cancelling.set(null);
         this.notice.set(
@@ -682,6 +796,84 @@ export class TabOrdersPage {
         this.failure.set(failureMessage(error));
         if (problemCode(error) !== 'DADOS_INVALIDOS') {
           this.cancelling.set(null);
+        }
+        this.loadOrders();
+      },
+    });
+  }
+
+  /** Abre a transferência do item e carrega as comandas abertas da unidade para escolher o destino. */
+  startTransfer(line: TabItem): void {
+    this.failure.set(null);
+    this.cancelling.set(null);
+    this.transferring.set({ line, toTabId: '', quantity: 1, reason: '' });
+    this.tabs
+      .active()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (tabs) => this.destinations.set(tabs.filter((t) => t.id !== this.tabId)),
+        error: (error: unknown) => this.failure.set(failureMessage(error)),
+      });
+  }
+
+  setTransferTarget(value: string): void {
+    const t = this.transferring();
+    if (t) {
+      this.transferring.set({ ...t, toTabId: value });
+    }
+  }
+
+  setTransferQuantity(value: string): void {
+    const t = this.transferring();
+    if (t) {
+      this.transferring.set({ ...t, quantity: Math.trunc(Number(value)) });
+    }
+  }
+
+  setTransferReason(value: string): void {
+    const t = this.transferring();
+    if (t) {
+      this.transferring.set({ ...t, reason: value });
+    }
+  }
+
+  /**
+   * Transfere unidades inteiras do item para outra comanda aberta (H25, FR-17): as duas contas mudam juntas e a
+   * produção continua a mesma, agora com os dois destinos.
+   */
+  confirmTransfer(): void {
+    const t = this.transferring();
+    if (!t) {
+      return;
+    }
+    const reason = t.reason.trim();
+    if (!t.toTabId) {
+      this.failure.set('Escolha a comanda de destino.');
+      return;
+    }
+    if (!Number.isInteger(t.quantity) || t.quantity < 1 || t.quantity > t.line.inTab) {
+      this.failure.set(`Transfira de 1 a ${t.line.inTab} unidade(s).`);
+      return;
+    }
+    if (reason.length < CANCEL_REASON_MIN || reason.length > CANCEL_REASON_MAX) {
+      this.failure.set(`Informe o motivo, com ${CANCEL_REASON_MIN} a ${CANCEL_REASON_MAX} caracteres.`);
+      return;
+    }
+    const target = this.destinations().find((d) => d.id === t.toTabId);
+    this.run(this.service.transfer(this.tabId, t.line.id, t.toTabId, t.quantity, t.line.inTab, reason), {
+      next: (done) => {
+        this.transferring.set(null);
+        this.notice.set(
+          `${done.quantity} × ${done.productName} transferido(s)` +
+            (target ? ` para a comanda ${target.number} · ${target.name}` : '') +
+            `; restam ${done.remainingInFrom} nesta.`,
+        );
+        this.loadOrders();
+      },
+      error: (error) => {
+        this.failure.set(failureMessage(error));
+        if (problemCode(error) !== 'DADOS_INVALIDOS') {
+          this.transferring.set(null);
         }
         this.loadOrders();
       },

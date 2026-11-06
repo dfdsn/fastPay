@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -66,10 +67,13 @@ public class Orders {
     /**
      * Linha enviada; valores em reais como texto com duas casas (especificação §7). {@code sectorId} vazio: dispensa
      * produção. {@code quantity} e {@code lineTotal}: o enviado; {@code activeQuantity} e {@code cancelledQuantity}:
-     * as unidades que ainda contam e as canceladas (H23, FR-20).
+     * as unidades que ainda contam (em todas as comandas) e as canceladas (H23, FR-20); {@code inTabQuantity}: as
+     * ativas na comanda do pedido; {@code transferredQuantity}: as ativas que foram transferidas para outras comandas
+     * (H25, FR-17).
      */
     public record SentLine(UUID id, int position, UUID productId, String productName, String unitPrice,
-            int quantity, String lineTotal, String note, UUID sectorId, int activeQuantity, int cancelledQuantity) {
+            int quantity, String lineTotal, String note, UUID sectorId, int activeQuantity, int cancelledQuantity,
+            int inTabQuantity, int transferredQuantity) {
     }
 
     /** Pedido enviado. {@code forwarding}: encaminhamento à produção pendente, concluído ou na fila de falhas. */
@@ -228,6 +232,38 @@ public class Orders {
         });
     }
 
+    /** Comanda de origem de um item recebido por transferência (H25), como a equipe a identifica. */
+    public record OriginTab(UUID id, int number, String name, String table) {
+    }
+
+    /**
+     * Item de pedido de outra comanda com unidades ativas nesta (H25, FR-17): recebido por transferência. Preço do
+     * envio; {@code quantity}: as unidades ativas aqui; {@code lineTotal}: preço × unidades aqui.
+     */
+    public record ReceivedLine(UUID id, String productName, String unitPrice, int quantity, String lineTotal,
+            String note, UUID sectorId, Instant sentAt, OriginTab origin) {
+    }
+
+    /** Itens recebidos de outras comandas por transferência, dos mais antigos aos mais novos (H25). */
+    public Outcome<List<ReceivedLine>> receivedOfTab(UUID actorId, UUID establishmentId, UUID tabId) {
+        return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_COMANDA, me -> {
+            if (!tabs.existsInCurrentUnit(tabId)) {
+                return new Refused<>(Refusal.COMANDA_NAO_ENCONTRADA);
+            }
+            List<JdbcOrderStore.ReceivedLineRow> rows = store.receivedLines(tabId);
+            Map<UUID, Tabs.Label> labels = tabs.labelsInCurrentUnit(
+                    rows.stream().map(JdbcOrderStore.ReceivedLineRow::originTabId).distinct().toList());
+            return new Done<>(rows.stream().map(r -> {
+                Tabs.Label label = labels.get(r.originTabId());
+                return new ReceivedLine(r.orderLineId(), r.productName(), OrderRules.money(r.unitPrice()).toPlainString(),
+                        r.quantity(),
+                        OrderRules.money(r.unitPrice().multiply(BigDecimal.valueOf(r.quantity()))).toPlainString(),
+                        r.note(), r.sectorId(), r.sentAt(), label == null ? null
+                                : new OriginTab(label.id(), label.number(), label.name(), label.table()));
+            }).toList());
+        });
+    }
+
     /** Devolve à fila o encaminhamento que esgotou as tentativas, sem novo lançamento (FR-15). */
     public Outcome<SentOrder> retryForwarding(UUID actorId, UUID establishmentId, UUID orderId,
             String correlationId) {
@@ -341,6 +377,12 @@ public class Orders {
      * grava o fato do cancelamento.
      */
     public void cancelInCurrentUnit(UUID orderLineId, UUID tabId, int quantity) {
+        take(orderLineId, tabId, quantity);
+        changes.publishInCurrentTransaction(Topic.PEDIDO, tabId);
+    }
+
+    /** Tira unidades ativas da linha na comanda, das alocações mais recentes. */
+    private void take(UUID orderLineId, UUID tabId, int quantity) {
         int left = quantity;
         for (JdbcOrderStore.AllocationIdRow a : store.allocationsInTab(orderLineId, tabId)) {
             if (left == 0) {
@@ -352,22 +394,45 @@ public class Orders {
         }
         if (left != 0) {
             // Quem chama conferiu as unidades ativas com a comanda travada: sobrar é erro de programa.
-            throw new IllegalStateException("Cancelamento acima das unidades ativas na comanda.");
+            throw new IllegalStateException("Retirada acima das unidades ativas na comanda.");
         }
-        changes.publishInCurrentTransaction(Topic.PEDIDO, tabId);
+    }
+
+    /**
+     * Passa unidades ativas da linha de uma comanda para outra (H25, FR-17, RN-01): a origem diminui (das alocações
+     * mais recentes), o destino soma, e a soma das alocações da linha não muda. A linha enviada, o preço e a observação
+     * ficam; a conta (H22) das duas acompanha. Quem chama trava as duas comandas, confere as unidades e grava o fato.
+     */
+    public void transferInCurrentUnit(UUID orderLineId, UUID fromTabId, UUID toTabId, int quantity) {
+        take(orderLineId, fromTabId, quantity);
+        store.addToAllocation(orderLineId, toTabId, quantity, clock.instant());
+        changes.publishInCurrentTransaction(Topic.PEDIDO, fromTabId);
+        changes.publishInCurrentTransaction(Topic.PEDIDO, toTabId);
     }
 
     private List<SentOrder> view(List<OrderRow> orders) {
         List<UUID> ids = orders.stream().map(OrderRow::id).toList();
         Map<UUID, List<SentLine>> lines = new LinkedHashMap<>();
         List<LineRow> rows = store.lines(ids);
-        Map<UUID, Integer> active = store.activeUnits(rows.stream().map(LineRow::id).toList());
+        Map<UUID, UUID> tabOfOrder = new HashMap<>();
+        orders.forEach(o -> tabOfOrder.put(o.id(), o.tabId()));
+        Map<UUID, UUID> tabOfLine = new HashMap<>();
+        rows.forEach(l -> tabOfLine.put(l.id(), tabOfOrder.get(l.orderId())));
+        Map<UUID, Integer> active = new HashMap<>();
+        Map<UUID, Integer> inTab = new HashMap<>();
+        for (JdbcOrderStore.AllocationRow a : store.allocations(rows.stream().map(LineRow::id).toList())) {
+            active.merge(a.orderLineId(), a.quantity(), Integer::sum);
+            if (a.tabId().equals(tabOfLine.get(a.orderLineId()))) {
+                inTab.merge(a.orderLineId(), a.quantity(), Integer::sum);
+            }
+        }
         for (LineRow l : rows) {
             int units = active.getOrDefault(l.id(), 0);
+            int here = inTab.getOrDefault(l.id(), 0);
             lines.computeIfAbsent(l.orderId(), k -> new ArrayList<>()).add(new SentLine(l.id(), l.position(),
                     l.productId(), l.productName(), OrderRules.money(l.unitPrice()).toPlainString(), l.quantity(),
                     OrderRules.money(l.unitPrice().multiply(BigDecimal.valueOf(l.quantity()))).toPlainString(), l.note(),
-                    l.sectorId(), units, l.quantity() - units));
+                    l.sectorId(), units, l.quantity() - units, here, units - here));
         }
         Map<String, EffectState> forwarding = jobs.statesInCurrentTransaction(FORWARDING_JOB,
                 ids.stream().map(UUID::toString).toList());

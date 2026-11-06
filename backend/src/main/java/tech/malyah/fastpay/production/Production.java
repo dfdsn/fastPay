@@ -346,6 +346,7 @@ public class Production {
             case CANCELADO -> throw new IllegalStateException("Cancelamento passa por Cancellations.");
             case ENTREGA_DESFEITA, OCORRENCIA_ENTREGA ->
                 throw new IllegalStateException("Correção de entrega passa por DeliveryCorrections.");
+            case TRANSFERIDO -> throw new IllegalStateException("Transferência passa por Transfers.");
         }
         store.event(lineId, action, current.status(), to, reason, version + 1, actorId, now, correlationId);
         Line line = board(List.of(store.line(lineId).orElseThrow())).lines().getFirst();
@@ -361,6 +362,7 @@ public class Production {
             case CANCELADO -> throw new IllegalStateException("Cancelamento passa por Cancellations.");
             case ENTREGA_DESFEITA, OCORRENCIA_ENTREGA ->
                 throw new IllegalStateException("Correção de entrega passa por DeliveryCorrections.");
+            case TRANSFERIDO -> throw new IllegalStateException("Transferência passa por Transfers.");
         };
         if (change != null) {
             // Avisos do atendimento (H20) no mesmo commit da mudança.

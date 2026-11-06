@@ -1,7 +1,9 @@
 package tech.malyah.fastpay.attendance;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -19,7 +21,8 @@ import tech.malyah.fastpay.tabs.Tabs;
  * Avisos de atendimento a partir da produção (H20, FR-21, FR-26). Roda na mesma transação da mudança da linha (o
  * evento é publicado e ouvido de forma síncrona): o aviso e o fato entram no mesmo commit, ou nenhum dos dois. Cada
  * comanda de destino ganha o seu aviso, com a modalidade de atendimento dela; entregar conclui os avisos de pronto da
- * linha, retirar a sinalização conclui os de impossibilidade, e cancelar a linha inteira (H23) conclui os dois.
+ * linha, retirar a sinalização conclui os de impossibilidade, e cancelar a linha inteira (H23) conclui os dois. Na
+ * transferência (H25) os avisos em aberto seguem as unidades.
  */
 @Component
 class ProductionCalls {
@@ -49,7 +52,32 @@ class ProductionCalls {
                 conclude(event, CallKind.ITEM_PRONTO, "CANCELADO");
                 conclude(event, CallKind.IMPOSSIBILIDADE, "CANCELADO");
             }
+            case TRANSFERIDA -> transfer(event);
         }
+    }
+
+    /**
+     * H25: os avisos em aberto da linha seguem as unidades. Cada comanda que ficou com unidades ganha o aviso, com a
+     * modalidade dela; os das comandas que ficaram sem unidades terminam como transferidos.
+     */
+    private void transfer(ProductionLineChanged event) {
+        List<CallKind> kinds = store.openKinds(event.lineId());
+        if (kinds.isEmpty()) {
+            return;
+        }
+        Map<UUID, Tabs.Label> labels = tabs.labelsInCurrentUnit(event.tabIds());
+        for (CallKind kind : kinds) {
+            for (Tabs.Label label : labels.values()) {
+                store.open(label.id(), event.lineId(), kind, label.attendanceMode(), event.at());
+            }
+        }
+        List<UUID> left = store.concludeOutside(event.lineId(), event.tabIds(), "TRANSFERIDO", event.actorId(),
+                event.at());
+        Set<UUID> touched = new LinkedHashSet<>(event.tabIds());
+        touched.addAll(left);
+        publish(List.copyOf(touched));
+        log.info("Linha {}: avisos de {} seguem a transferência; {} comanda(s) sem unidades", event.lineId(), kinds,
+                left.size());
     }
 
     private void open(ProductionLineChanged event, CallKind kind) {

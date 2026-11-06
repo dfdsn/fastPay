@@ -159,6 +159,15 @@ public class JdbcProductionStore {
                 clearImpossible, id, version));
     }
 
+    /**
+     * Transferência de unidades na linha travada (H25): a etapa e os instantes ficam; só a versão sobe, para a entrega
+     * com os destinos de antes ser recusada (H18).
+     */
+    public void transfer(UUID id, long version) {
+        requireOne(jdbc.update("UPDATE production_line SET version = version + 1 WHERE id = ? AND version = ?", id,
+                version));
+    }
+
     /** Trava a linha até o fim da transação: duas mudanças de etapa simultâneas se enfileiram. */
     public Optional<LineRow> lock(UUID id) {
         return jdbc.query("SELECT " + COLUMNS + " FROM production_line WHERE id = ? FOR UPDATE",

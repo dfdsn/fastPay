@@ -57,6 +57,34 @@ public class JdbcAttendanceStore {
                 """, Timestamp.from(now), actorId, resolution, lineId, kind.name());
     }
 
+    /** Tipos dos avisos em aberto da linha (H25: seguem as unidades transferidas). */
+    public List<CallKind> openKinds(UUID lineId) {
+        return jdbc.queryForList("""
+                SELECT DISTINCT kind FROM attendance_call WHERE production_line_id = ? AND concluded_at IS NULL
+                 ORDER BY kind
+                """, String.class, lineId).stream().map(CallKind::valueOf).toList();
+    }
+
+    /**
+     * Conclui os avisos em aberto da linha nas comandas fora de {@code keep} (H25: ficaram sem unidades da linha).
+     *
+     * @return as comandas cujos avisos foram concluídos
+     */
+    public List<UUID> concludeOutside(UUID lineId, List<UUID> keep, String resolution, UUID actorId, Instant now) {
+        return jdbc.query("""
+                UPDATE attendance_call
+                   SET concluded_at = ?, concluded_by = ?, resolution = ?, version = version + 1
+                 WHERE production_line_id = ? AND concluded_at IS NULL AND NOT (tab_id = ANY (?))
+                RETURNING tab_id
+                """, ps -> {
+                    ps.setTimestamp(1, Timestamp.from(now));
+                    ps.setObject(2, actorId);
+                    ps.setString(3, resolution);
+                    ps.setObject(4, lineId);
+                    ps.setArray(5, ps.getConnection().createArrayOf("uuid", keep.toArray()));
+                }, (rs, n) -> rs.getObject("tab_id", UUID.class)).stream().distinct().toList();
+    }
+
     /** Chamados em aberto, dos mais antigos aos mais novos. */
     public List<CallRow> open() {
         return jdbc.query("SELECT " + COLUMNS + """

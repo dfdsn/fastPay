@@ -116,6 +116,18 @@ public class JdbcIssueStore {
                 """, Boolean.class, tabId));
     }
 
+    /**
+     * Problema não tratado da comanda que impede transferir o item (H25): {@code true} se da conta, {@code false} se do
+     * item; vazio se nenhum. O do item vem primeiro.
+     */
+    public Optional<Boolean> pendingForTransfer(UUID tabId, UUID orderLineId) {
+        return jdbc.queryForList("""
+                SELECT order_line_id IS NULL FROM consumer_issue
+                 WHERE tab_id = ? AND status <> 'TRATADO' AND (order_line_id IS NULL OR order_line_id = ?)
+                 ORDER BY order_line_id IS NULL LIMIT 1
+                """, Boolean.class, tabId, orderLineId).stream().findFirst();
+    }
+
     public void audit(String action, UUID subjectId, UUID actorId, String detail, String correlationId) {
         jdbc.update("""
                 INSERT INTO audit_event (id, establishment_id, action, subject_id, actor_id, detail, correlation_id)
