@@ -355,21 +355,15 @@ class ConsumerIssuesIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void problemaDepoisDoPagamentoPreservaQuitacaoEVaiAoGerente() throws Exception {
+    void problemaDepoisDoEncerramentoPreservaEncerramentoEVaiAoGerente() throws Exception {
         Browser gabi = login.inUnit(garcom, loja);
         Browser gui = login.inUnit(gerente, loja);
         String comanda = comanda(gabi, "Fabi");
-        gabi.post("/api/v1/orders", envio(comanda, linha(chopp, 2, "9.90"))).andExpect(status().isOk());
-        rodarJobs();
         Browser cliente = vincular(gabi, comanda);
-        // Encerramento e quitação chegam com H28–H32: aqui a comanda é encerrada direto no banco, com o acesso de 7 dias.
-        // Datas pelo relógio da aplicação (controlado no teste), não pelo do banco.
-        admin().update("UPDATE fastpay.tab SET closed_at = ?, access_until = ? WHERE id = ?",
-                java.sql.Timestamp.from(relogio.instant()),
-                java.sql.Timestamp.from(relogio.instant().plus(Duration.ofDays(7))),
+        // Quitação chega com H30/H31; o encerramento sem valor da H29 (conta zerada, pelo cliente) faz o papel aqui.
+        cliente.post("/api/v1/guest/tabs/" + comanda + "/closing/without-value", "{}").andExpect(status().isOk());
+        Map<String, Object> antes = admin().queryForMap("SELECT closed_at, version FROM fastpay.tab WHERE id = ?",
                 UUID.fromString(comanda));
-        Map<String, Object> antes = admin().queryForMap("SELECT closed_at, access_until, version FROM fastpay.tab "
-                + "WHERE id = ?", UUID.fromString(comanda));
 
         String guest = "/api/v1/guest/tabs/" + comanda + "/issues";
         cliente.get(guest).andExpect(status().isOk()).andExpect(jsonPath("$.closed").value(true));
@@ -387,9 +381,13 @@ class ConsumerIssuesIntegrationTest extends PostgresIntegrationTest {
         gui.post(PROBLEMAS + problema + "/conclude", concluir(1, "Conferido: eram 2 chopps", "SEM_CORRECAO"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("TRATADO"));
 
-        // A quitação fica como estava.
-        assertThat(admin().queryForMap("SELECT closed_at, access_until, version FROM fastpay.tab WHERE id = ?",
+        // O encerramento fica como estava; o acesso avulso, suspenso enquanto o problema estava aberto, ganha 7 dias
+        // a partir da resolução (FR-11).
+        assertThat(admin().queryForMap("SELECT closed_at, version FROM fastpay.tab WHERE id = ?",
                 UUID.fromString(comanda))).isEqualTo(antes);
+        assertThat(admin().queryForObject("SELECT access_until FROM fastpay.tab WHERE id = ?",
+                java.sql.Timestamp.class, UUID.fromString(comanda)).toInstant())
+                .isEqualTo(relogio.instant().plus(Duration.ofDays(7)));
     }
 
     @Test

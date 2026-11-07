@@ -106,7 +106,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H26 | Continuação de visita e ajustes de couvert | Concluída | PR #41, merge `9774f4f` em `develop`, CI de `develop` run 42393012742 verde ([evidência](evidencias/H26-continuacao-visita-couvert.md)); T-03 da H26 proposta, aguardando Diego |
 | H27 | Google opcional e histórico do consumidor | Aguardando validação | PR #44, merge `ff5fa3d` em `develop`, CI de `develop` run 42399872363 verde ([evidência](evidencias/H27-google-historico-consumidor.md)); P-13 e T-03 da H27 aprovadas por Diego em 07/11/2026; feita em paralelo com a H28 a pedido de Diego (exceção à D-28); login com Google real aguarda o cliente OAuth de teste (Diego) |
 | H28 | Conferência, bloqueio e reabertura | Concluída | PR #43, merge `15e90fb` em `develop`, CI de `develop` run 42397051924 verde ([evidência](evidencias/H28-conferencia-bloqueio-reabertura.md)); T-03 da H28 aprovada por Diego em 07/11/2026 |
-| H29 | Encerramento de conta zerada | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H29 | Encerramento de conta zerada | Aguardando revisão | Branch `feature/H29-encerramento-conta-zerada`, PR para `develop` ([evidência](evidencias/H29-encerramento-conta-zerada.md)); T-03 da H29 proposta em 07/11/2026, aguardando Diego |
 | H30 | Pagamento integrado e reconciliação de incerteza | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H31 | Recebimento externo e invalidação | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H32 | Saída automática ou validada | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -736,6 +736,27 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: T-03 da H28 aprovada por Diego em 07/11/2026 ("Aprovar como proposto").
 - Bloqueios / quem resolve: seguem sem resposta as T-03 da H25 e da H26. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
 - Próximo passo concreto: nenhum pendente na H28. Próxima candidata elegível: H29 (gate D-02, resolvida), só quando Diego pedir.
+
+### H29 — Encerramento de conta zerada
+
+- História e estado: H29, **aguardando revisão** (PR aberto para `develop`). Gate D-02 resolvido; dependência H28 concluída. Diego pediu "Inicie o próximo desenvolvimento" em 07/11/2026; a H29 é a menor elegível (a H27 segue aguardando validação, com o teste real adiado por Diego).
+- Data/hora e agente: 07/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - O consumidor encerra a conta zerada elegível sem autorização nem PSP; a equipe também, pelo cliente sem celular (FR-41, CA-20, D-02).
+  - O registro é de encerramento sem valor, não de pagamento: nenhuma cobrança, pagamento ou comissão; situação "Encerrada sem valor a pagar".
+  - Mantém os requisitos de pendência e produção: item não entregue nem cancelado, problema em aberto e desconto em revisão impedem.
+  - Funcionário encerra a comanda abandonada vazia, com motivo e auditoria (FR-42).
+  - Acesso avulso por 7 dias depois do encerramento; problema aberto depois suspende e a última resolução reinicia (FR-11).
+  - Validação exigida: conta sem pedidos, desconto de 100% com e sem serviço, couvert, problema aberto e ausência de pagamento e comissão.
+- Critérios faltantes / motivo: "cobrança incerta" depende da cobrança (H30), que ainda não existe; o contrato fica em `Closings.finish`. "Manter o modo de saída": o encerramento não libera nem valida saída; a H32 decide pelo modo capturado na abertura.
+- Branch e commit reais: `feature/H29-encerramento-conta-zerada` (a partir de `develop` `bf915b6`).
+- PR, checks e merge real: ver o PR da branch; merge pendente de Diego.
+- Arquivos/migrations/contratos: `V25__encerramento_sem_valor.sql`; `tabs.Tabs` (`ClosureKind`, `closeInCurrentUnit`, `closureInCurrentUnit`, `refreshAccessAfterClosureInCurrentUnit`); `bills.Closings` (`/closing/without-value`, `/closing/abandon`, `/api/v1/guest/tabs/{id}/closing/without-value`); `attendance.ConsumerIssues` (prazo do acesso depois do encerramento); frontend `bills/bill-panel.ts`, `bills/bills.service.ts`, `guest/guest-bill.ts`; especificação §6; decisões T-03; [evidência](evidencias/H29-encerramento-conta-zerada.md).
+- Testes: ver a evidência (backend 509 no contêiner Temurin 25 com PostgreSQL real; frontend 224 no contêiner Node 24.18.0).
+- Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real na homologação de Diego.
+- Decisões novas/alteradas: T-03 da H29 proposta em 07/11/2026 (cartão no thread da H29), aguardando Diego.
+- Bloqueios / quem resolve: resposta de Diego à T-03 da H29; seguem sem resposta as T-03 da H25 e da H26. H05/H06 aguardam as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego revisa e faz o merge do PR; depois, reconciliar o progresso com o hash real.
 
 ## Registro de release (ainda nenhum)
 

@@ -132,6 +132,10 @@ public class ConsumerIssues {
                     context.grantId(), now)) {
                 return new Refused<>(Refusal.PROBLEMA_JA_ABERTO, null);
             }
+            if (context.closed()) {
+                // FR-11: problema aberto depois do encerramento suspende a expiração do acesso avulso (H29).
+                tabs.refreshAccessAfterClosureInCurrentUnit(tabId, true);
+            }
             store.audit("problema.informado", id, null,
                     aboutCouvert ? "couvert" : orderLineId == null ? "conta" : "item " + orderLineId,
                     correlationId);
@@ -272,6 +276,8 @@ public class ConsumerIssues {
             case IssueRules.Conclude c -> {
                 store.conclude(row.id(), row.version(), actorId, resolution, correction, now);
                 store.audit("problema.tratado", row.id(), actorId, correction.name(), correlationId);
+                // FR-11: na comanda encerrada, a última resolução dá mais 7 dias de acesso avulso (H29).
+                tabs.refreshAccessAfterClosureInCurrentUnit(row.tabId(), store.anyPending(row.tabId()));
             }
         }
         changes.publishInCurrentTransaction(Topic.PROBLEMA, row.tabId());

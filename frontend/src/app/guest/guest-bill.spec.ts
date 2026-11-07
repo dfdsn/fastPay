@@ -16,7 +16,9 @@ const ELEGIVEL: GuestClosing = {
   versionNumber: null,
   total: '90.47',
   blockers: { pendingItems: [], openIssue: false, discountReview: false },
+  closure: null,
   canStart: true,
+  canCloseWithoutValue: false,
 };
 
 const CONTA: GuestBill = {
@@ -163,5 +165,34 @@ describe('Conta do cliente', () => {
     const el = montar({ ...CONTA, lines: [], open: false }).nativeElement as HTMLElement;
     expect(texto(el)).toContain('Nenhum pedido ainda');
     expect(el.querySelector('button')).toBeNull();
+  });
+
+  it('conta zerada: o cliente encerra sem valor a pagar (H29)', () => {
+    const zerada = { ...CONTA, lines: [], consumption: '0.00', discount: '0.00', couvert: '0.00', total: '0.00' };
+    const fixture = montar(zerada);
+    http.expectOne(FECHAMENTO).flush({ ...ELEGIVEL, total: '0.00', canCloseWithoutValue: true });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const botao = (rotulo: string) =>
+      Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes(rotulo)) as HTMLButtonElement;
+    expect(texto(el)).toContain('Sua conta está zerada: não há nada a pagar.');
+    expect(botao('Fechar a conta')).toBeUndefined();
+    botao('Encerrar sem valor a pagar').click();
+    const pedido = http.expectOne(`${FECHAMENTO}/without-value`);
+    expect(pedido.request.method).toBe('POST');
+    const encerrada: GuestClosing = {
+      ...ELEGIVEL,
+      state: 'ENCERRADA',
+      total: '0.00',
+      blockers: null,
+      closure: { kind: 'SEM_VALOR', closedAt: '2026-11-07T22:10:00Z' },
+      canStart: false,
+    };
+    pedido.flush(encerrada);
+    http.expectOne(URL).flush({ ...zerada, open: false });
+    http.expectOne(FECHAMENTO).flush(encerrada);
+    fixture.detectChanges();
+    expect(texto(el)).toContain('Encerrada sem valor a pagar às');
+    expect(el.querySelector('[role="status"]')?.textContent).toContain('Comanda encerrada sem valor a pagar.');
   });
 });

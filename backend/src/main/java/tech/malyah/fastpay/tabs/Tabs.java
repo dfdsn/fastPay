@@ -24,10 +24,12 @@ import tech.malyah.fastpay.identity.Permission;
 import tech.malyah.fastpay.sync.Changes;
 import tech.malyah.fastpay.sync.Topic;
 import tech.malyah.fastpay.tabs.domain.AccessTokens;
+import tech.malyah.fastpay.tabs.domain.GuestAccessRules;
 import tech.malyah.fastpay.tabs.domain.QrSvg;
 import tech.malyah.fastpay.tabs.domain.TabRules;
 import tech.malyah.fastpay.tabs.domain.TabRules.Recovery;
 import tech.malyah.fastpay.tabs.infrastructure.JdbcTabStore;
+import tech.malyah.fastpay.tabs.infrastructure.JdbcTabStore.ClosureRow;
 import tech.malyah.fastpay.tabs.infrastructure.JdbcTabStore.TabRow;
 import tech.malyah.fastpay.tabs.infrastructure.TabsProperties;
 
@@ -264,6 +266,65 @@ public class Tabs {
         changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
         log.info("Comanda {} reaberta por {} (fechamento {})", tabId, actorId, closingId);
         return true;
+    }
+
+    /** Como a comanda foi encerrada (H29). Pagamento (H30/H31) e débito (H34) acrescentam os seus. */
+    public enum ClosureKind {
+        /** Conta zerada elegível, pelo cliente ou pela equipe (FR-41): "Encerrada sem valor a pagar". */
+        SEM_VALOR,
+        /** Comanda sem consumo nem pendência, encerrada pela equipe com motivo (FR-42). */
+        ABANDONO
+    }
+
+    /**
+     * Encerramento da comanda (H29). {@code closedBy}: quem da equipe encerrou, nulo quando foi o cliente pelo
+     * próprio acesso ({@code byConsumer}); {@code reason}: só no abandono.
+     */
+    public record Closure(ClosureKind kind, Instant closedAt, UUID closedBy, boolean byConsumer, String reason) {
+    }
+
+    /**
+     * Encerra a comanda (H29, FR-41, FR-42), na transação de unidade de quem chama, que travou a comanda, conferiu a
+     * elegibilidade e consolidou a conta zerada ({@code billVersionId}, a versão mais alta do fechamento
+     * {@code closingId}): a equipe ({@code actorId}) ou o cliente pelo próprio acesso ({@code grantId}). O acesso
+     * avulso vale mais 7 dias (FR-11); nada aqui é pagamento, cobrança ou comissão. O número da comanda fica livre.
+     */
+    public void closeInCurrentUnit(UUID tabId, UUID closingId, UUID billVersionId, ClosureKind kind, UUID actorId,
+            UUID grantId, String reason, String correlationId) {
+        Instant now = clock.instant();
+        store.insertClosure(UUID.randomUUID(), tabId, closingId, billVersionId, kind.name(), actorId, grantId, reason,
+                now);
+        if (!store.close(tabId, now, GuestAccessRules.accessUntil(now, false))) {
+            throw new IllegalStateException("Comanda " + tabId + " não estava ativa ao encerrar");
+        }
+        store.audit("comanda.encerrada", tabId, actorId,
+                kind.name() + (actorId == null ? "; pelo consumidor" : "; pela equipe")
+                        + (reason == null ? "" : "; " + reason),
+                correlationId);
+        changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
+        log.info("Comanda {} encerrada ({}, {})", tabId, kind, actorId == null ? "consumidor" : actorId);
+    }
+
+    /** Encerramento da comanda na unidade da transação de quem chama; vazio se ativa ou inexistente (H29). */
+    public Optional<Closure> closureInCurrentUnit(UUID tabId) {
+        return store.closure(tabId).map(Tabs::closure);
+    }
+
+    /**
+     * Prazo do acesso avulso da comanda encerrada (H29, FR-11, CA-23), na transação de unidade de quem chama: com
+     * pendência ({@code pending}: problema ainda não tratado) o acesso não expira; sem pendência, mais 7 dias a partir
+     * de agora. Comanda ativa não muda (o prazo começa no encerramento). Pagamento incerto, débito e devolução
+     * (H30–H35) também suspendem, quando existirem.
+     */
+    public void refreshAccessAfterClosureInCurrentUnit(UUID tabId, boolean pending) {
+        if (store.setAccessUntilOfClosed(tabId, GuestAccessRules.accessUntil(clock.instant(), pending))) {
+            log.info("Acesso avulso da comanda encerrada {} {}", tabId, pending ? "suspenso" : "por mais 7 dias");
+        }
+    }
+
+    private static Closure closure(ClosureRow row) {
+        return new Closure(ClosureKind.valueOf(row.kind()), row.closedAt(), row.closedBy(), row.closedBy() == null,
+                row.reason());
     }
 
     /** A comanda (ativa ou encerrada) existe na unidade da transação de quem chama (H16). */

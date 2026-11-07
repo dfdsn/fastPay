@@ -1,12 +1,15 @@
+import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { Observable } from 'rxjs';
 
 import {
   BillsService,
   GuestBill,
   GuestClosing,
   blockerTexts,
+  closureText,
   couvertNote,
   serviceLabel,
 } from '../bills/bills.service';
@@ -24,7 +27,7 @@ import { failureMessage } from '../session/unit-context.service';
  */
 @Component({
   selector: 'fp-guest-bill',
-  imports: [MatButtonModule],
+  imports: [DatePipe, MatButtonModule],
   template: `
     <section aria-labelledby="conta-cliente-titulo">
       <h2 id="conta-cliente-titulo">Sua conta</h2>
@@ -86,17 +89,31 @@ import { failureMessage } from '../session/unit-context.service';
             @for (text of blockers(c); track text) {
               <p class="muted">{{ text }}</p>
             }
-            <button mat-flat-button type="button" [disabled]="busy() || !c.canStart" (click)="close(c)">
-              Fechar a conta ({{ money(c.total) }})
-            </button>
-            @if (!c.canStart) {
-              <p class="muted">Resolvido o que aparece acima, você pode fechar a conta.</p>
+            @if (c.canCloseWithoutValue) {
+              <p class="muted">Sua conta está zerada: não há nada a pagar.</p>
+              <button mat-flat-button type="button" [disabled]="busy()" (click)="closeWithoutValue()">
+                Encerrar sem valor a pagar
+              </button>
+            } @else {
+              <button mat-flat-button type="button" [disabled]="busy() || !c.canStart" (click)="close(c)">
+                Fechar a conta ({{ money(c.total) }})
+              </button>
+              @if (!c.canStart) {
+                <p class="muted">Resolvido o que aparece acima, você pode fechar a conta.</p>
+              }
             }
           } @else if (c.state === 'EM_FECHAMENTO') {
             <p>
               Conta fechada em {{ money(c.total) }}. Ela não muda mais, a não ser o serviço. Para pedir mais alguma
               coisa, chame a equipe.
             </p>
+            @if (c.canCloseWithoutValue) {
+              <button mat-flat-button type="button" [disabled]="busy()" (click)="closeWithoutValue()">
+                Encerrar sem valor a pagar
+              </button>
+            }
+          } @else if (c.closure; as e) {
+            <p class="closed">{{ closureText(e.kind) }} às {{ e.closedAt | date: 'HH:mm' }}.</p>
           }
         }
       }
@@ -178,18 +195,31 @@ export class GuestBillPanel {
     return blockerTexts(closing.blockers);
   }
 
+  protected readonly closureText = closureText;
+
   close(closing: GuestClosing): void {
+    this.runClosing(
+      this.service.guestStartClosing(this.tabId(), closing.total),
+      'Conta fechada. Confira o total antes de pagar.',
+    );
+  }
+
+  /** Conta zerada (H29, FR-41): encerra sem pagamento nem autorização. */
+  closeWithoutValue(): void {
+    this.runClosing(this.service.guestCloseWithoutValue(this.tabId()), 'Comanda encerrada sem valor a pagar.');
+  }
+
+  private runClosing(request: Observable<GuestClosing>, done: string): void {
     this.busy.set(true);
     this.failure.set(null);
     this.notice.set(null);
-    this.service
-      .guestStartClosing(this.tabId(), closing.total)
+    request
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {
           this.busy.set(false);
           this.closing.set(updated);
-          this.notice.set('Conta fechada. Confira o total antes de pagar.');
+          this.notice.set(done);
           this.load(this.tabId());
         },
         error: (error: unknown) => {

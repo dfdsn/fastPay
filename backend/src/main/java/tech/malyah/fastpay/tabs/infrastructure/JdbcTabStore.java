@@ -216,6 +216,39 @@ public class JdbcTabStore {
                 """, Timestamp.from(now), actorId, reason, id) == 1;
     }
 
+    // Encerramento (H29)
+
+    /** Encerramento da comanda: {@code closedBy} nulo quando foi o cliente pelo acesso. */
+    public record ClosureRow(String kind, Instant closedAt, UUID closedBy, String reason) {
+    }
+
+    public void insertClosure(UUID id, UUID tabId, UUID closingId, UUID billVersionId, String kind, UUID actorId,
+            UUID grantId, String reason, Instant now) {
+        jdbc.update("""
+                INSERT INTO tab_closure (id, establishment_id, tab_id, closing_id, bill_version_id, kind, closed_at,
+                                         closed_by, closed_by_grant, reason)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?, ?)
+                """, id, tabId, closingId, billVersionId, kind, Timestamp.from(now), actorId, grantId, reason);
+    }
+
+    /** Encerra a comanda ativa no instante do encerramento registrado; {@code false} se já não estava ativa. */
+    public boolean close(UUID tabId, Instant now, Instant accessUntil) {
+        return jdbc.update("UPDATE tab SET closed_at = ?, access_until = ? WHERE id = ? AND closed_at IS NULL",
+                Timestamp.from(now), accessUntil == null ? null : Timestamp.from(accessUntil), tabId) == 1;
+    }
+
+    public Optional<ClosureRow> closure(UUID tabId) {
+        return jdbc.query("SELECT kind, closed_at, closed_by, reason FROM tab_closure WHERE tab_id = ?",
+                (rs, n) -> new ClosureRow(rs.getString("kind"), rs.getTimestamp("closed_at").toInstant(),
+                        rs.getObject("closed_by", UUID.class), rs.getString("reason")), tabId).stream().findFirst();
+    }
+
+    /** Novo prazo do acesso avulso da comanda encerrada (nulo: sem expiração); {@code false} se ativa. */
+    public boolean setAccessUntilOfClosed(UUID tabId, Instant accessUntil) {
+        return jdbc.update("UPDATE tab SET access_until = ? WHERE id = ? AND closed_at IS NOT NULL",
+                accessUntil == null ? null : Timestamp.from(accessUntil), tabId) == 1;
+    }
+
     // QR de vínculo
 
     /** Invalida o QR em aberto da comanda (gerar outro substitui o anterior, FR-08). */

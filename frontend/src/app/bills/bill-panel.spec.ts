@@ -86,8 +86,11 @@ const PENDENTE: Closing = {
     openIssue: true,
     discountReview: false,
   },
+  closure: null,
   canStart: false,
   canReopen: false,
+  canCloseWithoutValue: false,
+  canAbandon: false,
 };
 
 const ELEGIVEL: Closing = {
@@ -406,5 +409,79 @@ describe('Couvert na conta da comanda (H26)', () => {
     http.expectOne(URL).flush(CONTA);
     fixture.detectChanges();
     expect(el.querySelector('[role="status"]')?.textContent).toContain('Comanda reaberta.');
+  });
+
+  it('encerra a comanda abandonada sem consumo com motivo (H29)', () => {
+    const fixture = montar({ ...CONTA, total: '0.00' });
+    const zerada: Closing = { ...ELEGIVEL, total: '0.00', canCloseWithoutValue: true, canAbandon: true };
+    http.expectOne('/api/v1/tabs/t-1/closing').flush(zerada);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const botao = (rotulo: string) =>
+      Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes(rotulo)) as HTMLButtonElement;
+    expect(texto(el)).toContain('Conta zerada: encerra sem pagamento');
+
+    botao('Encerrar abandonada').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('5 a 300 caracteres');
+    const motivo = Array.from(el.querySelectorAll('input')).find(
+      (i) => i.closest('mat-form-field')?.textContent?.includes('Motivo do abandono'),
+    ) as HTMLInputElement;
+    motivo.value = 'Cliente foi embora';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Encerrar abandonada').click();
+    const abandono = http.expectOne('/api/v1/tabs/t-1/closing/abandon');
+    expect(abandono.request.body).toEqual({ reason: 'Cliente foi embora' });
+    const encerrada: Closing = {
+      ...zerada,
+      state: 'ENCERRADA',
+      blockers: null,
+      closure: {
+        kind: 'ABANDONO',
+        closedAt: '2026-11-07T22:10:00Z',
+        closedByName: 'Gabi Garçom',
+        byConsumer: false,
+        reason: 'Cliente foi embora',
+      },
+      canStart: false,
+      canCloseWithoutValue: false,
+      canAbandon: false,
+    };
+    abandono.flush(encerrada);
+    http.expectOne(URL).flush({ ...CONTA, total: '0.00' });
+    http.expectOne('/api/v1/tabs/t-1/closing').flush(encerrada);
+    fixture.detectChanges();
+    const t = texto(el);
+    expect(t).toContain('Encerrada sem consumo (abandono)');
+    expect(t).toContain('por Gabi Garçom: "Cliente foi embora"');
+    expect(botao('Encerrar sem valor a pagar')).toBeUndefined();
+  });
+
+  it('a equipe encerra a conta zerada pelo cliente (H29)', () => {
+    const fixture = montar({ ...CONTA, total: '0.00' });
+    http.expectOne('/api/v1/tabs/t-1/closing').flush({ ...ELEGIVEL, total: '0.00', canCloseWithoutValue: true });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const encerrar = Array.from(el.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Encerrar sem valor a pagar'),
+    ) as HTMLButtonElement;
+    encerrar.click();
+    const pedido = http.expectOne('/api/v1/tabs/t-1/closing/without-value');
+    expect(pedido.request.method).toBe('POST');
+    pedido.flush({
+      ...ELEGIVEL,
+      state: 'ENCERRADA',
+      closure: {
+        kind: 'SEM_VALOR',
+        closedAt: '2026-11-07T22:10:00Z',
+        closedByName: 'Gabi',
+        byConsumer: false,
+        reason: null,
+      },
+    });
+    http.expectOne(URL).flush({ ...CONTA, total: '0.00' });
+    http.match('/api/v1/tabs/t-1/closing');
+    fixture.detectChanges();
+    expect(el.querySelector('[role="status"]')?.textContent).toContain('Comanda encerrada sem valor a pagar.');
   });
 });

@@ -46,6 +46,11 @@ final class Responses {
                             + "fechar a conta.");
             case PROBLEMA_EM_ABERTO -> error(HttpStatus.CONFLICT, refusal.name(),
                     "Há um problema informado ainda não resolvido. Resolva o problema antes de fechar a conta.");
+            case CONTA_COM_VALOR -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "A conta tem valor a pagar: só a conta zerada encerra sem pagamento. Atualize a conta.");
+            case COMANDA_COM_CONSUMO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "A comanda tem itens: só a comanda sem consumo encerra como abandono. Cancele os itens com o "
+                            + "motivo ou encerre a conta zerada.");
             case DESCONTO_EM_REVISAO -> error(HttpStatus.CONFLICT, refusal.name(),
                     "O desconto precisa ser revisado por alguém com limite antes de fechar a conta.");
             case CONTA_MUDOU -> error(HttpStatus.CONFLICT, refusal.name(),

@@ -14,6 +14,7 @@ import {
   BillsService,
   COUVERT_REASONS,
   Closing,
+  closureText,
   blockerTexts,
   CouvertReason,
   DiscountKind,
@@ -101,6 +102,30 @@ import {
                   </button>
                 </div>
               }
+            } @else if (c.closure; as e) {
+              <p class="closed">
+                {{ closureText(e.kind) }} às {{ e.closedAt | date: 'HH:mm' }},
+                {{ e.byConsumer ? 'pelo cliente' : 'por ' + (e.closedByName ?? 'alguém da equipe') }}{{
+                  e.reason ? ': "' + e.reason + '"' : ''
+                }}.
+              </p>
+            }
+            @if (c.canCloseWithoutValue) {
+              <p class="muted">Conta zerada: encerra sem pagamento, pelo cliente sem celular.</p>
+              <button mat-stroked-button type="button" [disabled]="busy()" (click)="closeWithoutValue()">
+                Encerrar sem valor a pagar
+              </button>
+            }
+            @if (c.canAbandon) {
+              <div class="row">
+                <mat-form-field appearance="outline" class="grow">
+                  <mat-label>Motivo do abandono (sem consumo)</mat-label>
+                  <input matInput [formControl]="abandonReason" maxlength="300" />
+                </mat-form-field>
+                <button mat-stroked-button type="button" [disabled]="busy()" (click)="abandon()">
+                  Encerrar abandonada
+                </button>
+              </div>
             }
           </div>
         }
@@ -301,6 +326,8 @@ export class BillPanel {
   protected readonly bill = signal<Bill | null>(null);
   protected readonly closing = signal<Closing | null>(null);
   protected readonly reopenReason = this.forms.control('');
+  protected readonly abandonReason = this.forms.control('');
+  protected readonly closureText = closureText;
   protected readonly busy = signal(false);
   protected readonly failure = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
@@ -394,6 +421,23 @@ export class BillPanel {
     }
     this.runClosing(this.service.reopen(this.tabId(), closing.closingId, reason), 'Comanda reaberta.', () =>
       this.reopenReason.reset(),
+    );
+  }
+
+  /** Conta zerada (H29, FR-41): a equipe encerra pelo cliente, sem pagamento. */
+  closeWithoutValue(): void {
+    this.runClosing(this.service.closeWithoutValue(this.tabId()), 'Comanda encerrada sem valor a pagar.');
+  }
+
+  /** Comanda abandonada sem consumo (H29, FR-42): encerra com motivo, auditado. */
+  abandon(): void {
+    const reason = this.abandonReason.value.trim();
+    if (reason.length < 5) {
+      this.failure.set('Explique por que a comanda é encerrada sem consumo, em 5 a 300 caracteres.');
+      return;
+    }
+    this.runClosing(this.service.abandon(this.tabId(), reason), 'Comanda encerrada sem consumo.', () =>
+      this.abandonReason.reset(),
     );
   }
 

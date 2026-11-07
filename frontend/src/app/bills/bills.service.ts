@@ -149,7 +149,29 @@ export interface BillVersion {
   at: string;
 }
 
-/** Fechamento como a equipe vê (H28); o servidor confere de novo ao iniciar ou reabrir. */
+/** Como a comanda foi encerrada (H29): conta zerada ou abandono sem consumo. */
+export type ClosureKind = 'SEM_VALOR' | 'ABANDONO';
+
+/** Encerramento como a equipe vê: {@code closedByName} nulo quando foi o cliente; motivo só no abandono. */
+export interface ClosureView {
+  kind: ClosureKind;
+  closedAt: string;
+  closedByName: string | null;
+  byConsumer: boolean;
+  reason: string | null;
+}
+
+export interface GuestClosure {
+  kind: ClosureKind;
+  closedAt: string;
+}
+
+/** Situação apresentada da comanda encerrada (FR-41: não é pagamento). */
+export function closureText(kind: ClosureKind): string {
+  return kind === 'SEM_VALOR' ? 'Encerrada sem valor a pagar' : 'Encerrada sem consumo (abandono)';
+}
+
+/** Fechamento como a equipe vê (H28, H29); o servidor confere de novo ao iniciar, reabrir ou encerrar. */
 export interface Closing {
   tabId: string;
   state: ClosingState;
@@ -158,8 +180,11 @@ export interface Closing {
   version: BillVersion | null;
   total: string;
   blockers: ClosingBlockers | null;
+  closure: ClosureView | null;
   canStart: boolean;
   canReopen: boolean;
+  canCloseWithoutValue: boolean;
+  canAbandon: boolean;
 }
 
 export interface GuestClosing {
@@ -169,7 +194,9 @@ export interface GuestClosing {
   versionNumber: number | null;
   total: string;
   blockers: ClosingBlockers | null;
+  closure: GuestClosure | null;
   canStart: boolean;
+  canCloseWithoutValue: boolean;
 }
 
 const STAGE_TEXT: Record<PendingStage, string> = {
@@ -267,6 +294,16 @@ export class BillsService {
     );
   }
 
+  /** Encerra a conta zerada (H29, FR-41): sem pagamento. */
+  closeWithoutValue(tabId: string): Observable<Closing> {
+    return this.auth.withCsrf(() => this.http.post<Closing>(`/api/v1/tabs/${tabId}/closing/without-value`, {}));
+  }
+
+  /** Encerra a comanda abandonada sem consumo, com motivo (H29, FR-42). */
+  abandon(tabId: string, reason: string): Observable<Closing> {
+    return this.auth.withCsrf(() => this.http.post<Closing>(`/api/v1/tabs/${tabId}/closing/abandon`, { reason }));
+  }
+
   guestClosing(tabId: string): Observable<GuestClosing> {
     return this.http.get<GuestClosing>(`/api/v1/guest/tabs/${tabId}/closing`);
   }
@@ -274,6 +311,12 @@ export class BillsService {
   guestStartClosing(tabId: string, expectedTotal: string): Observable<GuestClosing> {
     return this.auth.withCsrf(() =>
       this.http.post<GuestClosing>(`/api/v1/guest/tabs/${tabId}/closing`, { expectedTotal }),
+    );
+  }
+
+  guestCloseWithoutValue(tabId: string): Observable<GuestClosing> {
+    return this.auth.withCsrf(() =>
+      this.http.post<GuestClosing>(`/api/v1/guest/tabs/${tabId}/closing/without-value`, {}),
     );
   }
 
