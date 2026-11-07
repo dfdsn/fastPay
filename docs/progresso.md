@@ -103,7 +103,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H23 | Cancelar quantidade e alertar produção | Concluída | PR #35, merge `9ff79c1` em `develop`, CI de `develop` run 42268110634 verde ([evidência](evidencias/H23-cancelamento-quantidade.md)); T-03 da H23 aprovada por Diego em 06/11/2026 ("Pode seguir com o T-03 como sugerido"); inclui o caso "linha cancelada" do lote da H19 e a revisão de desconto da H22 com o cancelamento real |
 | H24 | Desfazer entrega com histórico | Concluída | PR #37, merge `30706e9` em `develop`, CI de `develop` run 42283001366 verde ([evidência](evidencias/H24-desfazer-entrega.md)); T-03 da H24 aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto") |
 | H25 | Transferir unidades sem duplicar produção | Concluída | PR #39, merge `4bb791f` em `develop`, CI de `develop` run 42311207147 verde ([evidência](evidencias/H25-transferir-unidades.md)); T-03 da H25 proposta, aguardando Diego |
-| H26 | Continuação de visita e ajustes de couvert | Aguardando revisão | Branch `feature/H26-continuacao-visita-couvert`, PR para `develop` ([evidência](evidencias/H26-continuacao-visita-couvert.md)); T-03 da H26 proposta, aguardando Diego |
+| H26 | Continuação de visita e ajustes de couvert | Concluída | PR #41, merge `9774f4f` em `develop`, CI de `develop` run 42393012742 verde ([evidência](evidencias/H26-continuacao-visita-couvert.md)); T-03 da H26 proposta, aguardando Diego |
 | H27 | Google opcional e histórico do consumidor | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H28 | Conferência, bloqueio e reabertura | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H29 | Encerramento de conta zerada | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -674,7 +674,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H26 — Continuação de visita e ajustes de couvert
 
-- História e estado: H26, **aguardando revisão** (PR aberto para `develop`). Sem gate; dependências H15, H22 e H23 concluídas. T-03 da H26 proposta, aguardando Diego (cartão de decisão no thread da H26).
+- História e estado: H26, **concluída** (critérios atendidos, merge em `develop` verificado, CI de `develop` verde). Sem gate; dependências H15, H22 e H23 concluídas. T-03 da H26 proposta, aguardando Diego (cartão de decisão no thread da H26).
 - Data/hora e agente: 07/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
   - Quem tem `VINCULAR_CONTINUACAO_VISITA` vincula a comanda nova à visita da anterior do mesmo consumidor, escolhida numa lista por hora de abertura e com a permanência confirmada presencialmente; o sistema nunca vincula nem sugere pelo nome (FR-12). Vínculo auditado, único por comanda.
@@ -684,14 +684,14 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Contestação do couvert pelo cliente (problema da conta marcado) e cancelamento pelo autorizado com motivo (FR-29).
   - Validação exigida: virada do dia, segunda comanda, nomes iguais, devolução com motivo distinto simulada pelo contrato da H35 e ausência de recobrança implícita.
 - Critérios faltantes / motivo: saída validada (H32) e devolução (H35) exercitadas pelos contratos que essas histórias vão chamar; duas cobranças válidas na mesma visita montadas no banco (o caso real é a comanda paga antes do vínculo, H30). Comanda encerrada como anterior só existirá com a H28/H29 (lista e vínculo já aceitam). "Em fechamento" (H28) e cobrança existente (H30) devem fazer couvert e vínculo recusarem quando existirem.
-- Branch e commit reais: `feature/H26-continuacao-visita-couvert` (a partir de `develop` `d364281`); commits no PR.
-- PR, checks e merge real: PR aberto para `develop` (link no thread da H26); merge e CI de `develop` a reconciliar depois do merge.
+- Branch e commit reais: `feature/H26-continuacao-visita-couvert` (a partir de `develop` `d364281`); commit `405344f`.
+- PR, checks e merge real: [PR #41](https://github.com/dfdsn/fastPay/pull/41), checks verdes no commit `405344f` (backend, frontend, imagens e smoke Compose); merge por Diego em 07/11/2026 (`9774f4f`); CI de `develop` run 42393012742 verde.
 - Arquivos/migrations/contratos: `V22__continuacao_de_visita_e_couvert.sql`; `tabs.Tabs.linkVisit`/`continuationCandidates`/`visitInCurrentUnit`/`endVisitByValidatedExitInCurrentUnit`, eventos `tabs.TabOpened` e `tabs.VisitLinked`; `bills.Bills` (couvert e `recordCouvertRefundInCurrentUnit`), `bills.CouvertCharges`, `bills.domain.CouvertRules`; `attendance.ConsumerIssues.report(…, aboutCouvert, …)`; frontend `tabs/tabs-page.ts`, `bills/bill-panel.ts`, `guest/guest-bill.ts`, `guest/guest-issues.ts`, `attendance/issues-panel.ts`; especificação §6; decisões T-03; [evidência](evidencias/H26-continuacao-visita-couvert.md).
 - Testes: ver a evidência (backend 478 no contêiner Temurin 25 com PostgreSQL real; frontend 208 no contêiner Node 24.18.0).
 - Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real na homologação de Diego.
 - Decisões novas/alteradas: T-03 da H26 proposta (quem vincula e como escolhe, prazo de 24 h, vínculo único sem desfazer, fim da visita, couvert no vínculo, inclusão manual, cancelamento com motivo, inclusão de correção, contestação pelo problema da conta, contrato de devolução), aguardando Diego.
-- Bloqueios / quem resolve: Diego responde a T-03 da H26 (e a da H25) e revisa/mergeia o PR. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: revisão e merge do PR da H26 por Diego; depois, reconciliar progresso com o merge real. Próxima candidata elegível depois dela: H27 (gate P-13), só quando Diego pedir.
+- Bloqueios / quem resolve: Diego responde a T-03 da H26 (e a da H25). H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: registrar a resposta de Diego à T-03 da H26. H27 depende do gate P-13 (aberto); a menor história elegível sem gate é a H28 (dependências H21, H22, H25 e H26 concluídas).
 
 ## Registro de release (ainda nenhum)
 
