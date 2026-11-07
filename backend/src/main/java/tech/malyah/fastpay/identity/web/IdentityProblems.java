@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import tech.malyah.fastpay.identity.AuthenticationRequiredException;
+import tech.malyah.fastpay.identity.ConsumerSignInRequiredException;
 import tech.malyah.fastpay.identity.MfaRequiredException;
 import tech.malyah.fastpay.identity.PermissionDeniedException;
 import tech.malyah.fastpay.identity.PlatformAccessDeniedException;
@@ -35,6 +36,13 @@ class IdentityProblems {
     @ExceptionHandler(AuthenticationRequiredException.class)
     ProblemDetail authenticationRequired() {
         return problem(HttpStatus.UNAUTHORIZED, "SESSAO_AUSENTE", "Sua sessão não está ativa. Entre novamente.");
+    }
+
+    /** Consumidor sem conta Google conectada (H27): a tela oferece entrar com Google, e o avulso continua valendo. */
+    @ExceptionHandler(ConsumerSignInRequiredException.class)
+    ProblemDetail consumerSignInRequired() {
+        return problem(HttpStatus.UNAUTHORIZED, "CONSUMIDOR_SEM_LOGIN",
+                "Entre com Google para ver o seu histórico. Sem login, sua comanda continua funcionando neste aparelho.");
     }
 
     /** Falta o segundo fator ou o cadastro do autenticador: o código diz qual tela abrir. */

@@ -121,6 +121,37 @@ public class TenantTransactions {
         return inContext("app.guest_grant_hash", tokenHash, work);
     }
 
+    /**
+     * Transação nova em que só a conta de consumidor com este "sub" do Google é visível (H27): o retorno do login
+     * entra na conta existente ou a cria, sem enxergar nenhuma outra.
+     */
+    public <T> T forGoogleSubject(String subject, Supplier<T> work) {
+        Objects.requireNonNull(subject, "subject");
+        return inContext("app.google_subject", subject, work);
+    }
+
+    /**
+     * Transação nova com a conta do consumidor no contexto ({@code app.consumer_account_id}) e sem unidade (H27): só a
+     * própria conta, os próprios vínculos e as comandas vinculadas por ela, em qualquer unidade.
+     */
+    public <T> T asConsumer(UUID consumerAccountId, Supplier<T> work) {
+        Objects.requireNonNull(consumerAccountId, "consumerAccountId");
+        return inContext("app.consumer_account_id", consumerAccountId.toString(), work);
+    }
+
+    /**
+     * Transação nova com a unidade e a conta do consumidor (H27): vincular uma comanda da unidade à conta. Quem chama
+     * confere o acesso do consumidor à comanda dentro do trabalho; o contexto não é prova de acesso.
+     */
+    public <T> T inEstablishmentAsConsumer(UUID establishmentId, UUID consumerAccountId, Supplier<T> work) {
+        Objects.requireNonNull(establishmentId, "establishmentId");
+        Objects.requireNonNull(consumerAccountId, "consumerAccountId");
+        Map<String, String> settings = new LinkedHashMap<>();
+        settings.put("app.establishment_id", establishmentId.toString());
+        settings.put("app.consumer_account_id", consumerAccountId.toString());
+        return inContext(settings, work);
+    }
+
     public void runInEstablishment(UUID establishmentId, Runnable work) {
         Objects.requireNonNull(work, "work");
         inEstablishment(establishmentId, () -> {

@@ -6,14 +6,16 @@ import java.util.Collection;
 import tech.malyah.fastpay.identity.MembershipRole;
 
 /**
- * Limites de sessão da equipe por perfil (especificação §5, PRD "Sessões da equipe"). A sessão usa o
+ * Limites de sessão por perfil (especificação §5, PRD "Sessões da equipe"). A sessão usa o
  * perfil mais restritivo entre os contextos que ela alcança: admin fastPay, depois gestão de loja
  * (admin do estabelecimento ou gerente), depois operação (garçom e produção).
  */
 public enum SessionProfile {
     OPERACAO(Duration.ofHours(1), Duration.ofHours(12)),
     GESTAO(Duration.ofMinutes(30), Duration.ofHours(12)),
-    PLATAFORMA(Duration.ofMinutes(15), Duration.ofHours(8));
+    PLATAFORMA(Duration.ofMinutes(15), Duration.ofHours(8)),
+    /** Consumidor que entrou com Google (H27): conta à parte da equipe, nunca resultado de {@link #mostRestrictive}. */
+    CONSUMIDOR(Duration.ofDays(7), Duration.ofDays(30));
 
     private final Duration idleTimeout;
     private final Duration absoluteTimeout;

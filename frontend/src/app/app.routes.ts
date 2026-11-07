@@ -55,6 +55,16 @@ export const routes: Routes = [
     loadComponent: () => import('./guest/guest-tab-page').then((m) => m.GuestTabPage),
   },
   {
+    path: 'privacidade-google',
+    title: 'Conta Google · fastPay',
+    loadComponent: () => import('./consumer/privacy-page').then((m) => m.PrivacyPage),
+  },
+  {
+    path: 'meu-historico',
+    title: 'Meu histórico · fastPay',
+    loadComponent: () => import('./consumer/history-page').then((m) => m.HistoryPage),
+  },
+  {
     path: 'admin/estabelecimentos',
     title: 'Estabelecimentos · fastPay',
     canActivate: [signedInGuard],

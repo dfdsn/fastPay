@@ -27,7 +27,7 @@ import tech.malyah.fastpay.identity.domain.PasswordPolicy;
  * ({@code Memberships.inUnit}). Não há login por formulário, HTTP Basic nem usuário em memória.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(AuthProperties.class)
+@EnableConfigurationProperties({ AuthProperties.class, ConsumerProperties.class })
 class AuthConfiguration {
 
     private static final String CSRF_PROBLEM = """

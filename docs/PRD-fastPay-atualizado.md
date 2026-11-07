@@ -118,7 +118,7 @@ Integrações com PDVs e produção de terceiros; outros PSPs; adicionais pagos 
 
 **FR-03 — Multiestabelecimento.** Uma identidade pode ter vários vínculos, com funções diferentes. Após login, seleciona unidade; com apenas um vínculo, direcionamento automático. Unidade ativa sempre visível. Desativar um vínculo não afeta os demais. Administradores de uma loja não veem os vínculos em outras.
 
-**FR-04 — Credenciais.** Equipe utiliza contas individuais de e-mail e senha, com recuperação por e-mail. O convidante não conhece a senha. Login Google é a forma de autenticação do consumidor cadastrado; avulso permanece disponível se o login falhar ou for recusado. Associação entre identidade de equipe e consumidor com mesmo e-mail exige definição técnica segura, sem fusão implícita de privilégios.
+**FR-04 — Credenciais.** Equipe utiliza contas individuais de e-mail e senha, com recuperação por e-mail. O convidante não conhece a senha. Login Google é a forma de autenticação do consumidor cadastrado; avulso permanece disponível se o login falhar ou for recusado. Associação entre identidade de equipe e consumidor com mesmo e-mail exige definição técnica segura, sem fusão implícita de privilégios (P-13, 07/11/2026: no MVP as contas ficam separadas, sem associação).
 
 **FR-05 — Dois fatores.** Obrigatório para admin fastPay, admin do estabelecimento e gerente; opcional para garçom/produção. Aplicativo autenticador e códigos de recuperação de uso único. Promoção a perfil privilegiado exige configuração antes de acessar funções. Recuperar senha por e-mail não remove MFA. Recuperação excepcional de MFA: P-07.
 
@@ -450,7 +450,7 @@ O registro operacional completo, responsável, gate e histórias afetadas está 
 | P-10 | Resolvida: precisão, desconto, couvert, chamados/transferência e configuração capturada |
 | P-11 | Parcial: dicionário analítico definido; efeito histórico de reclassificação da rede pendente |
 | P-12 | Parcial: monitoramento proposto; disponibilidade, janelas/percentis, browsers/acessibilidade e carga detalhada pendentes |
-| P-13 | Aberta: dados mínimos e associação segura Google/equipe sem fusão por e-mail |
+| P-13 | Parcialmente resolvida (07/11/2026, Diego): login Google com escopos `openid email`, chave "sub", dados mínimos, aviso de privacidade antes da conta, conta do consumidor separada da equipe sem fusão por e-mail, loja vê só a marca "cadastrado" (H27); dados mínimos para o PSP abertos (H30) |
 | P-14 | Parcial: gate de liberação aprovado; janela e metas quantitativas do piloto/expansão pendentes |
 | P-15 | Aberta para fase 2: abrangência e implementação fiscal |
 

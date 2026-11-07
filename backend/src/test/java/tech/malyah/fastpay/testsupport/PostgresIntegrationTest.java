@@ -42,6 +42,9 @@ public abstract class PostgresIntegrationTest {
             .withPassword("owner-" + UUID.randomUUID())
             .withEnv("FASTPAY_MIGRATION_PASSWORD", MIGRATION_PASSWORD)
             .withEnv("FASTPAY_APP_PASSWORD", APP_PASSWORD)
+            // Cada contexto Spring em cache mantém o próprio pool; com mais de duas dezenas de contextos na execução, o
+            // limite padrão (100) acaba (H27). Só nos testes.
+            .withCommand("postgres", "-c", "fsync=off", "-c", "max_connections=300")
             .withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of("..", "infra", "postgres", "init", "01-roles.sh"), 0755),
                     "/docker-entrypoint-initdb.d/01-roles.sh");
