@@ -44,6 +44,13 @@ class GuestClosingController {
                 UUID.randomUUID().toString()).orElseThrow(GuestClosingController::tabNotFound));
     }
 
+    /** O cliente encerra a própria conta zerada (H29, FR-41, CA-20). */
+    @PostMapping("/without-value")
+    Closings.GuestClosingView closeWithoutValue(@PathVariable UUID tabId, HttpServletRequest request) {
+        return Responses.respond(closings.closeWithoutValueAsGuest(cookie.tokens(request), tabId,
+                UUID.randomUUID().toString()).orElseThrow(GuestClosingController::tabNotFound));
+    }
+
     private static ErrorResponseException tabNotFound() {
         return Responses.error(HttpStatus.NOT_FOUND, "COMANDA_NAO_ENCONTRADA",
                 "Não encontramos esta comanda neste aparelho. Peça ao atendente para mostrar o QR da sua comanda.");

@@ -31,6 +31,8 @@ import tech.malyah.fastpay.sync.Topic;
 import tech.malyah.fastpay.tabs.GuestAccess;
 import tech.malyah.fastpay.tabs.Tabs;
 import tech.malyah.fastpay.tabs.Tabs.BillTab;
+import tech.malyah.fastpay.tabs.Tabs.Closure;
+import tech.malyah.fastpay.tabs.Tabs.ClosureKind;
 import tech.malyah.fastpay.tabs.Tabs.OrderTarget;
 
 /**
@@ -50,6 +52,12 @@ import tech.malyah.fastpay.tabs.Tabs.OrderTarget;
  * <li><b>Reabrir</b>: só com {@link Permission#REABRIR_COMANDA} e motivo; a comanda volta a receber consumo com a
  * configuração capturada na abertura. Contrato para H30/H31: cobrança pendente ou incerta recusa a reabertura (o
  * resultado incerto mantém o bloqueio) e a comanda paga é encerrada, que já recusa.</li>
+ * <li><b>Encerrar sem valor</b> (H29, FR-41, CA-20, D-02): com a conta zerada e elegível (nada pendente, nenhum problema
+ * em aberto, nenhum desconto em revisão), o cliente pelo próprio acesso ou a equipe encerra sem autorização, PSP,
+ * pagamento ou comissão: "Encerrada sem valor a pagar". Aberta, consolida e encerra na mesma transação; em fechamento,
+ * encerra a versão mais alta. Contrato para H30: cobrança pendente ou incerta também recusa.</li>
+ * <li><b>Abandono</b> (H29, FR-42): a equipe encerra, com motivo, a comanda sem consumo (nenhuma unidade ativa) nem
+ * pendência e com a conta zerada. Abandono com valor é encerramento com débito, do gerente (H34).</li>
  * </ul>
  */
 @Service
@@ -78,16 +86,30 @@ public class Closings {
     }
 
     /**
+     * Encerramento como a equipe o vê (H29). {@code closedByName}: quem da equipe encerrou, nulo quando foi o cliente
+     * ({@code byConsumer}); {@code reason}: só no abandono.
+     */
+    public record ClosureView(ClosureKind kind, Instant closedAt, String closedByName, boolean byConsumer,
+            String reason) {
+    }
+
+    /** Encerramento como o cliente o vê: como e quando, sem nomes nem motivo da equipe. */
+    public record GuestClosureView(ClosureKind kind, Instant closedAt) {
+    }
+
+    /**
      * Fechamento como a equipe o vê. {@code total}: o da versão consolidada em fechamento, ou o de agora.
-     * {@code blockers}: só enquanto aberta. {@code canStart}/{@code canReopen}: o servidor confere de novo ao fazer.
+     * {@code blockers}: só enquanto aberta. {@code closure}: só encerrada (H29). {@code canStart}/{@code canReopen}/
+     * {@code canCloseWithoutValue}/{@code canAbandon}: o servidor confere de novo ao fazer.
      */
     public record ClosingView(UUID tabId, State state, UUID closingId, Instant startedAt, Version version,
-            String total, Blockers blockers, boolean canStart, boolean canReopen) {
+            String total, Blockers blockers, ClosureView closure, boolean canStart, boolean canReopen,
+            boolean canCloseWithoutValue, boolean canAbandon) {
     }
 
     /** Fechamento como o cliente o vê: sem quem iniciou nem a permissão de reabrir. */
     public record GuestClosingView(UUID tabId, State state, Instant startedAt, Integer versionNumber, String total,
-            Blockers blockers, boolean canStart) {
+            Blockers blockers, GuestClosureView closure, boolean canStart, boolean canCloseWithoutValue) {
     }
 
     private final Memberships memberships;
@@ -173,6 +195,36 @@ public class Closings {
         });
     }
 
+    /**
+     * Encerra a conta zerada pela equipe (H29, FR-41), por exemplo pelo cliente sem celular: aberta ou em fechamento,
+     * sem valor a pagar e sem pendência.
+     */
+    public Outcome<ClosingView> closeWithoutValue(UUID actorId, UUID establishmentId, UUID tabId,
+            String correlationId) {
+        return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_COMANDA, me -> finish(tabId,
+                ClosureKind.SEM_VALOR, actorId, null, null, correlationId)
+                .<Outcome<ClosingView>>map(Refused::new)
+                .orElseGet(() -> new Done<>(view(tabs.forBillInCurrentUnit(tabId, false).orElseThrow(), me))));
+    }
+
+    /**
+     * Encerra a comanda abandonada sem consumo (H29, FR-42), com motivo de 5 a 300 caracteres: nenhuma unidade ativa,
+     * conta zerada e nenhuma pendência. Com valor, é encerramento com débito (H34).
+     */
+    public Outcome<ClosingView> abandon(UUID actorId, UUID establishmentId, UUID tabId, String reason,
+            String correlationId) {
+        Optional<String> why = BillRules.reason(reason);
+        return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_COMANDA, me -> {
+            if (why.isEmpty()) {
+                return new Invalid<>("reason", "Explique por que a comanda é encerrada sem consumo, em 5 a 300 "
+                        + "caracteres.");
+            }
+            return finish(tabId, ClosureKind.ABANDONO, actorId, null, why.get(), correlationId)
+                    .<Outcome<ClosingView>>map(Refused::new)
+                    .orElseGet(() -> new Done<>(view(tabs.forBillInCurrentUnit(tabId, false).orElseThrow(), me)));
+        });
+    }
+
     // Consumidor
 
     /** Fechamento da comanda para o cliente com acesso válido; vazio sem acesso. */
@@ -193,6 +245,18 @@ public class Closings {
             return refused.<Outcome<GuestClosingView>>map(Refused::new)
                     .orElseGet(() -> new Done<>(guestView(tabs.forBillInCurrentUnit(tabId, false).orElseThrow())));
         });
+    }
+
+    /**
+     * O cliente encerra a própria conta zerada (H29, FR-41, CA-20), sem autorização nem pagamento. Vazio sem acesso
+     * válido.
+     */
+    public Optional<Outcome<GuestClosingView>> closeWithoutValueAsGuest(List<String> grantTokens, UUID tabId,
+            String correlationId) {
+        return guests.inTab(grantTokens, tabId, context -> finish(tabId, ClosureKind.SEM_VALOR, null,
+                context.grantId(), null, correlationId)
+                .<Outcome<GuestClosingView>>map(Refused::new)
+                .orElseGet(() -> new Done<>(guestView(tabs.forBillInCurrentUnit(tabId, false).orElseThrow()))));
     }
 
     // Contrato para a cobrança (H30)
@@ -247,40 +311,109 @@ public class Closings {
         return Optional.empty();
     }
 
+    /**
+     * Trava a comanda, confere a elegibilidade do encerramento sem valor e encerra (H29). Aberta: consolida a versão 1
+     * e encerra na mesma transação; em fechamento: encerra a versão mais alta, que precisa ser zero.
+     */
+    private Optional<Refusal> finish(UUID tabId, ClosureKind kind, UUID actorId, UUID grantId, String reason,
+            String correlationId) {
+        OrderTarget target = tabs.lockForOrderInCurrentUnit(tabId);
+        switch (target) {
+            case NAO_ENCONTRADA -> {
+                return Optional.of(Refusal.COMANDA_NAO_ENCONTRADA);
+            }
+            case ENCERRADA -> {
+                return Optional.of(Refusal.COMANDA_ENCERRADA);
+            }
+            case ABERTA, EM_FECHAMENTO -> {
+                // segue
+            }
+        }
+        Snapshot snapshot = bills.snapshotInCurrentUnit(tabId).orElseThrow();
+        Blockers blockers = blockers(tabId, snapshot);
+        if (!blockers.pendingItems().isEmpty()) {
+            return Optional.of(Refusal.ITENS_PENDENTES);
+        }
+        if (blockers.openIssue()) {
+            return Optional.of(Refusal.PROBLEMA_EM_ABERTO);
+        }
+        if (blockers.discountReview()) {
+            return Optional.of(Refusal.DESCONTO_EM_REVISAO);
+        }
+        if (kind == ClosureKind.ABANDONO && snapshot.hasItems()) {
+            return Optional.of(Refusal.COMANDA_COM_CONSUMO);
+        }
+        // H30: cobrança pendente ou incerta recusa aqui também (FR-41).
+        UUID closingId;
+        if (target == OrderTarget.ABERTA) {
+            if (snapshot.composition().total().signum() != 0) {
+                return Optional.of(Refusal.CONTA_COM_VALOR);
+            }
+            closingId = tabs.startClosingInCurrentUnit(tabId, actorId, grantId, correlationId);
+            bills.recordVersion(closingId, snapshot, actorId, grantId, clock.instant());
+        } else {
+            closingId = tabs.forBillInCurrentUnit(tabId, false).orElseThrow().closingId();
+        }
+        BillVersionRow version = store.currentBillVersion(closingId).orElseThrow();
+        if (version.total().signum() != 0) {
+            return Optional.of(Refusal.CONTA_COM_VALOR);
+        }
+        tabs.closeInCurrentUnit(tabId, closingId, version.id(), kind, actorId, grantId, reason, correlationId);
+        changes.publishInCurrentTransaction(Topic.CONTA, tabId);
+        log.info("Comanda {} encerrada sem valor ({}, fechamento {})", tabId, kind, closingId);
+        return Optional.empty();
+    }
+
     private Blockers blockers(UUID tabId, Snapshot snapshot) {
         return new Blockers(production.pendingOfTabInCurrentUnit(tabId), issues.blocksChargeInCurrentUnit(tabId),
                 snapshot.reviewPending());
     }
 
-    private record Read(State state, Version version, String total, Blockers blockers) {
+    /**
+     * Leitura do fechamento. {@code withoutValue}: encerrar sem valor é possível agora (conta zerada e nada pendente);
+     * {@code empty}: e sem nenhuma unidade ativa (abandono).
+     */
+    private record Read(State state, Version version, String total, Blockers blockers, Closure closure,
+            boolean withoutValue, boolean empty) {
     }
 
     private Read read(BillTab tab) {
+        Snapshot snapshot = bills.snapshotInCurrentUnit(tab.id()).orElseThrow();
         if (!tab.open()) {
-            return new Read(State.ENCERRADA, null, money(bills.snapshotInCurrentUnit(tab.id()).orElseThrow()), null);
+            return new Read(State.ENCERRADA, null, money(snapshot), null,
+                    tabs.closureInCurrentUnit(tab.id()).orElse(null), false, false);
         }
         if (tab.closingId() != null) {
             Version version = store.currentBillVersion(tab.closingId()).map(Closings::version).orElseThrow();
-            return new Read(State.EM_FECHAMENTO, version, version.total(), null);
+            boolean free = new BigDecimal(version.total()).signum() == 0 && blockers(tab.id(), snapshot).none();
+            return new Read(State.EM_FECHAMENTO, version, version.total(), null, null, free,
+                    free && !snapshot.hasItems());
         }
-        Snapshot snapshot = bills.snapshotInCurrentUnit(tab.id()).orElseThrow();
-        return new Read(State.ABERTA, null, money(snapshot), blockers(tab.id(), snapshot));
+        Blockers blockers = blockers(tab.id(), snapshot);
+        boolean free = blockers.none() && snapshot.composition().total().signum() == 0;
+        return new Read(State.ABERTA, null, money(snapshot), blockers, null, free, free && !snapshot.hasItems());
     }
 
     private ClosingView view(BillTab tab, UnitMembership me) {
         Read r = read(tab);
         Instant startedAt = r.version() == null ? null : startedAt(tab);
+        ClosureView closure = r.closure() == null ? null : new ClosureView(r.closure().kind(),
+                r.closure().closedAt(), r.closure().closedBy() == null ? null
+                        : memberships.namesInCurrentUnit(List.of(r.closure().closedBy())).get(r.closure().closedBy()),
+                r.closure().byConsumer(), r.closure().reason());
         return new ClosingView(tab.id(), r.state(), r.state() == State.EM_FECHAMENTO ? tab.closingId() : null,
-                startedAt, r.version(), r.total(), r.blockers(),
+                startedAt, r.version(), r.total(), r.blockers(), closure,
                 r.state() == State.ABERTA && r.blockers().none(),
-                r.state() == State.EM_FECHAMENTO && me.has(Permission.REABRIR_COMANDA));
+                r.state() == State.EM_FECHAMENTO && me.has(Permission.REABRIR_COMANDA), r.withoutValue(),
+                r.empty());
     }
 
     private GuestClosingView guestView(BillTab tab) {
         Read r = read(tab);
         return new GuestClosingView(tab.id(), r.state(), r.version() == null ? null : startedAt(tab),
                 r.version() == null ? null : r.version().number(), r.total(), r.blockers(),
-                r.state() == State.ABERTA && r.blockers().none());
+                r.closure() == null ? null : new GuestClosureView(r.closure().kind(), r.closure().closedAt()),
+                r.state() == State.ABERTA && r.blockers().none(), r.withoutValue());
     }
 
     private static Instant startedAt(BillTab tab) {

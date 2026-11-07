@@ -138,9 +138,12 @@ public class Bills {
             String couvert, CouvertState couvertState, ServiceView service, String total) {
     }
 
-    /** Composição para fechamento e cobrança (H28/H30), lida na transação deles depois de travar a comanda. */
+    /**
+     * Composição para fechamento e cobrança (H28/H30), lida na transação deles depois de travar a comanda.
+     * {@code hasItems}: há unidades ativas na comanda (H29: abandono só sem consumo).
+     */
     public record Snapshot(UUID tabId, UUID settingsVersionId, UUID discountId, Composition composition,
-            boolean serviceWaived, boolean reviewPending) {
+            boolean serviceWaived, boolean reviewPending, boolean hasItems) {
     }
 
     public enum Refusal {
@@ -155,6 +158,10 @@ public class Bills {
         ITENS_PENDENTES,
         /** Problema do consumidor ainda não tratado (H28, FR-24). */
         PROBLEMA_EM_ABERTO,
+        /** Encerrar sem valor com a conta acima de zero (H29, FR-41): é preciso pagar. */
+        CONTA_COM_VALOR,
+        /** Encerrar como abandono com unidades ativas na comanda (H29, FR-42). */
+        COMANDA_COM_CONSUMO,
         /** Desconto acima da autoridade aguardando revisão (H28, FR-68). */
         DESCONTO_EM_REVISAO,
         /** O total mudou desde que a tela foi carregada (H28, FR-32). */
@@ -570,7 +577,8 @@ public class Bills {
 
     private static Snapshot snapshot(Loaded l) {
         return new Snapshot(l.tab().id(), l.tab().settingsVersionId(),
-                l.discount().map(DiscountRow::id).orElse(null), l.composition(), l.waived(), l.reviewPending());
+                l.discount().map(DiscountRow::id).orElse(null), l.composition(), l.waived(), l.reviewPending(),
+                !l.lines().isEmpty());
     }
 
     /**
