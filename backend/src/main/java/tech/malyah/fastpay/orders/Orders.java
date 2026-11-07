@@ -91,8 +91,10 @@ public class Orders {
 
     public enum Refusal {
         COMANDA_NAO_ENCONTRADA,
-        /** Comanda encerrada (ou em fechamento, H28): não recebe pedido; o rascunho fica no aparelho. */
+        /** Comanda encerrada: não recebe pedido; o rascunho fica no aparelho. */
         COMANDA_ENCERRADA,
+        /** Comanda em fechamento (H28, FR-31): não recebe pedido até reabrir; o rascunho fica no aparelho. */
+        COMANDA_EM_FECHAMENTO,
         /** A chave de operação já serviu a outro pedido (outro conteúdo, outra comanda ou outra pessoa). */
         CHAVE_REUTILIZADA,
         PEDIDO_NAO_ENCONTRADO,
@@ -171,6 +173,9 @@ public class Orders {
                 }
                 case ENCERRADA -> {
                     return new Refused<>(Refusal.COMANDA_ENCERRADA);
+                }
+                case EM_FECHAMENTO -> {
+                    return new Refused<>(Refusal.COMANDA_EM_FECHAMENTO);
                 }
                 case ABERTA -> {
                     // segue

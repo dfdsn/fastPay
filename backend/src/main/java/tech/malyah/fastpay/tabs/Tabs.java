@@ -50,10 +50,11 @@ public class Tabs {
      * {@code guestLinked}: o consumidor já confirmou o vínculo e tem acesso ativo. {@code attendanceMode}: modalidade de
      * atendimento capturada na abertura (H20); {@code responsibleId}/{@code responsibleName}: o garçom responsável,
      * nulos na central. {@code continuesTab}: a comanda anterior cuja visita esta continua (H26), nula sem vínculo.
+     * {@code closingSince}: início do fechamento em andamento (H28), nulo se a comanda está aberta para consumo.
      */
     public record Tab(UUID id, UUID visitId, int number, String name, String table, UUID settingsVersionId,
             Instant openedAt, boolean guestLinked, AttendanceMode attendanceMode, UUID responsibleId,
-            String responsibleName, long version, TabRef continuesTab) {
+            String responsibleName, long version, TabRef continuesTab, Instant closingSince) {
     }
 
     /** Comanda citada por outra (H26): número e nome/apelido, só para a equipe reconhecer. */
@@ -94,7 +95,9 @@ public class Tabs {
         /** A anterior não existe na unidade, é a própria, foi aberta depois ou fora do prazo de continuação (H26). */
         COMANDA_ANTERIOR_INVALIDA,
         /** A visita da anterior terminou na saída validada (H32): a nova entrada é visita nova (FR-12, CA-13). */
-        VISITA_ENCERRADA_NA_SAIDA
+        VISITA_ENCERRADA_NA_SAIDA,
+        /** A comanda está em fechamento (H28): a conta não muda até reabrir. */
+        COMANDA_EM_FECHAMENTO
     }
 
     public sealed interface Outcome<T> {
@@ -181,7 +184,12 @@ public class Tabs {
     public enum OrderTarget {
         /** Ativa e travada até o fim da transação: o pedido entra antes de qualquer fechamento. */
         ABERTA,
-        /** Encerrada (H28/H29): não recebe pedido; o rascunho continua no aparelho. */
+        /**
+         * Em fechamento (H28, FR-32), travada até o fim da transação: não recebe pedido, cancelamento, transferência
+         * nem desfazer entrega até reabrir; o rascunho continua no aparelho.
+         */
+        EM_FECHAMENTO,
+        /** Encerrada (H29–H31): não recebe pedido; o rascunho continua no aparelho. */
         ENCERRADA,
         /** Não existe nesta unidade. */
         NAO_ENCONTRADA
@@ -194,15 +202,24 @@ public class Tabs {
      * ou vê a comanda encerrada e é recusado, preservando o rascunho. A permissão é conferida por quem chama.
      */
     public OrderTarget lockForOrderInCurrentUnit(UUID tabId) {
-        if (store.lockActiveTab(tabId).isPresent()) {
-            return OrderTarget.ABERTA;
+        Optional<TabRow> active = store.lockActiveTab(tabId);
+        if (active.isPresent()) {
+            return active.get().closingId() == null ? OrderTarget.ABERTA : OrderTarget.EM_FECHAMENTO;
         }
         // Encerrada não aparece na trava (a policy de UPDATE só cobre a ativa); a leitura distingue os casos.
         return store.tab(tabId).isPresent() ? OrderTarget.ENCERRADA : OrderTarget.NAO_ENCONTRADA;
     }
 
-    /** Comanda como a conta a usa (H22): a versão da configuração capturada na abertura e se ainda está ativa. */
-    public record BillTab(UUID id, UUID settingsVersionId, boolean open) {
+    /**
+     * Comanda como a conta a usa (H22): a versão da configuração capturada na abertura, se ainda está ativa e o
+     * fechamento em andamento (H28), nulo se aberta para consumo.
+     */
+    public record BillTab(UUID id, UUID settingsVersionId, boolean open, UUID closingId, Instant closingStartedAt) {
+
+        /** Ativa e sem fechamento em andamento: a conta pode mudar. */
+        public boolean openForConsumption() {
+            return open && closingId == null;
+        }
     }
 
     /**
@@ -213,7 +230,40 @@ public class Tabs {
     public Optional<BillTab> forBillInCurrentUnit(UUID tabId, boolean lock) {
         Optional<TabRow> active = lock ? store.lockActiveTab(tabId) : Optional.empty();
         return active.or(() -> store.tab(tabId))
-                .map(row -> new BillTab(row.id(), row.settingsVersionId(), row.closedAt() == null));
+                .map(row -> new BillTab(row.id(), row.settingsVersionId(), row.closedAt() == null,
+                        row.closedAt() == null ? row.closingId() : null,
+                        row.closedAt() == null ? row.closingStartedAt() : null));
+    }
+
+    /**
+     * Inicia o fechamento (H28, FR-32), na transação de unidade de quem chama, que já travou a comanda
+     * ({@link #lockForOrderInCurrentUnit} devolveu {@link OrderTarget#ABERTA}) e conferiu a elegibilidade: a equipe
+     * ({@code actorId}) ou o cliente pelo próprio acesso ({@code grantId}). Devolve o id do fechamento.
+     */
+    public UUID startClosingInCurrentUnit(UUID tabId, UUID actorId, UUID grantId, String correlationId) {
+        UUID id = UUID.randomUUID();
+        store.insertClosing(id, tabId, actorId, grantId, clock.instant());
+        store.audit("fechamento.iniciado", tabId, actorId, actorId == null ? "pelo consumidor" : "pela equipe",
+                correlationId);
+        changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
+        log.info("Fechamento {} da comanda {} iniciado ({})", id, tabId, actorId == null ? "consumidor" : actorId);
+        return id;
+    }
+
+    /**
+     * Reabre a comanda em fechamento (H28, FR-33), na transação de unidade de quem chama, que travou a comanda e
+     * conferiu a permissão e a cobrança: o fechamento termina com quem, quando e o motivo, e a comanda volta a receber
+     * consumo com a mesma configuração capturada na abertura. {@code false} se o fechamento já não estava em andamento.
+     */
+    public boolean reopenInCurrentUnit(UUID tabId, UUID closingId, UUID actorId, String reason,
+            String correlationId) {
+        if (!store.reopenClosing(closingId, actorId, reason, clock.instant())) {
+            return false;
+        }
+        store.audit("fechamento.reaberto", tabId, actorId, "fechamento " + closingId, correlationId);
+        changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
+        log.info("Comanda {} reaberta por {} (fechamento {})", tabId, actorId, closingId);
+        return true;
     }
 
     /** A comanda (ativa ou encerrada) existe na unidade da transação de quem chama (H16). */
@@ -365,6 +415,10 @@ public class Tabs {
             if (tab.version() != version) {
                 return new Refused<>(Refusal.VERSAO_DESATUALIZADA);
             }
+            // O couvert da comanda nova pode sair no vínculo: em fechamento a conta não muda (H28).
+            if (tab.closingId() != null) {
+                return new Refused<>(Refusal.COMANDA_EM_FECHAMENTO);
+            }
             Optional<TabRow> previous = previousTabId.equals(tabId) ? Optional.empty() : store.tab(previousTabId);
             Instant now = clock.instant();
             if (previous.isEmpty() || previous.get().openedAt().isAfter(tab.openedAt())
@@ -504,7 +558,8 @@ public class Tabs {
                 AttendanceMode.valueOf(row.attendanceMode()), row.responsibleId(),
                 row.responsibleId() == null ? null : names.get(row.responsibleId()), row.version(),
                 row.continuesTabId() == null ? null
-                        : new TabRef(row.continuesTabId(), row.continuesNumber(), row.continuesName())))
+                        : new TabRef(row.continuesTabId(), row.continuesNumber(), row.continuesName()),
+                row.closedAt() == null ? row.closingStartedAt() : null))
                 .toList();
     }
 }

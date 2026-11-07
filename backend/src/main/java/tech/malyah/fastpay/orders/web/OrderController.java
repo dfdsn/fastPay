@@ -105,6 +105,9 @@ class OrderController {
                     "Comanda não encontrada nesta unidade. Atualize a lista.");
             case COMANDA_ENCERRADA -> error(HttpStatus.CONFLICT, refusal.name(),
                     "Esta comanda não recebe mais pedidos. O rascunho continua guardado neste aparelho.");
+            case COMANDA_EM_FECHAMENTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda está em fechamento e não recebe pedidos. O rascunho continua guardado neste "
+                            + "aparelho; para enviar, peça para reabrir a comanda.");
             case CHAVE_REUTILIZADA -> error(HttpStatus.CONFLICT, refusal.name(),
                     "Este envio já foi usado para outro pedido. Atualize a página e confira os pedidos da comanda.");
             case PEDIDO_NAO_ENCONTRADO -> error(HttpStatus.NOT_FOUND, refusal.name(),

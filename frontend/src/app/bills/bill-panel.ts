@@ -13,6 +13,8 @@ import {
   Bill,
   BillsService,
   COUVERT_REASONS,
+  Closing,
+  blockerTexts,
   CouvertReason,
   DiscountKind,
   couvertNote,
@@ -28,6 +30,10 @@ import {
  *
  * Couvert (H26, FR-12, FR-29): um por visita. A tela mostra onde ele está cobrado, a dispensa ou a correção pendente;
  * inclui o manual com o valor vigente; quem pode cancela com motivo e, depois de uma correção, inclui o valor correto.
+ *
+ * Fechamento (H28, FR-31–FR-33): mostra o que ainda impede (itens não entregues, problema em aberto, desconto em
+ * revisão) e inicia com o total que a tela mostra. Em fechamento a conta fica consolidada: só o serviço muda (nova
+ * versão); quem tem "Reabrir comanda" reabre com motivo.
  */
 @Component({
   selector: 'fp-bill-panel',
@@ -64,6 +70,40 @@ import {
           <dt class="total">Total</dt>
           <dd class="total">{{ money(b.total) }}</dd>
         </dl>
+
+        @if (closing(); as c) {
+          <div class="closing" aria-labelledby="fechamento-titulo">
+            <h3 id="fechamento-titulo">Fechamento</h3>
+            @if (c.state === 'ABERTA') {
+              @for (text of blockers(c); track text) {
+                <p class="muted">{{ text }}</p>
+              }
+              @if (c.canStart) {
+                <p class="muted">Ao iniciar, a conta fica consolidada em {{ money(c.total) }}: pedidos, cancelamentos,
+                  transferências, desconto e couvert só depois de reabrir.</p>
+              }
+              <button mat-flat-button type="button" [disabled]="busy() || !c.canStart" (click)="startClosing(c)">
+                Iniciar fechamento
+              </button>
+            } @else if (c.state === 'EM_FECHAMENTO') {
+              <p>
+                Em fechamento desde {{ c.startedAt | date: 'HH:mm' }}: conta consolidada em
+                {{ money(c.version?.total ?? c.total) }} (versão {{ c.version?.number }}). Só o serviço ainda muda.
+              </p>
+              @if (c.canReopen) {
+                <div class="row">
+                  <mat-form-field appearance="outline" class="grow">
+                    <mat-label>Motivo para reabrir</mat-label>
+                    <input matInput [formControl]="reopenReason" maxlength="300" />
+                  </mat-form-field>
+                  <button mat-stroked-button type="button" [disabled]="busy()" (click)="reopen(c)">
+                    Reabrir comanda
+                  </button>
+                </div>
+              }
+            }
+          </div>
+        }
 
         @if (b.discount; as d) {
           <div class="discount" [class.flagged]="d.needsReview">
@@ -231,6 +271,7 @@ import {
       width: 100%;
     }
     .couvert,
+    .closing,
     .discount {
       padding: 8px;
       border: 1px solid rgba(0, 0, 0, 0.12);
@@ -258,6 +299,8 @@ export class BillPanel {
   readonly refresh = input(0);
 
   protected readonly bill = signal<Bill | null>(null);
+  protected readonly closing = signal<Closing | null>(null);
+  protected readonly reopenReason = this.forms.control('');
   protected readonly busy = signal(false);
   protected readonly failure = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
@@ -330,6 +373,28 @@ export class BillPanel {
 
   protected reasonHint(): string {
     return COUVERT_REASONS.find((r) => r.value === this.cancelForm.controls.reasonKind.value)?.hint ?? '';
+  }
+
+  protected blockers(closing: Closing): string[] {
+    return blockerTexts(closing.blockers);
+  }
+
+  startClosing(closing: Closing): void {
+    this.runClosing(this.service.startClosing(this.tabId(), closing.total), 'Fechamento iniciado: conta consolidada.');
+  }
+
+  reopen(closing: Closing): void {
+    const reason = this.reopenReason.value.trim();
+    if (!closing.closingId) {
+      return;
+    }
+    if (reason.length < 5) {
+      this.failure.set('Explique por que a comanda volta a ser aberta, em 5 a 300 caracteres.');
+      return;
+    }
+    this.runClosing(this.service.reopen(this.tabId(), closing.closingId, reason), 'Comanda reaberta.', () =>
+      this.reopenReason.reset(),
+    );
   }
 
   includeCouvert(): void {
@@ -430,6 +495,27 @@ export class BillPanel {
     return kind;
   }
 
+  /** Fechamento mudou: relê a conta, que mostra o que pode mudar agora. */
+  private runClosing(request: Observable<Closing>, done: string, after?: () => void): void {
+    this.busy.set(true);
+    this.failure.set(null);
+    this.notice.set(null);
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (closing) => {
+        this.busy.set(false);
+        this.closing.set(closing);
+        this.notice.set(done);
+        after?.();
+        this.load(this.tabId());
+      },
+      error: (error: unknown) => {
+        this.busy.set(false);
+        this.failure.set(failureMessage(error));
+        this.load(this.tabId());
+      },
+    });
+  }
+
   private run(request: Observable<Bill>, done: string, after?: () => void): void {
     this.busy.set(true);
     this.failure.set(null);
@@ -440,6 +526,8 @@ export class BillPanel {
         this.bill.set(bill);
         this.notice.set(done);
         after?.();
+        // O serviço muda a versão consolidada em fechamento.
+        this.loadClosing(this.tabId());
       },
       error: (error: unknown) => {
         this.busy.set(false);
@@ -456,6 +544,17 @@ export class BillPanel {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (bill) => this.bill.set(bill),
+        error: (error: unknown) => this.failure.set(failureMessage(error)),
+      });
+    this.loadClosing(tabId);
+  }
+
+  private loadClosing(tabId: string): void {
+    this.service
+      .closing(tabId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (closing) => this.closing.set(closing),
         error: (error: unknown) => this.failure.set(failureMessage(error)),
       });
   }

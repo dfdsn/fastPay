@@ -31,6 +31,7 @@ describe('Comanda do cliente', () => {
   afterEach(() => {
     // A conta (H22) tem testes próprios; aqui basta que a tela a releia junto.
     http.match('/api/v1/guest/tabs/t-1/bill');
+    http.match('/api/v1/guest/tabs/t-1/closing');
     // Histórico com Google (H27) tem testes próprios.
     http.match('/api/v1/consumer/session');
     http.match('/api/v1/guest/tabs/t-1/account-link');

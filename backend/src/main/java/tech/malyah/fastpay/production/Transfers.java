@@ -64,6 +64,10 @@ public class Transfers {
         DESTINO_NAO_ENCONTRADO,
         /** Comanda de destino encerrada. */
         DESTINO_ENCERRADO,
+        /** Comanda de origem em fechamento (H28, FR-32). */
+        COMANDA_EM_FECHAMENTO,
+        /** Comanda de destino em fechamento (H28, FR-17). */
+        DESTINO_EM_FECHAMENTO,
         ITEM_NAO_ENCONTRADO,
         /** A produção ainda não recebeu a linha (encaminhamento pendente ou com falha). */
         ITEM_AGUARDANDO_PRODUCAO,
@@ -164,6 +168,12 @@ public class Transfers {
             }
             if (to == OrderTarget.ENCERRADA) {
                 return new Refused<>(Refusal.DESTINO_ENCERRADO);
+            }
+            if (from == OrderTarget.EM_FECHAMENTO) {
+                return new Refused<>(Refusal.COMANDA_EM_FECHAMENTO);
+            }
+            if (to == OrderTarget.EM_FECHAMENTO) {
+                return new Refused<>(Refusal.DESTINO_EM_FECHAMENTO);
             }
             CancelTarget item = orders.cancelTargetInCurrentUnit(orderLineId, fromTabId).orElse(null);
             if (item == null) {

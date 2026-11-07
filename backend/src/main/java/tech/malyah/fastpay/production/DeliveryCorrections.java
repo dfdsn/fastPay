@@ -40,8 +40,8 @@ import tech.malyah.fastpay.tabs.Tabs.OrderTarget;
  * devolvido; registra-se {@code OCORRENCIA_ENTREGA} no histórico da linha, com motivo, para o gerente tratar pelo
  * caminho próprio (devolução, H35).</li>
  * </ul>
- * Contrato para H28/H30: "em fechamento" e cobrança existente também impedem desfazer (e levam à ocorrência quando
- * paga), conferidos aqui depois de travar as comandas.
+ * Comanda em fechamento (H28) impede desfazer e a ocorrência: reabre-se antes. Contrato para H30: cobrança existente
+ * também impede desfazer, conferida aqui depois de travar as comandas.
  */
 @Service
 public class DeliveryCorrections {
@@ -57,6 +57,8 @@ public class DeliveryCorrections {
         ITEM_CANCELADO,
         /** Alguma comanda de destino está encerrada: cabe a ocorrência, não desfazer. */
         COMANDA_ENCERRADA,
+        /** Alguma comanda de destino está em fechamento (H28): reabrir antes de desfazer. */
+        COMANDA_EM_FECHAMENTO,
         /** Todas as comandas de destino estão abertas: cabe desfazer, não a ocorrência. */
         ENTREGA_PODE_SER_DESFEITA
     }
@@ -214,6 +216,9 @@ public class DeliveryCorrections {
             OrderTarget target = tabs.lockForOrderInCurrentUnit(tabId);
             if (target == OrderTarget.NAO_ENCONTRADA) {
                 return new Locked(null, null, false, Refusal.LINHA_NAO_ENCONTRADA);
+            }
+            if (target == OrderTarget.EM_FECHAMENTO) {
+                return new Locked(null, null, false, Refusal.COMANDA_EM_FECHAMENTO);
             }
             anyClosed |= target == OrderTarget.ENCERRADA;
         }

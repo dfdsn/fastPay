@@ -105,7 +105,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H25 | Transferir unidades sem duplicar produção | Concluída | PR #39, merge `4bb791f` em `develop`, CI de `develop` run 42311207147 verde ([evidência](evidencias/H25-transferir-unidades.md)); T-03 da H25 proposta, aguardando Diego |
 | H26 | Continuação de visita e ajustes de couvert | Concluída | PR #41, merge `9774f4f` em `develop`, CI de `develop` run 42393012742 verde ([evidência](evidencias/H26-continuacao-visita-couvert.md)); T-03 da H26 proposta, aguardando Diego |
 | H27 | Google opcional e histórico do consumidor | Aguardando revisão | Branch `feature/H27-google-historico-consumidor`, PR para `develop` ([evidência](evidencias/H27-google-historico-consumidor.md)); P-13 e T-03 da H27 aprovadas por Diego em 07/11/2026; feita em paralelo com a H28 a pedido de Diego (exceção à D-28); login com Google real aguarda o cliente OAuth de teste (Diego) |
-| H28 | Conferência, bloqueio e reabertura | Não iniciada | Sem evidência; ver dependências/gates no backlog |
+| H28 | Conferência, bloqueio e reabertura | Aguardando revisão | Branch `feature/H28-conferencia-bloqueio-reabertura`, PR para `develop` ([evidência](evidencias/H28-conferencia-bloqueio-reabertura.md)); T-03 da H28 aprovada por Diego em 07/11/2026 |
 | H29 | Encerramento de conta zerada | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H30 | Pagamento integrado e reconciliação de incerteza | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H31 | Recebimento externo e invalidação | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -715,6 +715,27 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 - Decisões novas/alteradas: P-13 aprovada (identidade; PSP para a H30); T-03 da H27 aprovada; exceção à D-28 para H27 em paralelo com a H28.
 - Bloqueios / quem resolve: Diego cria o cliente OAuth de teste no Google Cloud para a validação real e revisa/mergeia o PR. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
 - Próximo passo concreto: revisão e merge do PR da H27 por Diego; depois, reconciliar progresso com o merge real.
+
+### H28 — Conferência, bloqueio e reabertura
+
+- História e estado: H28, **aguardando revisão** (PR aberto para `develop`). Sem gate; dependências H21, H22, H25 e H26 concluídas. Diego escolheu a H28 em vez da H27 (gate P-13 aberto) e aprovou a T-03 da H28 em 07/11/2026 (cartões de decisão no thread da H28).
+- Data/hora e agente: 07/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
+- Objetivo e critérios atendidos:
+  - Conferência exige todas as unidades enviadas entregues ou canceladas e nenhum problema em aberto; aguardando, em preparo, pronto ou impossível impedem (FR-31, CA-08). Desconto em revisão também impede (T-03).
+  - O rascunho não bloqueia. Depois do bloqueio ele não é enviado e fica no aparelho até reabrir (FR-31).
+  - Iniciar o fechamento trava a comanda e consolida a conta com versão e total (`bill_version`). Um lançamento concorrente entra antes ou é recusado (FR-32, CA-07).
+  - O serviço é ajustável na conferência, antes da cobrança, e grava uma nova versão; os itens continuam bloqueados (FR-28, CA-11).
+  - Reabrir só com `REABRIR_COMANDA` e motivo, com a configuração capturada preservada (FR-33).
+  - Validação exigida: corrida envio × fechamento em paralelo; cancelamento e transferência recusados em fechamento; pronta não entregue; reabertura com o rascunho preservado.
+- Critérios faltantes / motivo: "reabrir só após resolução definitiva da tentativa" e "paga não reabre consumo" dependem da cobrança (H30) e do pagamento (H31), que não existem ainda. Ficam como contrato documentado (`Closings.reopen` e `currentVersionInCurrentUnit`) para testar nessas histórias. As corridas de cancelamento e transferência contra o fechamento usam a mesma trava do envio e foram testadas em sequência, não em paralelo.
+- Branch e commit reais: `feature/H28-conferencia-bloqueio-reabertura` (a partir de `develop` `9774f4f`); commits no PR.
+- PR, checks e merge real: PR aberto para `develop` (link no thread da H28); merge e CI de `develop` a reconciliar depois do merge.
+- Arquivos/migrations/contratos: `V23__fechamento_e_reabertura.sql`; `bills.Closings` (`/api/v1/tabs/{id}/closing`, `/reopen`, `/api/v1/guest/tabs/{id}/closing`); `tabs.Tabs` (`OrderTarget.EM_FECHAMENTO`, `startClosingInCurrentUnit`, `reopenInCurrentUnit`); `production.Production.pendingOfTabInCurrentUnit`; recusas em `Orders`, `Cancellations`, `Transfers`, `DeliveryCorrections`, `Bills` e `Tabs.linkVisit`; frontend `bills/bill-panel.ts`, `guest/guest-bill.ts`, `tabs/tabs-page.ts`; especificação §6; decisões T-03; [evidência](evidencias/H28-conferencia-bloqueio-reabertura.md).
+- Testes: ver a evidência (backend 482 no contêiner Temurin 25 com PostgreSQL real; frontend 211 no contêiner Node 24.18.0).
+- Testes não executados e por quê: `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real na homologação de Diego.
+- Decisões novas/alteradas: T-03 da H28 aprovada por Diego em 07/11/2026 ("Aprovar como proposto").
+- Bloqueios / quem resolve: Diego revisa e mergeia o PR. Seguem sem resposta as T-03 da H25 e da H26. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: revisão e merge do PR da H28 por Diego; depois, reconciliar o progresso com o merge real. Próxima candidata elegível: H29 (gate D-02, resolvida), só quando Diego pedir.
 
 ## Registro de release (ainda nenhum)
 

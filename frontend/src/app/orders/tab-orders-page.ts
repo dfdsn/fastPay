@@ -66,6 +66,7 @@ export const SEND_TIMEOUT_MS = 20_000;
 /** Recusas definitivas do servidor: nada foi gravado e a chave do envio pode ser descartada. */
 const DEFINITE_REFUSALS = new Set([
   'COMANDA_ENCERRADA',
+  'COMANDA_EM_FECHAMENTO',
   'COMANDA_NAO_ENCONTRADA',
   'CHAVE_REUTILIZADA',
   'DADOS_INVALIDOS',

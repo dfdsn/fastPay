@@ -141,6 +141,8 @@ class TabController {
                     "Escolha uma comanda desta unidade aberta antes desta, nas últimas 24 horas. Atualize a lista.");
             case VISITA_ENCERRADA_NA_SAIDA -> error(HttpStatus.CONFLICT, refusal.name(),
                     "O cliente já teve a saída validada nessa comanda: esta entrada é uma visita nova.");
+            case COMANDA_EM_FECHAMENTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda está em fechamento. Para mudar a conta, reabra a comanda com o motivo.");
         };
     }
 

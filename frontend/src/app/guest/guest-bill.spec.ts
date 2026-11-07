@@ -3,14 +3,26 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { comCookieCsrf } from '../auth/auth-testing';
-import { GuestBill } from '../bills/bills.service';
+import { GuestBill, GuestClosing } from '../bills/bills.service';
 import { GuestBillPanel } from './guest-bill';
 
 const URL = '/api/v1/guest/tabs/t-1/bill';
+const FECHAMENTO = '/api/v1/guest/tabs/t-1/closing';
+
+const ELEGIVEL: GuestClosing = {
+  tabId: 't-1',
+  state: 'ABERTA',
+  startedAt: null,
+  versionNumber: null,
+  total: '90.47',
+  blockers: { pendingItems: [], openIssue: false, discountReview: false },
+  canStart: true,
+};
 
 const CONTA: GuestBill = {
   tabId: 't-1',
   open: true,
+  closing: false,
   lines: [
     {
       orderLineId: 'l-1',
@@ -62,7 +74,10 @@ describe('Conta do cliente', () => {
     return fixture;
   }
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.match(`${FECHAMENTO}`);
+    http.verify();
+  });
 
   it('mostra itens com valores, desconto, couvert, serviço e total separados', () => {
     const t = texto(montar(CONTA).nativeElement as HTMLElement);
@@ -104,6 +119,44 @@ describe('Conta do cliente', () => {
     expect(t).not.toContain('Couvert R$');
     expect(t).toContain('Couvert já cobrado em outra comanda desta visita: não se repete.');
     expect(t).not.toContain('Não concorda com o couvert?');
+  });
+
+  it('fecha a conta com o total que vê; com item pendente o botão fica desabilitado (H28)', () => {
+    const fixture = montar(CONTA);
+    http.expectOne(FECHAMENTO).flush({
+      ...ELEGIVEL,
+      blockers: {
+        pendingItems: [{ orderLineId: 'l-1', productName: 'Batata frita', quantity: 2, stage: 'EM_PREPARO' }],
+        openIssue: false,
+        discountReview: false,
+      },
+      canStart: false,
+    });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const fechar = () =>
+      Array.from(el.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('Fechar a conta'),
+      ) as HTMLButtonElement;
+    expect(texto(el)).toContain('2 × Batata frita: em preparo.');
+    expect(fechar().disabled).toBe(true);
+
+    http.match(FECHAMENTO);
+    fixture.componentRef.setInput('refresh', 1);
+    fixture.detectChanges();
+    http.expectOne(URL).flush(CONTA);
+    http.expectOne(FECHAMENTO).flush(ELEGIVEL);
+    fixture.detectChanges();
+    expect(texto(el)).toContain('Fechar a conta (R$ 90,47)');
+    fechar().click();
+    const pedido = http.expectOne((r) => r.method === 'POST' && r.url === FECHAMENTO);
+    expect(pedido.request.body).toEqual({ expectedTotal: '90.47' });
+    pedido.flush({ ...ELEGIVEL, state: 'EM_FECHAMENTO', versionNumber: 1, blockers: null, canStart: false });
+    http.expectOne(URL).flush({ ...CONTA, closing: true });
+    http.expectOne(FECHAMENTO).flush({ ...ELEGIVEL, state: 'EM_FECHAMENTO', versionNumber: 1, blockers: null });
+    fixture.detectChanges();
+    expect(texto(el)).toContain('Conta fechada em R$ 90,47');
+    expect(el.querySelector('[role="status"]')?.textContent).toContain('Conta fechada.');
   });
 
   it('sem pedidos e conta encerrada: sem botão de serviço', () => {
