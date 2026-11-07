@@ -7,7 +7,7 @@ import { AuthService } from '../auth/auth.service';
 /**
  * Comanda ativa da unidade (H15). {@code guestLinked}: o cliente já confirmou o acesso pelo QR.
  * {@code attendanceMode}: modalidade de atendimento capturada na abertura (H20); {@code responsibleName}: o garçom
- * responsável, nulo na central.
+ * responsável, nulo na central. {@code continuesTab}: a comanda anterior cuja visita esta continua (H26).
  */
 export interface Tab {
   id: string;
@@ -22,6 +22,17 @@ export interface Tab {
   responsibleId: string | null;
   responsibleName: string | null;
   version: number;
+  continuesTab: { id: string; number: number; name: string } | null;
+}
+
+/** Comanda que pode ser a anterior de uma continuação de visita (H26), por hora de abertura. */
+export interface ContinuationCandidate {
+  id: string;
+  number: number;
+  name: string;
+  table: string | null;
+  openedAt: string;
+  closed: boolean;
 }
 
 /** QR de vínculo: vale 2 minutos e uma vez; o SVG é desenhado pelo servidor só com formas. */
@@ -71,6 +82,21 @@ export class TabsService {
     return this.auth.withCsrf(() =>
       this.http.put<Tab>(`/api/v1/tabs/${tab.id}/responsible`, {
         responsibleId,
+        version: tab.version,
+      }),
+    );
+  }
+
+  continuationCandidates(tabId: string): Observable<ContinuationCandidate[]> {
+    return this.http.get<ContinuationCandidate[]>(`/api/v1/tabs/${tabId}/visit-continuation/candidates`);
+  }
+
+  /** Vincula a comanda à visita da anterior (H26): só com a permanência confirmada pessoalmente. */
+  linkVisit(tab: Tab, previousTabId: string, stayConfirmed: boolean): Observable<Tab> {
+    return this.auth.withCsrf(() =>
+      this.http.post<Tab>(`/api/v1/tabs/${tab.id}/visit-continuation`, {
+        previousTabId,
+        stayConfirmed,
         version: tab.version,
       }),
     );

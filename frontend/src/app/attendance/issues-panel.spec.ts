@@ -18,6 +18,7 @@ function problema(changes: Partial<ConsumerIssue> = {}): ConsumerIssue {
     tab: { id: 't-1', number: 12, name: 'Ana', table: '5' },
     item: { orderLineId: 'l-1', productName: 'Batata frita' },
     description: 'Veio fria',
+    aboutCouvert: false,
     afterClosure: false,
     owner: { id: 'u-gabi', name: 'Gabi' },
     mine: true,

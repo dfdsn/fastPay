@@ -24,10 +24,23 @@ public class JdbcTabStore {
         this.jdbc = jdbc;
     }
 
-    /** {@code guestLinked}: há acesso de consumidor ativo (não revogado) na comanda. */
+    /**
+     * {@code guestLinked}: há acesso de consumidor ativo (não revogado) na comanda. {@code continuesTabId}: a comanda
+     * anterior cuja visita esta continua (H26), com o número e o nome dela; nulos sem vínculo.
+     */
     public record TabRow(UUID id, UUID visitId, int number, String displayName, String tableLabel,
             UUID settingsVersionId, Instant openedAt, Instant closedAt, Instant accessUntil, boolean guestLinked,
-            String attendanceMode, UUID responsibleId, long version) {
+            String attendanceMode, UUID responsibleId, long version, UUID continuesTabId, Integer continuesNumber,
+            String continuesName) {
+    }
+
+    /** Visita (H26): {@code exitValidatedAt} gravado pela saída validada (H32). */
+    public record VisitRow(UUID id, Instant exitValidatedAt) {
+    }
+
+    /** Comanda que pode ser a anterior de uma continuação de visita (H26). */
+    public record CandidateRow(UUID id, int number, String displayName, String tableLabel, Instant openedAt,
+            boolean closed) {
     }
 
     public record BindingRow(UUID id, UUID establishmentId, UUID tabId, boolean recovery, Instant expiresAt,
@@ -78,7 +91,12 @@ public class JdbcTabStore {
             t.closed_at, t.access_until, t.version, t.responsible_id,
             (SELECT v.attendance_mode FROM unit_settings_version v WHERE v.id = t.settings_version_id)
                 AS attendance_mode,
-            EXISTS (SELECT 1 FROM guest_grant g WHERE g.tab_id = t.id AND g.revoked_at IS NULL) AS guest_linked
+            EXISTS (SELECT 1 FROM guest_grant g WHERE g.tab_id = t.id AND g.revoked_at IS NULL) AS guest_linked,
+            (SELECT l.previous_tab_id FROM visit_link l WHERE l.tab_id = t.id) AS continues_tab_id,
+            (SELECT p.number FROM visit_link l JOIN tab p ON p.id = l.previous_tab_id WHERE l.tab_id = t.id)
+                AS continues_number,
+            (SELECT p.display_name FROM visit_link l JOIN tab p ON p.id = l.previous_tab_id WHERE l.tab_id = t.id)
+                AS continues_name
             """;
 
     /** Comandas ativas da unidade, por número. */
@@ -111,6 +129,64 @@ public class JdbcTabStore {
                 UPDATE tab SET responsible_id = ?, updated_by = ?, updated_at = ?, version = version + 1
                  WHERE id = ? AND version = ? AND closed_at IS NULL
                 """, responsibleId, actorId, Timestamp.from(now), id, version) == 1;
+    }
+
+    // Visitas (H26)
+
+    /** Trava a visita até o fim da transação: vínculo, couvert e saída da mesma visita não se cruzam. */
+    public Optional<VisitRow> lockVisit(UUID id) {
+        return jdbc.query("SELECT id, exit_validated_at FROM visit WHERE id = ? FOR UPDATE",
+                (rs, n) -> new VisitRow(rs.getObject("id", UUID.class), instant(rs, "exit_validated_at")), id)
+                .stream().findFirst();
+    }
+
+    /** Comandas da visita (ativas e encerradas), da abertura mais antiga à mais nova. */
+    public List<UUID> tabsOfVisit(UUID visitId) {
+        return jdbc.query("SELECT id FROM tab WHERE visit_id = ? ORDER BY opened_at, id",
+                (rs, n) -> rs.getObject(1, UUID.class), visitId);
+    }
+
+    /**
+     * Comandas que podem ser a anterior de {@code tabId}: abertas desde {@code since} e até a abertura dela, de outra
+     * visita, sem saída validada; da mais recente à mais antiga, sem ordenar nem filtrar por nome (FR-12).
+     */
+    public List<CandidateRow> continuationCandidates(UUID tabId, UUID visitId, Instant openedAt, Instant since,
+            int limit) {
+        return jdbc.query("""
+                SELECT t.id, t.number, t.display_name, t.table_label, t.opened_at, t.closed_at IS NOT NULL AS closed
+                  FROM tab t JOIN visit v ON v.id = t.visit_id
+                 WHERE t.id <> ? AND t.visit_id <> ? AND t.opened_at <= ? AND t.opened_at >= ?
+                   AND v.exit_validated_at IS NULL
+                 ORDER BY t.opened_at DESC, t.number
+                 LIMIT ?
+                """, (rs, n) -> new CandidateRow(rs.getObject("id", UUID.class), rs.getInt("number"),
+                        rs.getString("display_name"), rs.getString("table_label"), instant(rs, "opened_at"),
+                        rs.getBoolean("closed")),
+                tabId, visitId, Timestamp.from(openedAt), Timestamp.from(since), limit);
+    }
+
+    /** Leva a comanda ativa para a visita {@code visitId} (continuação, H26). */
+    public boolean moveToVisit(UUID tabId, long version, UUID visitId, UUID actorId, Instant now) {
+        return jdbc.update("""
+                UPDATE tab SET visit_id = ?, updated_by = ?, updated_at = ?, version = version + 1
+                 WHERE id = ? AND version = ? AND closed_at IS NULL
+                """, visitId, actorId, Timestamp.from(now), tabId, version) == 1;
+    }
+
+    public void insertVisitLink(UUID id, UUID tabId, UUID previousTabId, UUID fromVisitId, UUID toVisitId,
+            UUID actorId, Instant now) {
+        jdbc.update("""
+                INSERT INTO visit_link (id, establishment_id, tab_id, previous_tab_id, from_visit_id, to_visit_id,
+                                        stay_confirmed, linked_by, linked_at)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, true, ?, ?)
+                """, id, tabId, previousTabId, fromVisitId, toVisitId, actorId, Timestamp.from(now));
+    }
+
+    /** Saída validada (H32) encerra a visita; {@code false} se já estava encerrada. */
+    public boolean endVisitByExit(UUID visitId, UUID tabId, Instant now) {
+        return jdbc.update("""
+                UPDATE visit SET exit_validated_at = ?, exit_tab_id = ? WHERE id = ? AND exit_validated_at IS NULL
+                """, Timestamp.from(now), tabId, visitId) == 1;
     }
 
     // QR de vínculo
@@ -226,7 +302,9 @@ public class JdbcTabStore {
                 rs.getString("display_name"), rs.getString("table_label"),
                 rs.getObject("settings_version_id", UUID.class), instant(rs, "opened_at"), instant(rs, "closed_at"),
                 instant(rs, "access_until"), rs.getBoolean("guest_linked"), rs.getString("attendance_mode"),
-                rs.getObject("responsible_id", UUID.class), rs.getLong("version"));
+                rs.getObject("responsible_id", UUID.class), rs.getLong("version"),
+                rs.getObject("continues_tab_id", UUID.class), (Integer) rs.getObject("continues_number"),
+                rs.getString("continues_name"));
     }
 
     private static BindingRow binding(ResultSet rs, int n) throws SQLException {

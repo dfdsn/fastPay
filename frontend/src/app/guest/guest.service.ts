@@ -37,6 +37,8 @@ export interface GuestItem {
 export interface GuestIssue {
   id: string;
   item: { orderLineId: string; productName: string | null } | null;
+  /** Contestação do couvert (H26): problema da conta marcado. */
+  aboutCouvert: boolean;
   description: string;
   status: IssueStatus;
   afterClosure: boolean;
@@ -93,9 +95,10 @@ export class GuestService {
   }
 
   /** {@code orderLineId} nulo: problema da conta. */
-  report(tabId: string, orderLineId: string | null, description: string): Observable<GuestIssue> {
+  /** {@code aboutCouvert}: contestação do couvert (H26), sem item. */
+  report(tabId: string, orderLineId: string | null, description: string, aboutCouvert = false): Observable<GuestIssue> {
     return this.auth.withCsrf(() =>
-      this.http.post<GuestIssue>(`/api/v1/guest/tabs/${tabId}/issues`, { orderLineId, description }),
+      this.http.post<GuestIssue>(`/api/v1/guest/tabs/${tabId}/issues`, { orderLineId, aboutCouvert, description }),
     );
   }
 }

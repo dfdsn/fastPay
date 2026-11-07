@@ -18,7 +18,13 @@ import tech.malyah.fastpay.bills.domain.BillRules;
 import tech.malyah.fastpay.bills.domain.BillRules.Composition;
 import tech.malyah.fastpay.bills.domain.BillRules.Discount;
 import tech.malyah.fastpay.bills.domain.BillRules.Kind;
+import tech.malyah.fastpay.bills.domain.CouvertRules;
+import tech.malyah.fastpay.bills.domain.CouvertRules.EndKind;
+import tech.malyah.fastpay.bills.domain.CouvertRules.Origin;
+import tech.malyah.fastpay.bills.domain.CouvertRules.Reason;
+import tech.malyah.fastpay.bills.domain.CouvertRules.VisitState;
 import tech.malyah.fastpay.bills.infrastructure.JdbcBillStore;
+import tech.malyah.fastpay.bills.infrastructure.JdbcBillStore.CouvertRow;
 import tech.malyah.fastpay.bills.infrastructure.JdbcBillStore.DiscountRow;
 import tech.malyah.fastpay.establishments.CouvertMode;
 import tech.malyah.fastpay.establishments.EstablishmentSettings;
@@ -46,7 +52,10 @@ import tech.malyah.fastpay.tabs.Tabs.BillTab;
  * percentual efetivo passar da autoridade de quem concedeu, a conta fica em revisão e a cobrança é bloqueada
  * ({@link #blocksChargeInCurrentUnit}) até alguém com limite suficiente revisar, substituir ou retirar; correções
  * (cancelamento, transferência) continuam possíveis.</li>
- * <li><b>Couvert (K)</b>: o automático da configuração capturada na abertura; o manual e os ajustes chegam com a H26.</li>
+ * <li><b>Couvert (K)</b>: o couvert válido lançado na comanda (H26): o automático na abertura, com o valor da versão
+ * capturada; o manual na inclusão, com o valor vigente; a correção com o valor digitado. Um por comanda e um por
+ * visita (FR-12, FR-29): não se repete na continuação, a dispensa por indevido/isenção vale para a visita, duplicidade
+ * preserva o válido e correção exige inclusão explícita. Cancelar exige {@link Permission#CANCELAR_ITEM} e motivo.</li>
  * <li><b>Serviço (S)</b>: percentual e base da configuração capturada na abertura; o cliente (ou a equipe por ele)
  * retira ou devolve sem autorização enquanto a comanda está aberta e sem cobrança.</li>
  * </ul>
@@ -85,14 +94,42 @@ public class Bills {
             String myLimitPercent) {
     }
 
+    /**
+     * Couvert como o cliente o vê (H26): {@code COBRADO} nesta comanda; {@code COBRADO_EM_OUTRA} comanda da mesma
+     * visita (não se repete); {@code DISPENSADO} na visita; {@code AGUARDANDO_CORRECAO}; {@code SEM_COUVERT}.
+     */
+    public enum CouvertState {
+        COBRADO,
+        COBRADO_EM_OUTRA,
+        DISPENSADO,
+        AGUARDANDO_CORRECAO,
+        SEM_COUVERT
+    }
+
+    /** Couvert encerrado desta comanda, para o histórico na tela da equipe. */
+    public record EndedCouvert(UUID id, Origin origin, String amount, EndKind endKind, Reason reasonKind,
+            String reason, Person endedBy, Instant endedAt) {
+    }
+
+    /**
+     * Couvert da comanda como a equipe o vê (H26). {@code mode}: modalidade capturada na abertura (nula sem couvert);
+     * {@code chargeId}/{@code origin}/{@code amount}: o válido desta comanda; {@code chargedOnTab}: a comanda da visita
+     * que tem o couvert, quando é outra; {@code includeAmount}: o valor que a inclusão manual usaria agora.
+     */
+    public record CouvertView(CouvertMode mode, CouvertState state, UUID chargeId, Origin origin,
+            String amount, Tabs.TabRef chargedOnTab, boolean canInclude, String includeAmount, boolean canCancel,
+            boolean canCorrect, List<EndedCouvert> history) {
+    }
+
     /** Conta como a equipe a vê. {@code reviewPending}: desconto acima da autoridade, cobrança bloqueada. */
     public record Bill(UUID tabId, boolean open, List<Line> lines, String consumption, DiscountView discount,
-            String couvert, ServiceView service, String total, boolean reviewPending, DiscountPolicy policy) {
+            String couvert, CouvertView couvertDetail, ServiceView service, String total, boolean reviewPending,
+            DiscountPolicy policy) {
     }
 
     /** Conta como o cliente a vê: valores, sem motivo nem nomes da equipe. */
     public record GuestBill(UUID tabId, boolean open, List<Line> lines, String consumption, String discount,
-            String couvert, ServiceView service, String total) {
+            String couvert, CouvertState couvertState, ServiceView service, String total) {
     }
 
     /** Composição para fechamento e cobrança (H28/H30), lida na transação deles depois de travar a comanda. */
@@ -119,7 +156,25 @@ public class Bills {
         /** Revisar um desconto que está dentro da autoridade. */
         DESCONTO_SEM_REVISAO,
         /** A comanda foi aberta com o serviço desabilitado: não há o que retirar. */
-        SERVICO_DESABILITADO
+        SERVICO_DESABILITADO,
+        /** Cancelar ou devolver sem couvert válido nesta comanda. */
+        SEM_COUVERT,
+        /** Inclusão manual numa comanda aberta sem couvert ou com o couvert automático. */
+        COUVERT_NAO_MANUAL,
+        /** A configuração vigente desligou o couvert: não há valor para incluir. */
+        COUVERT_DESABILITADO,
+        /** A comanda já tem couvert válido. */
+        COUVERT_JA_INCLUIDO,
+        /** Outra comanda da mesma visita já tem o couvert (FR-12: não se repete). */
+        COUVERT_JA_COBRADO_NA_VISITA,
+        /** O couvert foi dispensado na visita (indevido ou isenção). */
+        COUVERT_DISPENSADO_NA_VISITA,
+        /** Cancelado ou devolvido por correção: só a inclusão de correção, com o valor correto. */
+        COUVERT_AGUARDA_CORRECAO,
+        /** Duplicidade sem outro couvert válido na visita. */
+        COUVERT_SEM_DUPLICIDADE,
+        /** Inclusão de correção sem couvert cancelado ou devolvido por correção. */
+        COUVERT_SEM_CORRECAO
     }
 
     public sealed interface Outcome<T> {
@@ -300,6 +355,167 @@ public class Bills {
         });
     }
 
+    // Couvert (H26)
+
+    /**
+     * Inclui o couvert manual (FR-29, FR-68): comanda aberta no modo manual, sem couvert na visita, com o valor da
+     * configuração vigente na inclusão. Quem opera comanda inclui ({@link Permission#OPERAR_COMANDA}).
+     */
+    public Outcome<Bill> includeCouvert(UUID actorId, UUID establishmentId, UUID tabId, String correlationId) {
+        return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_COMANDA, me -> {
+            Optional<BillTab> tab = tabs.forBillInCurrentUnit(tabId, true);
+            Optional<Outcome<Bill>> refused = refuseChange(tab);
+            if (refused.isPresent()) {
+                return refused.get();
+            }
+            tabs.visitInCurrentUnit(tabId, true);
+            Loaded current = load(tab.get());
+            SettingsValues captured = current.captured();
+            if (!captured.couvertEnabled() || captured.couvertMode() != CouvertMode.MANUAL) {
+                return new Refused<>(Refusal.COUVERT_NAO_MANUAL);
+            }
+            Optional<Refusal> blocked = blockedInclusion(current);
+            if (blocked.isPresent()) {
+                return new Refused<>(blocked.get());
+            }
+            var now = settings.currentInCurrentUnit();
+            if (!now.values().couvertEnabled()) {
+                return new Refused<>(Refusal.COUVERT_DESABILITADO);
+            }
+            UUID id = UUID.randomUUID();
+            store.insertCouvert(id, tabId, Origin.MANUAL, now.values().couvertAmount(), now.id(), null, actorId,
+                    clock.instant());
+            store.audit("couvert.incluido", id, actorId, "comanda " + tabId + "; manual "
+                    + now.values().couvertAmount().toPlainString() + "; configuracao v" + now.number(), correlationId);
+            changes.publishInCurrentTransaction(Topic.CONTA, tabId);
+            log.info("Couvert {} incluído na comanda {} por {}", id, tabId, actorId);
+            return new Done<>(bill(load(tab.get()), me));
+        });
+    }
+
+    /**
+     * Cancela o couvert válido da comanda aberta, com motivo (FR-12, FR-29, T-03 da H26), por quem tem
+     * {@link Permission#CANCELAR_ITEM}: indevido ou isenção dispensam o couvert na visita; duplicidade exige outro
+     * válido na visita, que continua cobrado; correção deixa a visita aguardando a inclusão do valor correto.
+     */
+    public Outcome<Bill> cancelCouvert(UUID actorId, UUID establishmentId, UUID tabId, UUID chargeId,
+            String reasonKind, String reason, String correlationId) {
+        Optional<Reason> kind = CouvertRules.reason(reasonKind);
+        Optional<String> why = BillRules.reason(reason);
+        return memberships.inUnit(actorId, establishmentId, Permission.CANCELAR_ITEM, me -> {
+            if (kind.isEmpty()) {
+                return new Invalid<>("reasonKind", "Escolha o motivo: indevido, isenção, duplicidade ou correção.");
+            }
+            if (why.isEmpty()) {
+                return new Invalid<>("reason", "Explique por que o couvert sai, em 5 a 300 caracteres.");
+            }
+            Optional<BillTab> tab = tabs.forBillInCurrentUnit(tabId, true);
+            Optional<Outcome<Bill>> refused = refuseChange(tab);
+            if (refused.isPresent()) {
+                return refused.get();
+            }
+            tabs.visitInCurrentUnit(tabId, true);
+            Optional<Refusal> ended = endCouvert(load(tab.get()), chargeId, EndKind.CANCELADO, kind.get(), why.get(),
+                    actorId, correlationId);
+            return ended.<Outcome<Bill>>map(Refused::new).orElseGet(() -> new Done<>(bill(load(tab.get()), me)));
+        });
+    }
+
+    /**
+     * Inclusão de correção (FR-12: "correção exige inclusão explícita do valor correto, sem recobrança automática
+     * integral"): depois de cancelar ou devolver por correção, quem tem {@link Permission#CANCELAR_ITEM} inclui o valor
+     * correto (R$ 0,01 a R$ 200,00), com motivo, numa comanda aberta da visita.
+     */
+    public Outcome<Bill> correctCouvert(UUID actorId, UUID establishmentId, UUID tabId, String amount, String reason,
+            String correlationId) {
+        Optional<BigDecimal> value = CouvertRules.amount(amount);
+        Optional<String> why = BillRules.reason(reason);
+        return memberships.inUnit(actorId, establishmentId, Permission.CANCELAR_ITEM, me -> {
+            if (value.isEmpty()) {
+                return new Invalid<>("amount", "Informe o valor correto do couvert, de R$ 0,01 a R$ 200,00.");
+            }
+            if (why.isEmpty()) {
+                return new Invalid<>("reason", "Explique a correção em 5 a 300 caracteres.");
+            }
+            Optional<BillTab> tab = tabs.forBillInCurrentUnit(tabId, true);
+            Optional<Outcome<Bill>> refused = refuseChange(tab);
+            if (refused.isPresent()) {
+                return refused.get();
+            }
+            tabs.visitInCurrentUnit(tabId, true);
+            Loaded current = load(tab.get());
+            if (current.visitState() != VisitState.AGUARDANDO_CORRECAO) {
+                return new Refused<>(blockedInclusion(current).orElse(Refusal.COUVERT_SEM_CORRECAO));
+            }
+            UUID id = UUID.randomUUID();
+            store.insertCouvert(id, tabId, Origin.CORRECAO, value.get(), null, why.get(), actorId, clock.instant());
+            store.audit("couvert.corrigido", id, actorId, "comanda " + tabId + "; valor " + value.get().toPlainString(),
+                    correlationId);
+            publishVisit(current);
+            log.info("Couvert {} de correção incluído na comanda {} por {}", id, tabId, actorId);
+            return new Done<>(bill(load(tab.get()), me));
+        });
+    }
+
+    /**
+     * Contrato para a devolução (H35, FR-12, FR-71, D-12), na transação de unidade de quem registra a devolução
+     * atribuída ao couvert, com identidade (quem autorizou): encerra o couvert como devolvido, com o motivo e os mesmos
+     * efeitos do cancelamento. Vale também para comanda encerrada. Devolução de valor livre não chama isto (não presume
+     * estorno de couvert). Vazio quando registrado; senão a recusa.
+     */
+    public Optional<Refusal> recordCouvertRefundInCurrentUnit(UUID tabId, UUID chargeId, Reason reason, UUID actorId,
+            String correlationId) {
+        Optional<BillTab> tab = tabs.forBillInCurrentUnit(tabId, false);
+        if (tab.isEmpty()) {
+            return Optional.of(Refusal.COMANDA_NAO_ENCONTRADA);
+        }
+        tabs.visitInCurrentUnit(tabId, true);
+        return endCouvert(load(tab.get()), chargeId, EndKind.DEVOLVIDO, reason, null, actorId, correlationId);
+    }
+
+    /** Por que a visita não aceita mais um couvert agora; vazio se aceita. */
+    private static Optional<Refusal> blockedInclusion(Loaded l) {
+        if (l.couvert().isPresent()) {
+            return Optional.of(Refusal.COUVERT_JA_INCLUIDO);
+        }
+        return switch (l.visitState()) {
+            case COBRADO -> Optional.of(Refusal.COUVERT_JA_COBRADO_NA_VISITA);
+            case DISPENSADO -> Optional.of(Refusal.COUVERT_DISPENSADO_NA_VISITA);
+            case AGUARDANDO_CORRECAO -> Optional.of(Refusal.COUVERT_AGUARDA_CORRECAO);
+            case SEM_COUVERT -> Optional.empty();
+        };
+    }
+
+    /** Encerra o couvert válido da comanda (cancelamento ou devolução), com a visita já travada. */
+    private Optional<Refusal> endCouvert(Loaded current, UUID chargeId, EndKind kind, Reason reason, String text,
+            UUID actorId, String correlationId) {
+        if (current.couvert().isEmpty()) {
+            return Optional.of(Refusal.SEM_COUVERT);
+        }
+        CouvertRow charge = current.couvert().get();
+        if (!charge.id().equals(chargeId)) {
+            return Optional.of(Refusal.VERSAO_DESATUALIZADA);
+        }
+        if (reason == Reason.DUPLICIDADE && !CouvertRules.hasDuplicate(
+                current.visitCouverts().stream().map(CouvertRow::charge).toList(), charge.charge())) {
+            return Optional.of(Refusal.COUVERT_SEM_DUPLICIDADE);
+        }
+        store.endCouvert(chargeId, kind, reason, text, actorId, clock.instant());
+        store.audit(kind == EndKind.CANCELADO ? "couvert.cancelado" : "couvert.devolvido", chargeId, actorId,
+                "comanda " + current.tab().id() + "; motivo " + reason.name() + "; valor "
+                        + charge.amount().toPlainString(), correlationId);
+        publishVisit(current);
+        log.info("Couvert {} da comanda {} {} por {} ({})", chargeId, current.tab().id(),
+                kind == EndKind.CANCELADO ? "cancelado" : "devolvido", actorId, reason);
+        return Optional.empty();
+    }
+
+    /** A situação do couvert muda para todas as comandas da visita: cada uma recebe o aviso da conta. */
+    private void publishVisit(Loaded l) {
+        tabs.visitInCurrentUnit(l.tab().id(), false).map(Tabs.VisitTabs::tabIds).orElse(List.of(l.tab().id()))
+                .forEach(id -> changes.publishInCurrentTransaction(Topic.CONTA, id));
+    }
+
     // Consumidor
 
     /** Conta da comanda para o cliente com acesso válido; vazio sem acesso (outra comanda, revogado, vencido). */
@@ -345,17 +561,29 @@ public class Bills {
 
     // Interno
 
+    /**
+     * {@code visitCouverts}: couverts (válidos e encerrados) de todas as comandas da visita; {@code couvert}: o válido
+     * desta comanda.
+     */
     private record Loaded(BillTab tab, List<Orders.ChargedLine> lines, SettingsValues captured,
-            Optional<DiscountRow> discount, boolean waived, Composition composition, boolean reviewPending) {
+            Optional<DiscountRow> discount, boolean waived, Composition composition, boolean reviewPending,
+            List<CouvertRow> visitCouverts, Optional<CouvertRow> couvert) {
+
+        VisitState visitState() {
+            return CouvertRules.state(visitCouverts.stream().map(CouvertRow::charge).toList());
+        }
     }
 
     private Loaded load(BillTab tab) {
         List<Orders.ChargedLine> lines = orders.chargedLinesOfTabInCurrentUnit(tab.id());
         BigDecimal c = lines.stream().map(Orders.ChargedLine::lineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
         SettingsValues captured = settings.versionInCurrentUnit(tab.settingsVersionId()).orElseThrow().values();
-        BigDecimal couvert = captured.couvertEnabled() && captured.couvertMode() == CouvertMode.AUTOMATICO
-                ? captured.couvertAmount()
-                : BigDecimal.ZERO;
+        List<UUID> visitTabs = tabs.visitInCurrentUnit(tab.id(), false).map(Tabs.VisitTabs::tabIds)
+                .orElse(List.of(tab.id()));
+        List<CouvertRow> visitCouverts = store.couverts(visitTabs);
+        Optional<CouvertRow> valid = visitCouverts.stream()
+                .filter(r -> r.tabId().equals(tab.id()) && r.endKind() == null).findFirst();
+        BigDecimal couvert = valid.map(CouvertRow::amount).orElse(BigDecimal.ZERO);
         boolean waived = store.serviceWaived(tab.id()).orElse(false);
         Optional<DiscountRow> discount = store.activeDiscount(tab.id());
         Composition composition = BillRules.compose(c,
@@ -364,7 +592,7 @@ public class Bills {
                         captured.serviceIncludesCouvert(), waived));
         boolean reviewPending = discount.map(r -> BillRules.needsReview(new Discount(r.kind(), r.value()),
                 composition.discount(), composition.consumption(), r.authorityPercent())).orElse(false);
-        return new Loaded(tab, lines, captured, discount, waived, composition, reviewPending);
+        return new Loaded(tab, lines, captured, discount, waived, composition, reviewPending, visitCouverts, valid);
     }
 
     /** Comanda inexistente ou encerrada não muda de conta. */
@@ -412,7 +640,45 @@ public class Bills {
                 me.has(Permission.CONCEDER_DESCONTO) && l.tab().open(),
                 me.discountLimitPercent().toPlainString());
         return new Bill(l.tab().id(), l.tab().open(), lines(l), text(c.consumption()), discount, text(c.couvert()),
-                service(l), text(c.total()), l.reviewPending(), policy);
+                couvertView(l, me, now), service(l), text(c.total()), l.reviewPending(), policy);
+    }
+
+    private static CouvertState couvertState(Loaded l) {
+        if (l.couvert().isPresent()) {
+            return CouvertState.COBRADO;
+        }
+        return switch (l.visitState()) {
+            case COBRADO -> CouvertState.COBRADO_EM_OUTRA;
+            case DISPENSADO -> CouvertState.DISPENSADO;
+            case AGUARDANDO_CORRECAO -> CouvertState.AGUARDANDO_CORRECAO;
+            case SEM_COUVERT -> CouvertState.SEM_COUVERT;
+        };
+    }
+
+    private CouvertView couvertView(Loaded l, UnitMembership me, SettingsValues now) {
+        CouvertState state = couvertState(l);
+        Tabs.TabRef chargedOn = null;
+        if (state == CouvertState.COBRADO_EM_OUTRA) {
+            UUID other = l.visitCouverts().stream().filter(r -> r.endKind() == null).findFirst().orElseThrow().tabId();
+            Tabs.Label label = tabs.labelsInCurrentUnit(List.of(other)).get(other);
+            chargedOn = new Tabs.TabRef(other, label.number(), label.name());
+        }
+        List<CouvertRow> ended = l.visitCouverts().stream()
+                .filter(r -> r.tabId().equals(l.tab().id()) && r.endKind() != null).toList();
+        Map<UUID, String> names = memberships.namesInCurrentUnit(ended.stream().map(CouvertRow::endedBy).distinct()
+                .toList());
+        List<EndedCouvert> history = ended.stream().map(r -> new EndedCouvert(r.id(), r.origin(), text(r.amount()),
+                r.endKind(), r.endReasonKind(), r.endReason(), new Person(r.endedBy(), names.get(r.endedBy())),
+                r.endedAt())).toList();
+        boolean open = l.tab().open();
+        boolean manual = l.captured().couvertEnabled() && l.captured().couvertMode() == CouvertMode.MANUAL;
+        boolean canInclude = open && manual && state == CouvertState.SEM_COUVERT && now.couvertEnabled();
+        boolean cancelling = open && me.has(Permission.CANCELAR_ITEM);
+        return new CouvertView(l.captured().couvertEnabled() ? l.captured().couvertMode() : null, state,
+                l.couvert().map(CouvertRow::id).orElse(null), l.couvert().map(CouvertRow::origin).orElse(null),
+                text(l.composition().couvert()), chargedOn, canInclude,
+                canInclude ? text(now.couvertAmount()) : null, cancelling && l.couvert().isPresent(),
+                cancelling && state == CouvertState.AGUARDANDO_CORRECAO, history);
     }
 
     private DiscountView discountView(DiscountRow r, Loaded l, Composition c) {
@@ -433,7 +699,8 @@ public class Bills {
     private GuestBill guestBill(Loaded l) {
         Composition c = l.composition();
         return new GuestBill(l.tab().id(), l.tab().open(), lines(l), text(c.consumption()),
-                l.discount().isPresent() ? text(c.discount()) : null, text(c.couvert()), service(l), text(c.total()));
+                l.discount().isPresent() ? text(c.discount()) : null, text(c.couvert()), couvertState(l), service(l),
+                text(c.total()));
     }
 
     private static List<Line> lines(Loaded l) {

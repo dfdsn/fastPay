@@ -52,6 +52,24 @@ final class Responses {
                     "Este desconto está dentro do limite de quem concedeu: não precisa de revisão.");
             case SERVICO_DESABILITADO -> error(HttpStatus.CONFLICT, refusal.name(),
                     "Esta comanda não tem taxa de serviço.");
+            case SEM_COUVERT -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda não tem couvert cobrado. Atualize a conta.");
+            case COUVERT_NAO_MANUAL -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda foi aberta sem couvert lançado pela equipe: não há couvert para incluir.");
+            case COUVERT_DESABILITADO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "O couvert está desligado na configuração da unidade agora.");
+            case COUVERT_JA_INCLUIDO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda já tem couvert. Atualize a conta.");
+            case COUVERT_JA_COBRADO_NA_VISITA -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "O couvert desta visita já está em outra comanda do cliente: ele não se repete.");
+            case COUVERT_DISPENSADO_NA_VISITA -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "O couvert foi dispensado nesta visita (indevido ou isenção): não volta a ser cobrado.");
+            case COUVERT_AGUARDA_CORRECAO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "O couvert desta visita saiu por correção: use Incluir correção com o valor correto.");
+            case COUVERT_SEM_DUPLICIDADE -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Não há outro couvert cobrado nesta visita: não é duplicidade. Escolha outro motivo.");
+            case COUVERT_SEM_CORRECAO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Não há couvert cancelado por correção nesta visita.");
         };
     }
 

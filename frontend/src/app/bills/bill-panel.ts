@@ -9,13 +9,25 @@ import { Observable } from 'rxjs';
 
 import { reais } from '../orders/order-draft';
 import { failureMessage } from '../session/unit-context.service';
-import { Bill, BillsService, DiscountKind, percentText, serviceLabel } from './bills.service';
+import {
+  Bill,
+  BillsService,
+  COUVERT_REASONS,
+  CouvertReason,
+  DiscountKind,
+  couvertNote,
+  percentText,
+  serviceLabel,
+} from './bills.service';
 
 /**
  * Conta da comanda para a equipe (H22, PRD §10, FR-28–FR-30, FR-68): consumo, desconto, couvert, serviço e total
  * separados, como o servidor calculou. Quem tem "Conceder desconto" concede em reais ou percentual, com motivo, dentro do
  * próprio limite; conceder de novo substitui. Desconto em revisão (o consumo caiu depois da concessão) bloqueia a
  * cobrança até alguém com limite revisar, trocar ou retirar. O serviço sai ou volta a pedido do cliente.
+ *
+ * Couvert (H26, FR-12, FR-29): um por visita. A tela mostra onde ele está cobrado, a dispensa ou a correção pendente;
+ * inclui o manual com o valor vigente; quem pode cancela com motivo e, depois de uma correção, inclui o valor correto.
  */
 @Component({
   selector: 'fp-bill-panel',
@@ -89,6 +101,65 @@ import { Bill, BillsService, DiscountKind, percentText, serviceLabel } from './b
           </div>
         }
 
+        @if (showCouvert(b)) {
+        <div class="couvert" aria-labelledby="couvert-titulo">
+          <h3 id="couvert-titulo">Couvert</h3>
+          @if (note(b); as text) {
+            <p>{{ text }}</p>
+          }
+          @if (b.couvertDetail.state === 'COBRADO') {
+            <p>{{ money(b.couvertDetail.amount) }} {{ originText(b) }}.</p>
+          } @else if (b.couvertDetail.state === 'SEM_COUVERT') {
+            <p class="muted">
+              {{ b.couvertDetail.mode === 'MANUAL' ? 'Couvert lançado pela equipe: ainda não incluído.' : 'Sem couvert.' }}
+            </p>
+          }
+          @for (h of b.couvertDetail.history; track h.id) {
+            <p class="muted">{{ historyText(h) }}</p>
+          }
+          @if (b.couvertDetail.canInclude) {
+            <button mat-stroked-button type="button" [disabled]="busy()" (click)="includeCouvert()">
+              Incluir couvert ({{ money(b.couvertDetail.includeAmount ?? '0.00') }})
+            </button>
+          }
+          @if (b.couvertDetail.canCancel) {
+            <form [formGroup]="cancelForm" (ngSubmit)="cancelCouvert()" aria-label="Cancelar couvert">
+              <div class="row">
+                <mat-form-field appearance="outline">
+                  <mat-label>Motivo do cancelamento</mat-label>
+                  <select matNativeControl formControlName="reasonKind">
+                    @for (r of reasons; track r.value) {
+                      <option [value]="r.value">{{ r.label }}</option>
+                    }
+                  </select>
+                  <mat-hint>{{ reasonHint() }}</mat-hint>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="grow">
+                  <mat-label>Explique</mat-label>
+                  <input matInput formControlName="reason" maxlength="300" />
+                </mat-form-field>
+                <button mat-stroked-button type="submit" [disabled]="busy()">Cancelar couvert</button>
+              </div>
+            </form>
+          }
+          @if (b.couvertDetail.canCorrect) {
+            <form [formGroup]="correctionForm" (ngSubmit)="correctCouvert()" aria-label="Incluir correção do couvert">
+              <div class="row">
+                <mat-form-field appearance="outline">
+                  <mat-label>Valor correto (R$)</mat-label>
+                  <input matInput formControlName="amount" inputmode="decimal" />
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="grow">
+                  <mat-label>Motivo da correção</mat-label>
+                  <input matInput formControlName="reason" maxlength="300" />
+                </mat-form-field>
+                <button mat-flat-button type="submit" [disabled]="busy()">Incluir correção</button>
+              </div>
+            </form>
+          }
+        </div>
+        }
+
         @if (b.open && b.service.enabled) {
           <button mat-stroked-button type="button" [disabled]="busy()" (click)="toggleService(b)">
             {{ b.service.waived ? 'Devolver o serviço à conta' : 'Retirar o serviço a pedido do cliente' }}
@@ -159,6 +230,7 @@ import { Bill, BillsService, DiscountKind, percentText, serviceLabel } from './b
     .wide {
       width: 100%;
     }
+    .couvert,
     .discount {
       padding: 8px;
       border: 1px solid rgba(0, 0, 0, 0.12);
@@ -195,6 +267,15 @@ export class BillPanel {
     reason: this.forms.control('', [Validators.required, Validators.minLength(5), Validators.maxLength(300)]),
   });
   protected readonly removeReason = this.forms.control('');
+  protected readonly reasons = COUVERT_REASONS;
+  protected readonly cancelForm = this.forms.group({
+    reasonKind: this.forms.control<CouvertReason>('INDEVIDO'),
+    reason: this.forms.control(''),
+  });
+  protected readonly correctionForm = this.forms.group({
+    amount: this.forms.control(''),
+    reason: this.forms.control(''),
+  });
 
   constructor() {
     effect(() => {
@@ -214,6 +295,78 @@ export class BillPanel {
 
   protected serviceText(bill: Bill): string {
     return serviceLabel(bill.service);
+  }
+
+  /** Comanda aberta sem couvert e sem nada na visita: a seção não aparece. */
+  protected showCouvert(bill: Bill): boolean {
+    const c = bill.couvertDetail;
+    return c.mode !== null || c.state !== 'SEM_COUVERT' || c.history.length > 0;
+  }
+
+  protected note(bill: Bill): string | null {
+    return couvertNote(bill.couvertDetail.state, bill.couvertDetail.chargedOnTab);
+  }
+
+  protected originText(bill: Bill): string {
+    switch (bill.couvertDetail.origin) {
+      case 'MANUAL':
+        return 'incluído pela equipe';
+      case 'CORRECAO':
+        return 'incluído como correção';
+      default:
+        return 'automático, da configuração na abertura';
+    }
+  }
+
+  protected historyText(h: Bill['couvertDetail']['history'][number]): string {
+    const who = h.endedBy.name ?? 'alguém da equipe';
+    if (h.endKind === 'NAO_REPETIDO') {
+      return `Couvert de ${reais(h.amount)} não repetido: a comanda continua uma visita (${who}).`;
+    }
+    const reason = COUVERT_REASONS.find((r) => r.value === h.reasonKind)?.label ?? '';
+    const verb = h.endKind === 'DEVOLVIDO' ? 'devolvido' : 'cancelado';
+    return `Couvert de ${reais(h.amount)} ${verb} por ${who}: ${reason}${h.reason ? ` ("${h.reason}")` : ''}.`;
+  }
+
+  protected reasonHint(): string {
+    return COUVERT_REASONS.find((r) => r.value === this.cancelForm.controls.reasonKind.value)?.hint ?? '';
+  }
+
+  includeCouvert(): void {
+    this.run(this.service.includeCouvert(this.tabId()), 'Couvert incluído.');
+  }
+
+  cancelCouvert(): void {
+    const chargeId = this.bill()?.couvertDetail.chargeId;
+    const value = this.cancelForm.getRawValue();
+    const reason = value.reason.trim();
+    if (!chargeId) {
+      return;
+    }
+    if (reason.length < 5) {
+      this.failure.set('Explique por que o couvert sai, em 5 a 300 caracteres.');
+      return;
+    }
+    this.run(this.service.cancelCouvert(this.tabId(), chargeId, value.reasonKind, reason), 'Couvert cancelado.', () =>
+      this.cancelForm.reset(),
+    );
+  }
+
+  correctCouvert(): void {
+    const value = this.correctionForm.getRawValue();
+    const amount = value.amount.trim().replace(',', '.');
+    const reason = value.reason.trim();
+    if (amount === '') {
+      this.failure.set('Informe o valor correto do couvert, de R$ 0,01 a R$ 200,00.');
+      return;
+    }
+    if (reason.length < 5) {
+      this.failure.set('Explique a correção em 5 a 300 caracteres.');
+      return;
+    }
+    this.run(this.service.correctCouvert(this.tabId(), amount, reason), 'Couvert corrigido.', () =>
+      this.correctionForm.reset(),
+    );
   }
 
   grant(): void {

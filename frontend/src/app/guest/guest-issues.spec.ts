@@ -16,6 +16,7 @@ const DADOS: GuestIssues = {
       item: null,
       description: 'Cobraram couvert',
       status: 'TRATADO',
+      aboutCouvert: false,
       afterClosure: false,
       createdAt: '2026-11-04T19:30:00Z',
       attendedAt: '2026-11-04T19:31:00Z',
@@ -48,7 +49,7 @@ describe('Problemas do cliente', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     const opcoes = Array.from(el.querySelectorAll('option')).map((o) => o.textContent?.trim());
-    expect(opcoes).toEqual(['A conta', '2 × Batata frita']);
+    expect(opcoes).toEqual(['A conta', 'O couvert', '2 × Batata frita']);
     expect(el.textContent).toContain('Tratado');
     expect(el.textContent).toContain('Resolução: Couvert retirado');
   });
@@ -66,7 +67,7 @@ describe('Problemas do cliente', () => {
     texto.dispatchEvent(new Event('input'));
     (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
     const envio = http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/guest/tabs/t-1/issues');
-    expect(envio.request.body).toEqual({ orderLineId: 'l-1', description: 'Veio fria' });
+    expect(envio.request.body).toEqual({ orderLineId: 'l-1', aboutCouvert: false, description: 'Veio fria' });
     envio.flush({ ...DADOS.issues[0], id: 'p-2', status: 'ABERTO' });
     http.expectOne('/api/v1/guest/tabs/t-1/issues').flush(DADOS);
     fixture.detectChanges();
@@ -85,6 +86,32 @@ describe('Problemas do cliente', () => {
       );
     fixture.detectChanges();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain('Você já informou um problema');
+  });
+
+  it('contesta o couvert como problema da conta marcado (H26)', () => {
+    const fixture = montar();
+    http.expectOne('/api/v1/guest/tabs/t-1/issues').flush(DADOS);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const select = el.querySelector('select') as HTMLSelectElement;
+    select.value = 'couvert';
+    select.dispatchEvent(new Event('change'));
+    const texto = el.querySelector('textarea') as HTMLTextAreaElement;
+    texto.value = 'Não teve música ao vivo';
+    texto.dispatchEvent(new Event('input'));
+    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    const envio = http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/guest/tabs/t-1/issues');
+    expect(envio.request.body).toEqual({
+      orderLineId: null,
+      aboutCouvert: true,
+      description: 'Não teve música ao vivo',
+    });
+    envio.flush({ ...DADOS.issues[0], id: 'p-3', item: null, aboutCouvert: true });
+    http
+      .expectOne('/api/v1/guest/tabs/t-1/issues')
+      .flush({ ...DADOS, issues: [{ ...DADOS.issues[0], id: 'p-3', item: null, aboutCouvert: true }] });
+    fixture.detectChanges();
+    expect(el.querySelector('.issues')?.textContent).toContain('O couvert');
   });
 
   it('texto curto não vai ao servidor; conta encerrada avisa que o pagamento continua válido', () => {

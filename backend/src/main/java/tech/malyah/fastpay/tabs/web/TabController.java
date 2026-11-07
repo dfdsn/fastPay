@@ -27,7 +27,8 @@ import tech.malyah.fastpay.tabs.Tabs.Refused;
 /**
  * Comandas da unidade escolhida na sessão (H15). Abrir, listar, trocar mesa e mostrar o QR: {@code OPERAR_COMANDA}.
  * Recuperar o acesso do consumidor: {@code RECUPERAR_ACESSO_CONSUMIDOR}, com a conferência presencial de P-07.
- * Reatribuir o garçom responsável (H20): {@code REATRIBUIR_ATENDIMENTO}.
+ * Reatribuir o garçom responsável (H20): {@code REATRIBUIR_ATENDIMENTO}. Continuação de visita (H26):
+ * {@code VINCULAR_CONTINUACAO_VISITA}.
  * A permissão é conferida no servidor a cada chamada (403 {@code PERMISSAO_NEGADA}).
  */
 @RestController
@@ -90,6 +91,21 @@ class TabController {
                 body.responsibleId(), correlationId()));
     }
 
+    /** Comandas que podem ser a anterior da continuação de visita (H26), por hora de abertura. */
+    @GetMapping("/{id}/visit-continuation/candidates")
+    List<Tabs.ContinuationCandidate> continuationCandidates(@PathVariable UUID id, HttpServletRequest request) {
+        return respond(tabs.continuationCandidates(session.requireIdentity(request),
+                session.requireSelectedUnit(request), id));
+    }
+
+    /** Vincula a comanda à visita da anterior (H26), com a permanência confirmada presencialmente. */
+    @PostMapping("/{id}/visit-continuation")
+    Tabs.Tab linkVisit(@PathVariable UUID id, @RequestBody ContinuationRequest body, HttpServletRequest request) {
+        UUID actor = session.requireIdentity(request);
+        return respond(tabs.linkVisit(actor, session.requireSelectedUnit(request), id, body.previousTabId(),
+                body.stayConfirmed(), body.version(), correlationId()));
+    }
+
     private static <T> T respond(Outcome<T> outcome) {
         return switch (outcome) {
             case Done<T> done -> done.value();
@@ -119,6 +135,12 @@ class TabController {
             case ATENDIMENTO_CENTRAL -> error(HttpStatus.CONFLICT, refusal.name(),
                     "Esta comanda é atendida pela central e não tem responsável. Reatribua cada chamado na tela de "
                             + "atendimento.");
+            case COMANDA_JA_VINCULADA -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda já faz parte de uma visita com outra comanda. O vínculo é feito uma vez só.");
+            case COMANDA_ANTERIOR_INVALIDA -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Escolha uma comanda desta unidade aberta antes desta, nas últimas 24 horas. Atualize a lista.");
+            case VISITA_ENCERRADA_NA_SAIDA -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "O cliente já teve a saída validada nessa comanda: esta entrada é uma visita nova.");
         };
     }
 
@@ -140,6 +162,9 @@ class TabController {
     }
 
     record ResponsibleRequest(UUID responsibleId, Long version) {
+    }
+
+    record ContinuationRequest(UUID previousTabId, Boolean stayConfirmed, Long version) {
     }
 
     record RecoveryRequest(Boolean nameChecked, String accountCheck, String reason) {

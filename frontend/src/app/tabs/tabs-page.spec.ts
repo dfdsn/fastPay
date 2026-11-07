@@ -22,6 +22,7 @@ const ANA: Tab = {
   responsibleId: 'u-gabi',
   responsibleName: 'Gabi',
   version: 0,
+  continuesTab: null,
 };
 
 function qr(recovery = false): BindingQr {
@@ -202,6 +203,48 @@ describe('TabsPage', () => {
     http.expectOne('/api/v1/tabs').flush([{ ...ANA, version: 1 }]);
     fixture.detectChanges();
     expect(element().querySelector('[role="alert"]')?.textContent).toContain('Outra pessoa alterou');
+  });
+
+  it('continuação de visita: lista por abertura, exige escolha e confirmação, e mostra o vínculo (H26)', () => {
+    const nova: Tab = { ...ANA, id: 't-2', number: 2, version: 3, openedAt: '2026-11-03T22:00:00Z' };
+    abrir(['OPERAR_COMANDA', 'VINCULAR_CONTINUACAO_VISITA'], [ANA, nova]);
+    const botoes = Array.from(element().querySelectorAll('button')).filter((b) =>
+      b.textContent?.includes('Continuação de visita'),
+    );
+    expect(botoes.length).toBe(2);
+    botoes[1].click();
+    http.expectOne('/api/v1/tabs/t-2/visit-continuation/candidates').flush([
+      { id: 't-1', number: 1, name: 'Ana', table: '4', openedAt: '2026-11-03T20:00:00Z', closed: false },
+    ]);
+    fixture.detectChanges();
+    expect(texto()).toContain('Continuação de visita · comanda 2');
+    expect(texto()).toContain('a lista não sugere pelo nome');
+
+    botao('Vincular à visita').click();
+    fixture.detectChanges();
+    expect(element().querySelector('[role="alert"]')?.textContent).toContain('confirme com o cliente');
+
+    (element().querySelector('mat-radio-button input') as HTMLInputElement).click();
+    (element().querySelector('mat-checkbox input') as HTMLInputElement).click();
+    fixture.detectChanges();
+    botao('Vincular à visita').click();
+    const pedido = http.expectOne('/api/v1/tabs/t-2/visit-continuation');
+    expect(pedido.request.body).toEqual({ previousTabId: 't-1', stayConfirmed: true, version: 3 });
+    const vinculada = { ...nova, version: 4, continuesTab: { id: 't-1', number: 1, name: 'Ana' } };
+    pedido.flush(vinculada);
+    http.expectOne('/api/v1/tabs').flush([ANA, vinculada]);
+    fixture.detectChanges();
+    expect(texto()).toContain('Comanda 2 continua a visita da comanda 1.');
+    expect(texto()).toContain('continua a visita da comanda 1');
+    expect(
+      Array.from(element().querySelectorAll('button')).filter((b) => b.textContent?.includes('Continuação de visita'))
+        .length,
+    ).toBe(1);
+  });
+
+  it('sem a permissão não há continuação de visita', () => {
+    abrir(['OPERAR_COMANDA'], [ANA]);
+    expect(texto()).not.toContain('Continuação de visita');
   });
 
   it('produção não opera comandas', () => {

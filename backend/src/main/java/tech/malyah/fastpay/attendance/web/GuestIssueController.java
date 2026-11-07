@@ -41,7 +41,8 @@ class GuestIssueController {
     @PostMapping
     ConsumerIssues.GuestIssue report(@PathVariable UUID tabId, @RequestBody ReportRequest body,
             HttpServletRequest request) {
-        return Responses.respond(issues.report(cookie.tokens(request), tabId, body.orderLineId(), body.description(),
+        return Responses.respond(issues.report(cookie.tokens(request), tabId, body.orderLineId(),
+                Boolean.TRUE.equals(body.aboutCouvert()), body.description(),
                 UUID.randomUUID().toString()).orElseThrow(GuestIssueController::tabNotFound));
     }
 
@@ -50,6 +51,6 @@ class GuestIssueController {
                 "Não encontramos esta comanda neste aparelho. Peça ao atendente para mostrar o QR da sua comanda.");
     }
 
-    record ReportRequest(UUID orderLineId, String description) {
+    record ReportRequest(UUID orderLineId, Boolean aboutCouvert, String description) {
     }
 }

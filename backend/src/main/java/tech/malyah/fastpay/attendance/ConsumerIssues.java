@@ -60,13 +60,14 @@ public class ConsumerIssues {
      * Problema como a equipe o vê. {@code owner}: o garçom responsável da comanda ou, na central, quem atende; nulo na
      * central sem ninguém. {@code attendedBy}: quem começou o atendimento. {@code forwarded}: encaminhado ao gerente.
      */
-    public record Issue(UUID id, Status status, AttendanceMode mode, TabRef tab, Item item, String description,
+    public record Issue(UUID id, Status status, AttendanceMode mode, TabRef tab, Item item, boolean aboutCouvert,
+            String description,
             boolean afterClosure, Owner owner, boolean mine, Owner attendedBy, boolean forwarded, Instant createdAt,
             Instant attendedAt, Instant forwardedAt, long version) {
     }
 
-    /** Problema como o cliente o vê: sem nomes da equipe. */
-    public record GuestIssue(UUID id, Item item, String description, Status status, boolean afterClosure,
+    /** Problema como o cliente o vê: sem nomes da equipe. {@code aboutCouvert}: contestação do couvert (H26). */
+    public record GuestIssue(UUID id, Item item, boolean aboutCouvert, String description, Status status, boolean afterClosure,
             Instant createdAt, Instant attendedAt, Instant concludedAt, String resolution) {
     }
 
@@ -107,10 +108,15 @@ public class ConsumerIssues {
     /**
      * O cliente informa um problema do item (da própria comanda) ou da conta ({@code orderLineId} nulo). Um em aberto
      * por item e um da conta: repetir recebe {@link Refusal#PROBLEMA_JA_ABERTO}. Vazio sem acesso válido.
+     * {@code aboutCouvert}: a contestação do couvert (H26, FR-29) é um problema da conta marcado; quem tem
+     * {@code CANCELAR_ITEM} cancela o couvert com motivo, e cancelar não conclui o problema.
      */
     public Optional<Outcome<GuestIssue>> report(List<String> grantTokens, UUID tabId, UUID orderLineId,
-            String description, String correlationId) {
+            boolean aboutCouvert, String description, String correlationId) {
         return guests.inTab(grantTokens, tabId, context -> {
+            if (aboutCouvert && orderLineId != null) {
+                return new Invalid<>("orderLineId", "A contestação do couvert não aponta um item.");
+            }
             Optional<String> text = IssueRules.text(description);
             if (text.isEmpty()) {
                 return new Invalid<>("description", "Conte o que aconteceu em 5 a 300 caracteres.");
@@ -122,11 +128,12 @@ public class ConsumerIssues {
             Tabs.Label label = tabs.labelsInCurrentUnit(List.of(tabId)).get(tabId);
             UUID id = UUID.randomUUID();
             Instant now = clock.instant();
-            if (!store.insert(id, tabId, orderLineId, text.get(), label.attendanceMode(), context.closed(),
+            if (!store.insert(id, tabId, orderLineId, aboutCouvert, text.get(), label.attendanceMode(), context.closed(),
                     context.grantId(), now)) {
                 return new Refused<>(Refusal.PROBLEMA_JA_ABERTO, null);
             }
-            store.audit("problema.informado", id, null, orderLineId == null ? "conta" : "item " + orderLineId,
+            store.audit("problema.informado", id, null,
+                    aboutCouvert ? "couvert" : orderLineId == null ? "conta" : "item " + orderLineId,
                     correlationId);
             changes.publishInCurrentTransaction(Topic.PROBLEMA, tabId);
             log.info("Problema {} informado na comanda {} ({})", id, tabId,
@@ -319,7 +326,7 @@ public class ConsumerIssues {
                     new TabRef(label.id(), label.number(), label.name(), label.table()),
                     row.orderLineId() == null ? null
                             : new Item(row.orderLineId(), line == null ? null : line.productName()),
-                    row.description(), row.afterClosure(),
+                    row.aboutCouvert(), row.description(), row.afterClosure(),
                     ownerId == null ? null : new Owner(ownerId, names.get(ownerId)), Objects.equals(ownerId, actorId),
                     row.attendedBy() == null ? null : new Owner(row.attendedBy(), names.get(row.attendedBy())),
                     row.forwardedAt() != null, row.createdAt(), row.attendedAt(), row.forwardedAt(), row.version()));
@@ -339,7 +346,7 @@ public class ConsumerIssues {
         Item item = row.orderLineId() == null ? null : new Item(row.orderLineId(), items.stream()
                 .filter(i -> i.orderLineId().equals(row.orderLineId())).map(Orders.TabItem::productName)
                 .findFirst().orElse(null));
-        return new GuestIssue(row.id(), item, row.description(), row.status(), row.afterClosure(), row.createdAt(),
+        return new GuestIssue(row.id(), item, row.aboutCouvert(), row.description(), row.status(), row.afterClosure(), row.createdAt(),
                 row.attendedAt(), row.concludedAt(), row.resolution());
     }
 }

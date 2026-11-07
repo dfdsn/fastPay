@@ -5,6 +5,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,8 +13,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import tech.malyah.fastpay.bills.domain.BillRules.Kind;
+import tech.malyah.fastpay.bills.domain.CouvertRules;
+import tech.malyah.fastpay.bills.domain.CouvertRules.EndKind;
+import tech.malyah.fastpay.bills.domain.CouvertRules.Origin;
+import tech.malyah.fastpay.bills.domain.CouvertRules.Reason;
 
-/** Desconto e escolha do serviço da comanda (H22, V18), sempre na transação de unidade de quem chama (RLS). */
+/**
+ * Desconto e escolha do serviço (H22, V18) e couvert (H26, V22) da comanda, sempre na transação de unidade de quem
+ * chama (RLS).
+ */
 @Repository
 public class JdbcBillStore {
 
@@ -84,11 +92,66 @@ public class JdbcBillStore {
                 """, UUID.randomUUID(), tabId, waived, chosenBy, guestGrantId, Timestamp.from(now));
     }
 
+    // Couvert (H26, V22)
+
+    /** Couvert lançado; {@code endKind} nulo = válido. */
+    public record CouvertRow(UUID id, UUID tabId, Origin origin, BigDecimal amount, String reason, UUID createdBy,
+            Instant createdAt, Instant endedAt, UUID endedBy, EndKind endKind, Reason endReasonKind,
+            String endReason) {
+
+        public CouvertRules.Charge charge() {
+            return new CouvertRules.Charge(id, tabId, amount, endKind, endReasonKind);
+        }
+    }
+
+    /** Couverts das comandas, válidos e encerrados, do mais antigo ao mais novo. */
+    public List<CouvertRow> couverts(List<UUID> tabIds) {
+        if (tabIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("""
+                SELECT id, tab_id, origin, amount, reason, created_by, created_at, ended_at, ended_by, end_kind,
+                       end_reason_kind, end_reason
+                  FROM couvert_charge WHERE tab_id = ANY (?) ORDER BY created_at, id
+                """, ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", tabIds.toArray())),
+                JdbcBillStore::couvert);
+    }
+
+    public void insertCouvert(UUID id, UUID tabId, Origin origin, BigDecimal amount, UUID settingsVersionId,
+            String reason, UUID actorId, Instant now) {
+        jdbc.update("""
+                INSERT INTO couvert_charge (id, establishment_id, tab_id, origin, amount, settings_version_id, reason,
+                                            created_by, created_at)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?)
+                """, id, tabId, origin.name(), amount, settingsVersionId, reason, actorId, Timestamp.from(now));
+    }
+
+    /** Encerra o couvert válido; {@code false} se já não estava válido. */
+    public boolean endCouvert(UUID id, EndKind kind, Reason reasonKind, String reason, UUID actorId, Instant now) {
+        return jdbc.update("""
+                UPDATE couvert_charge SET ended_at = ?, ended_by = ?, end_kind = ?, end_reason_kind = ?, end_reason = ?
+                 WHERE id = ? AND ended_at IS NULL
+                """, Timestamp.from(now), actorId, kind.name(), reasonKind == null ? null : reasonKind.name(), reason,
+                id) == 1;
+    }
+
     public void audit(String action, UUID subjectId, UUID actorId, String detail, String correlationId) {
         jdbc.update("""
                 INSERT INTO audit_event (id, establishment_id, action, subject_id, actor_id, detail, correlation_id)
                 VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?)
                 """, UUID.randomUUID(), action, subjectId, actorId, detail, correlationId);
+    }
+
+    private static CouvertRow couvert(ResultSet rs, int n) throws SQLException {
+        Timestamp endedAt = rs.getTimestamp("ended_at");
+        String endKind = rs.getString("end_kind");
+        String endReasonKind = rs.getString("end_reason_kind");
+        return new CouvertRow(rs.getObject("id", UUID.class), rs.getObject("tab_id", UUID.class),
+                Origin.valueOf(rs.getString("origin")), rs.getBigDecimal("amount"), rs.getString("reason"),
+                rs.getObject("created_by", UUID.class), rs.getTimestamp("created_at").toInstant(),
+                endedAt == null ? null : endedAt.toInstant(), rs.getObject("ended_by", UUID.class),
+                endKind == null ? null : EndKind.valueOf(endKind),
+                endReasonKind == null ? null : Reason.valueOf(endReasonKind), rs.getString("end_reason"));
     }
 
     private static DiscountRow discount(ResultSet rs, int n) throws SQLException {

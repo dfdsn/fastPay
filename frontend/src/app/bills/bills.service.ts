@@ -56,6 +56,40 @@ export interface DiscountPolicy {
   myLimitPercent: string;
 }
 
+/**
+ * Couvert na visita (H26): cobrado nesta comanda, em outra comanda da mesma visita (não se repete), dispensado na visita
+ * (indevido ou isenção), aguardando a inclusão do valor correto (correção) ou sem couvert.
+ */
+export type CouvertState = 'COBRADO' | 'COBRADO_EM_OUTRA' | 'DISPENSADO' | 'AGUARDANDO_CORRECAO' | 'SEM_COUVERT';
+export type CouvertOrigin = 'AUTOMATICO' | 'MANUAL' | 'CORRECAO';
+export type CouvertReason = 'INDEVIDO' | 'ISENCAO' | 'DUPLICIDADE' | 'CORRECAO';
+
+export interface EndedCouvert {
+  id: string;
+  origin: CouvertOrigin;
+  amount: string;
+  endKind: 'CANCELADO' | 'DEVOLVIDO' | 'NAO_REPETIDO';
+  reasonKind: CouvertReason | null;
+  reason: string | null;
+  endedBy: BillPerson;
+  endedAt: string;
+}
+
+/** Couvert da comanda como a equipe vê (H26); o servidor diz o que cada pessoa pode fazer. */
+export interface CouvertDetail {
+  mode: 'AUTOMATICO' | 'MANUAL' | null;
+  state: CouvertState;
+  chargeId: string | null;
+  origin: CouvertOrigin | null;
+  amount: string;
+  chargedOnTab: { id: string; number: number; name: string } | null;
+  canInclude: boolean;
+  includeAmount: string | null;
+  canCancel: boolean;
+  canCorrect: boolean;
+  history: EndedCouvert[];
+}
+
 /** Conta como a equipe vê (H22). {@code reviewPending}: desconto acima da autoridade, cobrança bloqueada. */
 export interface Bill {
   tabId: string;
@@ -64,6 +98,7 @@ export interface Bill {
   consumption: string;
   discount: BillDiscount | null;
   couvert: string;
+  couvertDetail: CouvertDetail;
   service: BillService;
   total: string;
   reviewPending: boolean;
@@ -78,6 +113,7 @@ export interface GuestBill {
   consumption: string;
   discount: string | null;
   couvert: string;
+  couvertState: CouvertState;
   service: BillService;
   total: string;
 }
@@ -121,6 +157,24 @@ export class BillsService {
     return this.auth.withCsrf(() => this.http.put<Bill>(`/api/v1/tabs/${tabId}/bill/service`, { waived }));
   }
 
+  /** Inclui o couvert manual (H26), com o valor da configuração vigente. */
+  includeCouvert(tabId: string): Observable<Bill> {
+    return this.auth.withCsrf(() => this.http.post<Bill>(`/api/v1/tabs/${tabId}/bill/couvert`, {}));
+  }
+
+  cancelCouvert(tabId: string, chargeId: string, reasonKind: CouvertReason, reason: string): Observable<Bill> {
+    return this.auth.withCsrf(() =>
+      this.http.post<Bill>(`/api/v1/tabs/${tabId}/bill/couvert/cancel`, { chargeId, reasonKind, reason }),
+    );
+  }
+
+  /** Inclusão de correção: o valor correto, depois de cancelar ou devolver por correção. */
+  correctCouvert(tabId: string, amount: string, reason: string): Observable<Bill> {
+    return this.auth.withCsrf(() =>
+      this.http.post<Bill>(`/api/v1/tabs/${tabId}/bill/couvert/correction`, { amount, reason }),
+    );
+  }
+
   guestBill(tabId: string): Observable<GuestBill> {
     return this.http.get<GuestBill>(`/api/v1/guest/tabs/${tabId}/bill`);
   }
@@ -142,4 +196,28 @@ export function serviceLabel(service: BillService): string {
 /** Percentual com vírgula, sem zeros à direita: "12,5%". */
 export function percentText(value: string): string {
   return `${Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}%`;
+}
+
+/** Motivos de cancelar o couvert (H26), na ordem do seletor. */
+export const COUVERT_REASONS: { value: CouvertReason; label: string; hint: string }[] = [
+  { value: 'INDEVIDO', label: 'Cobrança indevida', hint: 'Dispensa o couvert na visita inteira.' },
+  { value: 'ISENCAO', label: 'Isenção', hint: 'Dispensa o couvert na visita inteira.' },
+  { value: 'DUPLICIDADE', label: 'Duplicidade', hint: 'Só quando outro couvert da visita continua cobrado.' },
+  { value: 'CORRECAO', label: 'Correção de valor', hint: 'Depois, inclua o valor correto.' },
+];
+
+/** Frase sobre o couvert da visita, para a equipe e para o cliente; nula quando não há o que explicar. */
+export function couvertNote(state: CouvertState, otherTab?: { number: number } | null): string | null {
+  switch (state) {
+    case 'COBRADO_EM_OUTRA':
+      return otherTab
+        ? `Couvert já cobrado na comanda ${otherTab.number}, da mesma visita: não se repete.`
+        : 'Couvert já cobrado em outra comanda desta visita: não se repete.';
+    case 'DISPENSADO':
+      return 'Couvert dispensado nesta visita.';
+    case 'AGUARDANDO_CORRECAO':
+      return 'O couvert saiu por correção e aguarda a inclusão do valor correto.';
+    default:
+      return null;
+  }
 }

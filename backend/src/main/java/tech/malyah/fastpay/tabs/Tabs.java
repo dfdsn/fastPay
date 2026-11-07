@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import tech.malyah.fastpay.establishments.AttendanceMode;
@@ -48,11 +49,27 @@ public class Tabs {
     /**
      * {@code guestLinked}: o consumidor já confirmou o vínculo e tem acesso ativo. {@code attendanceMode}: modalidade de
      * atendimento capturada na abertura (H20); {@code responsibleId}/{@code responsibleName}: o garçom responsável,
-     * nulos na central.
+     * nulos na central. {@code continuesTab}: a comanda anterior cuja visita esta continua (H26), nula sem vínculo.
      */
     public record Tab(UUID id, UUID visitId, int number, String name, String table, UUID settingsVersionId,
             Instant openedAt, boolean guestLinked, AttendanceMode attendanceMode, UUID responsibleId,
-            String responsibleName, long version) {
+            String responsibleName, long version, TabRef continuesTab) {
+    }
+
+    /** Comanda citada por outra (H26): número e nome/apelido, só para a equipe reconhecer. */
+    public record TabRef(UUID id, int number, String name) {
+    }
+
+    /**
+     * Comanda que pode ser a anterior de uma continuação de visita (H26): aberta antes, dentro do prazo, de outra
+     * visita e sem saída validada. A lista vem por hora de abertura, nunca por semelhança de nome (FR-12).
+     */
+    public record ContinuationCandidate(UUID id, int number, String name, String table, Instant openedAt,
+            boolean closed) {
+    }
+
+    /** Visita da comanda para o couvert (H26): as comandas dela, da abertura mais antiga à mais nova. */
+    public record VisitTabs(UUID visitId, List<UUID> tabIds) {
     }
 
     /** QR de vínculo para mostrar na tela: o link vai no QR; o token só existe aqui e no navegador do consumidor. */
@@ -71,7 +88,13 @@ public class Tabs {
         /** Recuperação pedida, mas ninguém confirmou o vínculo ainda: basta mostrar o QR. */
         SEM_ACESSO_A_RECUPERAR,
         /** Comanda aberta na modalidade central: não tem responsável; cada chamado é reatribuído (H20). */
-        ATENDIMENTO_CENTRAL
+        ATENDIMENTO_CENTRAL,
+        /** A comanda já continua uma visita, ou outra comanda já continua a visita dela (H26): o vínculo é único. */
+        COMANDA_JA_VINCULADA,
+        /** A anterior não existe na unidade, é a própria, foi aberta depois ou fora do prazo de continuação (H26). */
+        COMANDA_ANTERIOR_INVALIDA,
+        /** A visita da anterior terminou na saída validada (H32): a nova entrada é visita nova (FR-12, CA-13). */
+        VISITA_ENCERRADA_NA_SAIDA
     }
 
     public sealed interface Outcome<T> {
@@ -95,11 +118,14 @@ public class Tabs {
     private final boolean production;
     private final String publicBaseUrl;
     private final Changes changes;
+    private final ApplicationEventPublisher events;
 
     Tabs(Memberships memberships, EstablishmentSettings settings, UnitProfiles units, JdbcTabStore store,
             TabsProperties properties, Clock clock, @Value("${fastpay.environment}") String environment,
-            @Value("${fastpay.mail.public-base-url}") String publicBaseUrl, Changes changes) {
+            @Value("${fastpay.mail.public-base-url}") String publicBaseUrl, Changes changes,
+            ApplicationEventPublisher events) {
         this.memberships = memberships;
+        this.events = events;
         this.changes = changes;
         this.settings = settings;
         this.units = units;
@@ -143,6 +169,8 @@ public class Tabs {
                     version.id(), mode == AttendanceMode.GARCOM_RESPONSAVEL ? actorId : null, actorId, now);
             store.audit("comanda.aberta", tabId, actorId, "numero " + number.get() + "; configuracao v"
                     + version.number() + "; atendimento " + mode.name(), correlationId);
+            // A conta lança o couvert automático da versão capturada no mesmo commit (H26).
+            events.publishEvent(new TabOpened(tabId, version.id(), actorId, now));
             changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
             log.info("Comanda {} aberta na unidade {} por {}", tabId, establishmentId, actorId);
             return new Done<>(tab(store.tab(tabId).orElseThrow()));
@@ -289,6 +317,108 @@ public class Tabs {
     }
 
     /**
+     * Comandas que podem ser a anterior da continuação de visita de {@code tabId} (H26): abertas até a abertura dela e
+     * dentro do prazo ({@code fastpay.tabs.visit-continuation-window}), ativas ou encerradas, de outra visita e sem
+     * saída validada. Até 50, da mais recente à mais antiga.
+     */
+    public Outcome<List<ContinuationCandidate>> continuationCandidates(UUID actorId, UUID establishmentId,
+            UUID tabId) {
+        return memberships.inUnit(actorId, establishmentId, Permission.VINCULAR_CONTINUACAO_VISITA, me -> {
+            Optional<TabRow> tab = store.tab(tabId);
+            if (tab.isEmpty() || tab.get().closedAt() != null) {
+                return new Refused<>(Refusal.NAO_ENCONTRADA);
+            }
+            Instant since = clock.instant().minus(properties.visitContinuationWindow());
+            return new Done<>(store.continuationCandidates(tabId, tab.get().visitId(), tab.get().openedAt(), since, 50)
+                    .stream().map(r -> new ContinuationCandidate(r.id(), r.number(), r.displayName(), r.tableLabel(),
+                            r.openedAt(), r.closed()))
+                    .toList());
+        });
+    }
+
+    /**
+     * Vincula a comanda ativa à visita de uma comanda anterior do mesmo consumidor (H26, FR-12, CA-13), por quem tem
+     * {@link Permission#VINCULAR_CONTINUACAO_VISITA}, com a permanência confirmada presencialmente: o sistema nunca
+     * vincula nem sugere pelo nome. A anterior pode estar ativa ou encerrada; precisa ter sido aberta antes, dentro do
+     * prazo de continuação, e a visita dela não pode ter terminado na saída validada (H32). A virada do dia e a saída
+     * automática não encerram a visita. Cada comanda é vinculada uma vez, sem desfazer (T-03 da H26). No mesmo commit,
+     * a conta aplica "couvert não se repete na visita" ({@link VisitLinked}); serviço e preços continuam por comanda.
+     */
+    public Outcome<Tab> linkVisit(UUID actorId, UUID establishmentId, UUID tabId, UUID previousTabId,
+            Boolean stayConfirmed, Long version, String correlationId) {
+        return memberships.inUnit(actorId, establishmentId, Permission.VINCULAR_CONTINUACAO_VISITA, me -> {
+            if (previousTabId == null) {
+                return new Invalid<>("previousTabId", "Escolha a comanda anterior do cliente.");
+            }
+            if (!Boolean.TRUE.equals(stayConfirmed)) {
+                return new Invalid<>("stayConfirmed",
+                        "Confirme com o cliente que é a mesma pessoa e que ela não saiu do estabelecimento.");
+            }
+            if (version == null) {
+                return new Invalid<>("version", "Atualize a tela e tente de novo.");
+            }
+            Optional<TabRow> current = store.lockActiveTab(tabId);
+            if (current.isEmpty()) {
+                return new Refused<>(Refusal.NAO_ENCONTRADA);
+            }
+            TabRow tab = current.get();
+            if (tab.version() != version) {
+                return new Refused<>(Refusal.VERSAO_DESATUALIZADA);
+            }
+            Optional<TabRow> previous = previousTabId.equals(tabId) ? Optional.empty() : store.tab(previousTabId);
+            Instant now = clock.instant();
+            if (previous.isEmpty() || previous.get().openedAt().isAfter(tab.openedAt())
+                    || previous.get().openedAt().isBefore(now.minus(properties.visitContinuationWindow()))) {
+                return new Refused<>(Refusal.COMANDA_ANTERIOR_INVALIDA);
+            }
+            UUID visitId = previous.get().visitId();
+            if (tab.continuesTabId() != null || visitId.equals(tab.visitId())
+                    || store.tabsOfVisit(tab.visitId()).size() > 1) {
+                return new Refused<>(Refusal.COMANDA_JA_VINCULADA);
+            }
+            // Comanda (acima) e depois a visita de destino: a mesma ordem das mudanças de couvert (H26).
+            if (store.lockVisit(visitId).orElseThrow().exitValidatedAt() != null) {
+                return new Refused<>(Refusal.VISITA_ENCERRADA_NA_SAIDA);
+            }
+            store.moveToVisit(tabId, version, visitId, actorId, now);
+            store.insertVisitLink(UUID.randomUUID(), tabId, previousTabId, tab.visitId(), visitId, actorId, now);
+            store.audit("visita.vinculada", tabId, actorId, "comanda anterior " + previousTabId + "; visita "
+                    + tab.visitId() + " -> " + visitId + "; permanencia confirmada", correlationId);
+            events.publishEvent(new VisitLinked(tabId, previousTabId, visitId, actorId, now));
+            changes.publishInCurrentTransaction(Topic.COMANDA, tabId);
+            log.info("Comanda {} vinculada à visita {} (comanda anterior {}) por {}", tabId, visitId, previousTabId,
+                    actorId);
+            return new Done<>(tab(store.tab(tabId).orElseThrow()));
+        });
+    }
+
+    /**
+     * Visita da comanda e as comandas dela, na transação de unidade de quem chama (H26, couvert). Com {@code lock}, a
+     * visita fica travada até o fim da transação; quem chama já travou a comanda antes (mesma ordem do vínculo).
+     */
+    public Optional<VisitTabs> visitInCurrentUnit(UUID tabId, boolean lock) {
+        return store.tab(tabId).map(row -> {
+            if (lock) {
+                store.lockVisit(row.visitId());
+            }
+            return new VisitTabs(row.visitId(), store.tabsOfVisit(row.visitId()));
+        });
+    }
+
+    /**
+     * Contrato para a saída validada (H32, FR-12): encerra a visita da comanda, na transação de unidade de quem valida
+     * a saída, para que a próxima entrada seja visita nova (couvert de novo). A saída automática não chama isto.
+     * {@code false} se a comanda não existe ou a visita já estava encerrada.
+     */
+    public boolean endVisitByValidatedExitInCurrentUnit(UUID tabId) {
+        Optional<TabRow> tab = store.tab(tabId);
+        if (tab.isEmpty() || store.lockVisit(tab.get().visitId()).isEmpty()) {
+            return false;
+        }
+        return store.endVisitByExit(tab.get().visitId(), tabId, clock.instant());
+    }
+
+    /**
      * Gera o QR de vínculo da comanda ainda sem acesso de consumidor, invalidando o QR anterior que não foi usado
      * (FR-08). Com acesso ativo, a troca de aparelho é recuperação ({@link #recover}).
      */
@@ -372,6 +502,9 @@ public class Tabs {
         return rows.stream().map(row -> new Tab(row.id(), row.visitId(), row.number(), row.displayName(),
                 row.tableLabel(), row.settingsVersionId(), row.openedAt(), row.guestLinked(),
                 AttendanceMode.valueOf(row.attendanceMode()), row.responsibleId(),
-                row.responsibleId() == null ? null : names.get(row.responsibleId()), row.version())).toList();
+                row.responsibleId() == null ? null : names.get(row.responsibleId()), row.version(),
+                row.continuesTabId() == null ? null
+                        : new TabRef(row.continuesTabId(), row.continuesNumber(), row.continuesName())))
+                .toList();
     }
 }
