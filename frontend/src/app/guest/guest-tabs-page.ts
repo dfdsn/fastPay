@@ -5,18 +5,20 @@ import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RouterLink } from '@angular/router';
 
+import { GoogleResult } from '../consumer/google-result';
 import { GuestService, GuestTab } from './guest.service';
 
-/** Comandas confirmadas neste aparelho que ainda valem (H15, FR-11). Sem login. */
+/** Comandas confirmadas neste aparelho que ainda valem (H15, FR-11). Sem login; o histórico com Google é da H27. */
 @Component({
   selector: 'fp-guest-tabs-page',
-  imports: [DatePipe, MatCardModule, MatProgressSpinnerModule, RouterLink],
+  imports: [DatePipe, MatCardModule, MatProgressSpinnerModule, RouterLink, GoogleResult],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
         <mat-card-title><h1>Minhas comandas</h1></mat-card-title>
       </mat-card-header>
       <mat-card-content>
+        <fp-google-result />
         <div role="status" aria-live="polite">
           @if (loading()) {
             <mat-progress-spinner mode="indeterminate" diameter="32" aria-hidden="true" />
@@ -37,6 +39,10 @@ import { GuestService, GuestTab } from './guest.service';
             </li>
           }
         </ul>
+        <p>
+          <a routerLink="/meu-historico">Meu histórico com Google</a> (opcional: comandas que você guardou, de todas as
+          lojas)
+        </p>
       </mat-card-content>
     </mat-card>
   `,

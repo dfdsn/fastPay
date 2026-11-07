@@ -157,6 +157,29 @@ public class GuestAccess {
      * revogado ou vencido).
      */
     public <T> Optional<T> inTab(List<String> grantTokens, UUID tabId, java.util.function.Function<GuestContext, T> work) {
+        return inTab(grantTokens, tabId, tenants::inEstablishment, work);
+    }
+
+    /**
+     * Como {@link #inTab}, com a conta Google do consumidor também no contexto (H27): vincular a comanda à conta exige o
+     * acesso válido à comanda conferido na mesma transação em que o vínculo é gravado.
+     */
+    public <T> Optional<T> inTabAsConsumer(List<String> grantTokens, UUID tabId, UUID consumerAccountId,
+            java.util.function.Function<GuestContext, T> work) {
+        return inTab(grantTokens, tabId, new UnitTransaction() {
+            @Override
+            public <R> R run(UUID establishmentId, java.util.function.Supplier<R> job) {
+                return tenants.inEstablishmentAsConsumer(establishmentId, consumerAccountId, job);
+            }
+        }, work);
+    }
+
+    private interface UnitTransaction {
+        <R> R run(UUID establishmentId, java.util.function.Supplier<R> work);
+    }
+
+    private <T> Optional<T> inTab(List<String> grantTokens, UUID tabId, UnitTransaction transaction,
+            java.util.function.Function<GuestContext, T> work) {
         for (String token : grantTokens) {
             if (!AccessTokens.wellFormed(token)) {
                 continue;
@@ -167,7 +190,7 @@ public class GuestAccess {
             if (found.isEmpty()) {
                 continue;
             }
-            Optional<T> result = tenants.inEstablishment(found.get().establishmentId(), () -> {
+            Optional<T> result = transaction.run(found.get().establishmentId(), () -> {
                 Optional<GrantRow> grant = store.grant(hash).filter(g -> g.tabId().equals(tabId));
                 Optional<TabRow> tab = store.tab(tabId);
                 if (grant.isEmpty() || tab.isEmpty() || !GuestAccessRules.grantValid(grant.get().revokedAt(),

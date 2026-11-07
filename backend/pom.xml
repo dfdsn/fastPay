@@ -65,6 +65,12 @@
             <artifactId>spring-boot-starter-session-jdbc</artifactId>
         </dependency>
         <dependency>
+            <!-- H27: validação do ID token do Google (assinatura pelas chaves públicas do Google, emissor, público,
+                 validade e nonce). Módulo do Spring Security, versão pelo BOM do Boot; traz o Nimbus JOSE+JWT. -->
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+        </dependency>
+        <dependency>
             <!-- H12: SMTP (Gmail de homologação; SES por SMTP em H49). Versão pelo BOM do Boot. -->
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>

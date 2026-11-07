@@ -23,7 +23,8 @@ public class JdbcAuthAttemptStore {
         REDEFINICAO_PEDIDA,
         REDEFINICAO_FALHOU,
         MFA_FALHOU,
-        CONVITE_FALHOU
+        CONVITE_FALHOU,
+        GOOGLE_INICIADO
     }
 
     private final JdbcTemplate jdbc;

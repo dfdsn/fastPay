@@ -6,6 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
+import { TabHistoryPanel } from '../consumer/tab-history-panel';
 import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
 import { failureMessage } from '../session/unit-context.service';
@@ -29,6 +30,7 @@ import { GuestService, GuestTab } from './guest.service';
     LiveStatus,
     GuestBillPanel,
     GuestIssuesPanel,
+    TabHistoryPanel,
   ],
   template: `
     <mat-card appearance="outlined">
@@ -56,6 +58,7 @@ import { GuestService, GuestTab } from './guest.service';
           <button mat-stroked-button type="button" (click)="load()">Atualizar</button>
           <fp-guest-bill [tabId]="t.tabId" [refresh]="refreshes()" />
           <fp-guest-issues [tabId]="t.tabId" [refresh]="refreshes()" />
+          <fp-tab-history [tabId]="t.tabId" />
         }
         <p><a routerLink="/minhas-comandas">Minhas comandas</a></p>
       </mat-card-content>

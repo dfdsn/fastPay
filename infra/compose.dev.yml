@@ -45,6 +45,10 @@ services:
       # H13: imagens (fotos de produto e logo) no volume files-data; sobrevive a down/up sem -v.
       STORAGE_LOCAL_DIR: /var/lib/fastpay/arquivos
       MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?defina MFA_ENCRYPTION_KEY no .env}
+      # H27: login Google do consumidor; vazio deixa só o avulso.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
     volumes:
       - files-data:/var/lib/fastpay/arquivos
     depends_on:

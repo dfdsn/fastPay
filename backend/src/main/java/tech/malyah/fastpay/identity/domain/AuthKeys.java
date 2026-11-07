@@ -47,4 +47,14 @@ public final class AuthKeys {
         RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
+
+    /** Desafio PKCE S256 (RFC 7636) do verificador: SHA-256 em Base64 seguro para URL, sem preenchimento (H27). */
+    public static String pkceChallenge(String verifier) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 indisponível", e);
+        }
+    }
 }

@@ -6,7 +6,9 @@
  * (H08), verificação em duas etapas e comandos de operador (H09), convites e o papel de admin fastPay
  * ({@link tech.malyah.fastpay.identity.Invitations}, {@link tech.malyah.fastpay.identity.PlatformAccess},
  * H10) também ficam aqui. Desde H11, permissões por ação ({@link tech.malyah.fastpay.identity.Permission},
- * exigidas por {@code Memberships.inUnit}) e a gestão da equipe ({@link tech.malyah.fastpay.identity.Team}).
+ * exigidas por {@code Memberships.inUnit}) e a gestão da equipe ({@link tech.malyah.fastpay.identity.Team}). Desde H27,
+ * o login Google opcional do consumidor, numa conta separada da equipe
+ * ({@link tech.malyah.fastpay.identity.ConsumerSession}).
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Identidade e vínculos")
 package tech.malyah.fastpay.identity;
