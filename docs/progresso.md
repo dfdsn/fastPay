@@ -104,7 +104,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 | H24 | Desfazer entrega com histórico | Concluída | PR #37, merge `30706e9` em `develop`, CI de `develop` run 42283001366 verde ([evidência](evidencias/H24-desfazer-entrega.md)); T-03 da H24 aprovada por Diego em 06/11/2026 (cartão de decisão no thread da H24, "Aprovar como proposto") |
 | H25 | Transferir unidades sem duplicar produção | Concluída | PR #39, merge `4bb791f` em `develop`, CI de `develop` run 42311207147 verde ([evidência](evidencias/H25-transferir-unidades.md)); T-03 da H25 proposta, aguardando Diego |
 | H26 | Continuação de visita e ajustes de couvert | Concluída | PR #41, merge `9774f4f` em `develop`, CI de `develop` run 42393012742 verde ([evidência](evidencias/H26-continuacao-visita-couvert.md)); T-03 da H26 proposta, aguardando Diego |
-| H27 | Google opcional e histórico do consumidor | Aguardando revisão | Branch `feature/H27-google-historico-consumidor`, PR para `develop` ([evidência](evidencias/H27-google-historico-consumidor.md)); P-13 e T-03 da H27 aprovadas por Diego em 07/11/2026; feita em paralelo com a H28 a pedido de Diego (exceção à D-28); login com Google real aguarda o cliente OAuth de teste (Diego) |
+| H27 | Google opcional e histórico do consumidor | Aguardando validação | PR #44, merge `ff5fa3d` em `develop`, CI de `develop` run 42399872363 verde ([evidência](evidencias/H27-google-historico-consumidor.md)); P-13 e T-03 da H27 aprovadas por Diego em 07/11/2026; feita em paralelo com a H28 a pedido de Diego (exceção à D-28); login com Google real aguarda o cliente OAuth de teste (Diego) |
 | H28 | Conferência, bloqueio e reabertura | Concluída | PR #43, merge `15e90fb` em `develop`, CI de `develop` run 42397051924 verde ([evidência](evidencias/H28-conferencia-bloqueio-reabertura.md)); T-03 da H28 aprovada por Diego em 07/11/2026 |
 | H29 | Encerramento de conta zerada | Não iniciada | Sem evidência; ver dependências/gates no backlog |
 | H30 | Pagamento integrado e reconciliação de incerteza | Não iniciada | Sem evidência; ver dependências/gates no backlog |
@@ -695,7 +695,7 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
 
 ### H27 — Google opcional e histórico do consumidor
 
-- História e estado: H27, **aguardando revisão** (PR aberto para `develop`). Gate P-13 resolvido para identidade (aprovada por Diego em 07/11/2026; parte do PSP fica para a H30). T-03 da H27 aprovada por Diego em 07/11/2026. Dependência H15 concluída.
+- História e estado: H27, **aguardando validação** (merge em `develop` verificado, CI de `develop` verde; falta o login com uma conta Google real, que depende do cliente OAuth de teste). Gate P-13 resolvido para identidade (aprovada por Diego em 07/11/2026; parte do PSP fica para a H30). T-03 da H27 aprovada por Diego em 07/11/2026. Dependência H15 concluída.
 - Paralelismo (exceção à D-28): em 07/11/2026 Diego perguntou "é possível ir desenvolvendo em paralelo o H27?" com a H28 em andamento em outro thread; tratei como a autorização explícita para trabalhar as duas ao mesmo tempo, cada uma na própria branch. Combinado com o thread da H28: H28 usa a V23 e a H27 a V24; a H28 não mexe em `GuestAccess`, `GuestController`, `SessionExpiryFilter` nem na configuração de segurança. Quem for mergeado depois ajusta a contagem do `MigrationsIntegrationTest` e as linhas do progresso.
 - Data/hora e agente: 07/11/2026, Claude Code (sessão em nuvem, a partir do GitHub).
 - Objetivo e critérios atendidos:
@@ -707,14 +707,14 @@ Não iniciada → em andamento → aguardando validação ou revisão → conclu
   - Conta Google separada da equipe: mesmo e-mail não funde nem passa privilégio; uma sessão é da equipe ou do consumidor (FR-04, P-13).
   - Validação exigida: OAuth com falha/negado, conta Google diferente, login sem grant, associação repetida, privacidade e prazos de sessão.
 - Critérios faltantes / motivo: login com uma conta Google real depende do cliente OAuth de teste no Google Cloud (Diego cria; `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` só no `.env` local); até lá a troca do código é simulada no teste de API e a conferência do ID token testada com chave própria. Texto do aviso de privacidade é provisório até a validação profissional (P-03/P-08). Exclusão, exportação e retenção da conta são da H47 (P-08). A marca "cadastrado" existe na API da equipe (`GET /api/v1/tabs/{id}/consumer-account`), sem tela da equipe nesta história.
-- Branch e commit reais: `feature/H27-google-historico-consumidor` (a partir de `develop` `9774f4f`, com `develop` `85c1c3f` mesclado, que só mudou docs); commits no PR.
-- PR, checks e merge real: PR aberto para `develop` (link no thread da H27); merge e CI de `develop` a reconciliar depois do merge.
+- Branch e commit reais: `feature/H27-google-historico-consumidor` (a partir de `develop` `9774f4f`, com `develop` `85c1c3f` mesclado, que só mudou docs, e depois `develop` `15e90fb` com a H28 e `7494f00` com a reconciliação dela); último commit da história `090387a`.
+- PR, checks e merge real: [PR #44](https://github.com/dfdsn/fastPay/pull/44), checks verdes no commit `090387a` (backend, frontend, imagens e smoke Compose); merge por Diego em 07/11/2026 (`ff5fa3d`); CI de `develop` run 42399872363 verde.
 - Arquivos/migrations/contratos: `V24__conta_google_e_historico.sql`; `identity.ConsumerSession`, `identity.application.GoogleSignIn`, `identity.infrastructure.GoogleOidcClient`/`GoogleIdTokenVerifier`/`ConsumerProperties`/`JdbcConsumerAccountStore`, `identity.web.ConsumerController`/`ConsumerSessionFilter`, `SessionProfile.CONSUMIDOR`; `tenancy.TenantTransactions.forGoogleSubject`/`asConsumer`/`inEstablishmentAsConsumer`; `tabs.ConsumerHistory`, `tabs.GuestAccess.inTabAsConsumer`, `tabs.web.ConsumerHistoryController`; frontend `consumer/*`, `guest/guest-tab-page.ts`, `guest/guest-tabs-page.ts`; dependência `spring-security-oauth2-jose`; especificação §5; decisões P-13 e T-03; [evidência](evidencias/H27-google-historico-consumidor.md).
-- Testes: ver a evidência (backend 500 no contêiner Temurin 25 com PostgreSQL real; frontend 218 no contêiner Node 24.18.0).
+- Testes: ver a evidência (backend 500 no contêiner Temurin 25 com PostgreSQL real; frontend 218 no contêiner Node 24.18.0). Depois de mesclar a H28: backend 504 e frontend verde no mesmo ambiente.
 - Testes não executados e por quê: login Google real (sem cliente OAuth de teste); `compose-smoke.sh` e imagens (CI do PR); E2E Playwright (não configurado); celular real na homologação de Diego.
 - Decisões novas/alteradas: P-13 aprovada (identidade; PSP para a H30); T-03 da H27 aprovada; exceção à D-28 para H27 em paralelo com a H28.
-- Bloqueios / quem resolve: Diego cria o cliente OAuth de teste no Google Cloud para a validação real e revisa/mergeia o PR. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
-- Próximo passo concreto: revisão e merge do PR da H27 por Diego; depois, reconciliar progresso com o merge real.
+- Bloqueios / quem resolve: Diego cria o cliente OAuth de teste no Google Cloud para a validação real. H05/H06 seguem aguardando as credenciais do Mercado Pago (Diego).
+- Próximo passo concreto: Diego cria o cliente OAuth de teste no Google Cloud; com ele, validar o login Google real (aceitar, recusar, conta diferente) e então marcar a H27 como concluída. Próxima candidata elegível: H29, só quando Diego pedir.
 
 ### H28 — Conferência, bloqueio e reabertura
 
