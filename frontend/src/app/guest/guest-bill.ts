@@ -2,7 +2,14 @@ import { Component, DestroyRef, effect, inject, input, signal, untracked } from 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 
-import { BillsService, GuestBill, couvertNote, serviceLabel } from '../bills/bills.service';
+import {
+  BillsService,
+  GuestBill,
+  GuestClosing,
+  blockerTexts,
+  couvertNote,
+  serviceLabel,
+} from '../bills/bills.service';
 import { reais } from '../orders/order-draft';
 import { failureMessage } from '../session/unit-context.service';
 
@@ -11,6 +18,9 @@ import { failureMessage } from '../session/unit-context.service';
  * como o servidor calculou. O serviço aparece incluído quando a casa cobra, e o cliente pode retirar (ou devolver) sem
  * pedir autorização, enquanto a conta está aberta. Couvert (H26): um por visita; a conta diz quando ele já foi cobrado
  * em outra comanda da visita ou dispensado, e o cliente contesta pelo problema da conta.
+ *
+ * Fechamento (H28, UJ-01): quando tudo foi entregue e não há problema em aberto, o cliente fecha a conta com o total que
+ * está vendo. Depois disso a conta não muda, a não ser o serviço; para pedir mais alguma coisa, a equipe reabre.
  */
 @Component({
   selector: 'fp-guest-bill',
@@ -71,6 +81,24 @@ import { failureMessage } from '../session/unit-context.service';
             {{ b.service.waived ? 'Incluir o serviço' : 'Retirar o serviço' }}
           </button>
         }
+        @if (closing(); as c) {
+          @if (c.state === 'ABERTA') {
+            @for (text of blockers(c); track text) {
+              <p class="muted">{{ text }}</p>
+            }
+            <button mat-flat-button type="button" [disabled]="busy() || !c.canStart" (click)="close(c)">
+              Fechar a conta ({{ money(c.total) }})
+            </button>
+            @if (!c.canStart) {
+              <p class="muted">Resolvido o que aparece acima, você pode fechar a conta.</p>
+            }
+          } @else if (c.state === 'EM_FECHAMENTO') {
+            <p>
+              Conta fechada em {{ money(c.total) }}. Ela não muda mais, a não ser o serviço. Para pedir mais alguma
+              coisa, chame a equipe.
+            </p>
+          }
+        }
       }
     </section>
   `,
@@ -121,6 +149,7 @@ export class GuestBillPanel {
   readonly refresh = input(0);
 
   protected readonly bill = signal<GuestBill | null>(null);
+  protected readonly closing = signal<GuestClosing | null>(null);
   protected readonly busy = signal(false);
   protected readonly failure = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
@@ -145,6 +174,32 @@ export class GuestBillPanel {
     return serviceLabel(bill.service);
   }
 
+  protected blockers(closing: GuestClosing): string[] {
+    return blockerTexts(closing.blockers);
+  }
+
+  close(closing: GuestClosing): void {
+    this.busy.set(true);
+    this.failure.set(null);
+    this.notice.set(null);
+    this.service
+      .guestStartClosing(this.tabId(), closing.total)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (updated) => {
+          this.busy.set(false);
+          this.closing.set(updated);
+          this.notice.set('Conta fechada. Confira o total antes de pagar.');
+          this.load(this.tabId());
+        },
+        error: (error: unknown) => {
+          this.busy.set(false);
+          this.failure.set(failureMessage(error));
+          this.load(this.tabId());
+        },
+      });
+  }
+
   toggleService(bill: GuestBill): void {
     const waived = !bill.service.waived;
     this.busy.set(true);
@@ -158,6 +213,7 @@ export class GuestBillPanel {
           this.busy.set(false);
           this.bill.set(updated);
           this.notice.set(waived ? 'Serviço retirado da sua conta.' : 'Serviço incluído na sua conta.');
+          this.loadClosing(this.tabId());
         },
         error: (error: unknown) => {
           this.busy.set(false);
@@ -172,6 +228,17 @@ export class GuestBillPanel {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (bill) => this.bill.set(bill),
+        error: (error: unknown) => this.failure.set(failureMessage(error)),
+      });
+    this.loadClosing(tabId);
+  }
+
+  private loadClosing(tabId: string): void {
+    this.service
+      .guestClosing(tabId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (closing) => this.closing.set(closing),
         error: (error: unknown) => this.failure.set(failureMessage(error)),
       });
   }

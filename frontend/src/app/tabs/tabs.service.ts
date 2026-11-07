@@ -23,6 +23,8 @@ export interface Tab {
   responsibleName: string | null;
   version: number;
   continuesTab: { id: string; number: number; name: string } | null;
+  /** Início do fechamento em andamento (H28); nulo se aberta para consumo. */
+  closingSince: string | null;
 }
 
 /** Comanda que pode ser a anterior de uma continuação de visita (H26), por hora de abertura. */

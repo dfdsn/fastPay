@@ -23,6 +23,7 @@ const ANA: Tab = {
   responsibleName: 'Gabi',
   version: 0,
   continuesTab: null,
+  closingSince: null,
 };
 
 function qr(recovery = false): BindingQr {

@@ -26,6 +26,7 @@ const ANA: Tab = {
   responsibleName: 'Gabi',
   version: 0,
   continuesTab: null,
+  closingSince: null,
 };
 
 function produto(id: string, name: string, price: number, available = true): Product {
@@ -141,6 +142,7 @@ describe('TabOrdersPage', () => {
   afterEach(() => {
     // A conta (H22) tem testes próprios; aqui basta que a tela a releia junto.
     http.match('/api/v1/tabs/t-1/bill');
+    http.match('/api/v1/tabs/t-1/closing');
     http.verify();
   });
 

@@ -227,6 +227,9 @@ interface ShownQr {
                 @if (tab.continuesTab; as previous) {
                   · continua a visita da comanda {{ previous.number }}
                 }
+                @if (tab.closingSince) {
+                  · <strong>em fechamento</strong> desde {{ tab.closingSince | date: 'HH:mm' }}
+                }
               </div>
               @if (editingTable() === tab.id) {
                 <form [formGroup]="tableForm" (ngSubmit)="saveTable(tab)" class="row">
