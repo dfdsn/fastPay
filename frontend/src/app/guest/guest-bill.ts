@@ -2,14 +2,15 @@ import { Component, DestroyRef, effect, inject, input, signal, untracked } from 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 
-import { BillsService, GuestBill, serviceLabel } from '../bills/bills.service';
+import { BillsService, GuestBill, couvertNote, serviceLabel } from '../bills/bills.service';
 import { reais } from '../orders/order-draft';
 import { failureMessage } from '../session/unit-context.service';
 
 /**
  * Conta do cliente avulso (H22, PRD §10.2, FR-28): itens com valores, consumo, desconto, couvert, serviço e total,
  * como o servidor calculou. O serviço aparece incluído quando a casa cobra, e o cliente pode retirar (ou devolver) sem
- * pedir autorização, enquanto a conta está aberta.
+ * pedir autorização, enquanto a conta está aberta. Couvert (H26): um por visita; a conta diz quando ele já foi cobrado
+ * em outra comanda da visita ou dispensado, e o cliente contesta pelo problema da conta.
  */
 @Component({
   selector: 'fp-guest-bill',
@@ -58,6 +59,12 @@ import { failureMessage } from '../session/unit-context.service';
           <dt class="total">Total</dt>
           <dd class="total">{{ money(b.total) }}</dd>
         </dl>
+        @if (couvertText(b); as text) {
+          <p class="muted">{{ text }}</p>
+        }
+        @if (b.couvertState === 'COBRADO') {
+          <p class="muted">Não concorda com o couvert? Conte em "Algum problema?" e escolha "Couvert".</p>
+        }
         @if (b.open && b.service.enabled) {
           <p class="muted">O serviço é opcional: você pode retirar ou devolver quando quiser, antes de pagar.</p>
           <button mat-stroked-button type="button" [disabled]="busy()" (click)="toggleService(b)">
@@ -128,6 +135,10 @@ export class GuestBillPanel {
 
   protected money(value: string): string {
     return reais(value);
+  }
+
+  protected couvertText(bill: GuestBill): string | null {
+    return couvertNote(bill.couvertState);
   }
 
   protected serviceText(bill: GuestBill): string {

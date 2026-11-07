@@ -17,7 +17,7 @@ import { AttendanceService, Attendant } from '../attendance/attendance.service';
 import { LiveStatus } from '../live/live-status';
 import { LiveUpdatesService } from '../live/live-updates';
 import { UnitContextService, can, failureMessage, problemCode } from '../session/unit-context.service';
-import { AccountCheck, BindingQr, Tab, TabsService } from './tabs.service';
+import { AccountCheck, BindingQr, ContinuationCandidate, Tab, TabsService } from './tabs.service';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
@@ -33,6 +33,9 @@ interface ShownQr {
  * opcional; o número é automático), troca a mesa e mostra o QR para o cliente acompanhar a conta no celular. Cliente
  * que perdeu o acesso (outro aparelho, bateria) é recuperado por quem tem a permissão, depois de conferir
  * pessoalmente o nome e um item da conta (ou a hora da abertura, sem pedido). Nome e número nunca dão acesso.
+ *
+ * Continuação de visita (H26, FR-12): quem tem a permissão escolhe a comanda anterior do mesmo cliente numa lista por
+ * hora de abertura (nunca sugerida pelo nome) e confirma pessoalmente que ele não saiu; o couvert não se repete.
  */
 @Component({
   selector: 'fp-tabs-page',
@@ -146,6 +149,43 @@ interface ShownQr {
         </mat-card>
       }
 
+      @if (linking(); as tab) {
+        <mat-card appearance="outlined">
+          <mat-card-header>
+            <mat-card-title>
+              <h2>Continuação de visita · comanda {{ tab.number }}</h2>
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <p>
+              Use quando o cliente já tinha outra comanda hoje e continua no estabelecimento. Pergunte qual era a
+              comanda anterior: a lista não sugere pelo nome. O couvert já cobrado na visita não se repete.
+            </p>
+            @if (candidates().length === 0) {
+              <p>Nenhuma comanda anterior nas últimas 24 horas pode ser vinculada.</p>
+            } @else {
+              <form [formGroup]="continuation" (ngSubmit)="linkVisit(tab)">
+                <mat-radio-group formControlName="previousTabId" aria-label="Comanda anterior" class="column">
+                  @for (c of candidates(); track c.id) {
+                    <mat-radio-button [value]="c.id">
+                      {{ c.number }} · {{ c.name }} · {{ c.table ? 'mesa ' + c.table : 'sem mesa' }} · aberta às
+                      {{ c.openedAt | date: 'HH:mm' }}{{ c.closed ? ' · encerrada' : '' }}
+                    </mat-radio-button>
+                  }
+                </mat-radio-group>
+                <mat-checkbox formControlName="stayConfirmed">
+                  Confirmei com o cliente que é a mesma pessoa e que ela não saiu do estabelecimento
+                </mat-checkbox>
+                <div class="row">
+                  <button mat-flat-button type="submit" [disabled]="busy()">Vincular à visita</button>
+                  <button mat-button type="button" (click)="linking.set(null)">Cancelar</button>
+                </div>
+              </form>
+            }
+          </mat-card-content>
+        </mat-card>
+      }
+
       @if (state() === 'ready') {
         <mat-card appearance="outlined">
           <mat-card-header>
@@ -184,6 +224,9 @@ interface ShownQr {
                     ? 'atendimento pela central'
                     : 'responsável: ' + (tab.responsibleName ?? 'ninguém')
                 }}
+                @if (tab.continuesTab; as previous) {
+                  · continua a visita da comanda {{ previous.number }}
+                }
               </div>
               @if (editingTable() === tab.id) {
                 <form [formGroup]="tableForm" (ngSubmit)="saveTable(tab)" class="row">
@@ -205,6 +248,9 @@ interface ShownQr {
                     </button>
                   }
                   <button mat-button type="button" (click)="editTable(tab)">Trocar mesa</button>
+                  @if (canLinkVisit() && !tab.continuesTab) {
+                    <button mat-button type="button" (click)="startLinking(tab)">Continuação de visita</button>
+                  }
                   @if (canReassign() && tab.attendanceMode === 'GARCOM_RESPONSAVEL') {
                     <button mat-button type="button" (click)="startReassign(tab)">
                       Trocar responsável
@@ -306,6 +352,10 @@ export class TabsPage {
   /** Gerente troca o garçom responsável (H20); os chamados em aberto da comanda acompanham. */
   protected readonly canReassign = computed(() => can(this.unit(), 'REATRIBUIR_ATENDIMENTO'));
   protected readonly reassigning = signal<string | null>(null);
+  /** Continuação de visita (H26): permissão própria, delegável ao garçom. */
+  protected readonly canLinkVisit = computed(() => can(this.unit(), 'VINCULAR_CONTINUACAO_VISITA'));
+  protected readonly linking = signal<Tab | null>(null);
+  protected readonly candidates = signal<ContinuationCandidate[]>([]);
   protected readonly attendants = signal<Attendant[]>([]);
   private readonly attendance = inject(AttendanceService);
   protected readonly secondsLeft = computed(() => {
@@ -325,6 +375,11 @@ export class TabsPage {
     nameChecked: [false, Validators.requiredTrue],
     accountCheck: this.forms.control<AccountCheck | ''>('', Validators.required),
     reason: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(300)]],
+  });
+
+  protected readonly continuation = this.forms.group({
+    previousTabId: ['', Validators.required],
+    stayConfirmed: [false, Validators.requiredTrue],
   });
 
   constructor() {
@@ -419,6 +474,32 @@ export class TabsPage {
         this.display({ ...tab, guestLinked: false }, qr);
       },
     );
+  }
+
+  startLinking(tab: Tab): void {
+    this.shown.set(null);
+    this.recovering.set(null);
+    this.continuation.reset();
+    this.candidates.set([]);
+    this.run(this.service.continuationCandidates(tab.id), (candidates) => {
+      this.candidates.set(candidates);
+      this.linking.set(tab);
+    });
+  }
+
+  linkVisit(tab: Tab): void {
+    if (this.continuation.invalid) {
+      this.failure.set('Escolha a comanda anterior e confirme com o cliente que ele não saiu do estabelecimento.');
+      return;
+    }
+    const { previousTabId, stayConfirmed } = this.continuation.getRawValue();
+    this.run(this.service.linkVisit(tab, previousTabId, stayConfirmed), (saved) => {
+      this.linking.set(null);
+      this.notice.set(
+        `Comanda ${saved.number} continua a visita da comanda ${saved.continuesTab?.number ?? ''}.`.trim(),
+      );
+      this.load();
+    });
   }
 
   editTable(tab: Tab): void {

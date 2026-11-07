@@ -31,12 +31,12 @@ public class JdbcIssueStore {
     public record IssueRow(UUID id, UUID tabId, UUID orderLineId, String description, AttendanceMode mode,
             boolean afterClosure, Instant createdAt, Status status, UUID attendedBy, Instant attendedAt,
             Instant forwardedAt, UUID forwardedBy, Instant concludedAt, UUID concludedBy, String resolution,
-            Correction correction, long version) {
+            Correction correction, long version, boolean aboutCouvert) {
     }
 
     private static final String COLUMNS = """
             id, tab_id, order_line_id, description, mode, after_closure, created_at, status, attended_by, attended_at,
-            forwarded_at, forwarded_by, concluded_at, concluded_by, resolution, correction, version
+            forwarded_at, forwarded_by, concluded_at, concluded_by, resolution, correction, version, about_couvert
             """;
 
     /**
@@ -44,17 +44,17 @@ public class JdbcIssueStore {
      *
      * @return {@code false} se já há um em aberto para o mesmo item (ou para a conta) desta comanda
      */
-    public boolean insert(UUID id, UUID tabId, UUID orderLineId, String description, AttendanceMode mode,
-            boolean afterClosure, UUID grantId, Instant now) {
+    public boolean insert(UUID id, UUID tabId, UUID orderLineId, boolean aboutCouvert, String description,
+            AttendanceMode mode, boolean afterClosure, UUID grantId, Instant now) {
         String conflict = orderLineId == null
                 ? "ON CONFLICT (tab_id) WHERE status <> 'TRATADO' AND order_line_id IS NULL DO NOTHING"
                 : "ON CONFLICT (tab_id, order_line_id) WHERE status <> 'TRATADO' AND order_line_id IS NOT NULL "
                         + "DO NOTHING";
         return jdbc.update("""
-                INSERT INTO consumer_issue (id, establishment_id, tab_id, order_line_id, description, mode,
-                                            after_closure, created_grant_id, created_at, forwarded_at)
-                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?, ?)
-                """ + conflict, id, tabId, orderLineId, description, mode.name(), afterClosure, grantId,
+                INSERT INTO consumer_issue (id, establishment_id, tab_id, order_line_id, about_couvert, description,
+                                            mode, after_closure, created_grant_id, created_at, forwarded_at)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """ + conflict, id, tabId, orderLineId, aboutCouvert, description, mode.name(), afterClosure, grantId,
                 Timestamp.from(now), afterClosure ? Timestamp.from(now) : null) == 1;
     }
 
@@ -144,7 +144,8 @@ public class JdbcIssueStore {
                 rs.getObject("attended_by", UUID.class), instant(rs, "attended_at"), instant(rs, "forwarded_at"),
                 rs.getObject("forwarded_by", UUID.class), instant(rs, "concluded_at"),
                 rs.getObject("concluded_by", UUID.class), rs.getString("resolution"),
-                correction == null ? null : Correction.valueOf(correction), rs.getLong("version"));
+                correction == null ? null : Correction.valueOf(correction), rs.getLong("version"),
+                rs.getBoolean("about_couvert"));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

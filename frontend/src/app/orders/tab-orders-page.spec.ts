@@ -25,6 +25,7 @@ const ANA: Tab = {
   responsibleId: 'u-gabi',
   responsibleName: 'Gabi',
   version: 0,
+  continuesTab: null,
 };
 
 function produto(id: string, name: string, price: number, available = true): Product {

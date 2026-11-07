@@ -24,6 +24,19 @@ const CONTA: Bill = {
   consumption: '71.80',
   discount: null,
   couvert: '0.00',
+  couvertDetail: {
+    mode: null,
+    state: 'SEM_COUVERT',
+    chargeId: null,
+    origin: null,
+    amount: '0.00',
+    chargedOnTab: null,
+    canInclude: false,
+    includeAmount: null,
+    canCancel: false,
+    canCorrect: false,
+    history: [],
+  },
   service: {
     enabled: true,
     percent: '10.0000',
@@ -181,5 +194,131 @@ describe('Conta da comanda (equipe)', () => {
     expect(texto(el)).toContain('retirado pelo cliente');
     expect(texto(el)).toContain('Total R$ 71,80');
     expect(texto(el)).toContain('Devolver o serviço');
+  });
+});
+
+describe('Couvert na conta da comanda (H26)', () => {
+  let http: HttpTestingController;
+
+  function montar(conta: Bill) {
+    comCookieCsrf(true);
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(BillPanel);
+    fixture.componentRef.setInput('tabId', 't-1');
+    fixture.detectChanges();
+    http.expectOne(URL).flush(conta);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function botao(el: HTMLElement, rotulo: string): HTMLButtonElement {
+    return Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes(rotulo)) as HTMLButtonElement;
+  }
+
+  afterEach(() => http.verify());
+
+  it('inclui o couvert manual com o valor que o servidor informa', () => {
+    const fixture = montar({
+      ...CONTA,
+      couvertDetail: { ...CONTA.couvertDetail, mode: 'MANUAL', canInclude: true, includeAmount: '12.00' },
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(texto(el)).toContain('Couvert lançado pela equipe: ainda não incluído.');
+    botao(el, 'Incluir couvert').click();
+    const pedido = http.expectOne((r) => r.method === 'POST' && r.url === `${URL}/couvert`);
+    pedido.flush({
+      ...CONTA,
+      couvert: '12.00',
+      total: '90.98',
+      couvertDetail: {
+        ...CONTA.couvertDetail,
+        mode: 'MANUAL',
+        state: 'COBRADO',
+        chargeId: 'k-1',
+        origin: 'MANUAL',
+        amount: '12.00',
+      },
+    });
+    fixture.detectChanges();
+    expect(texto(el)).toContain('R$ 12,00 incluído pela equipe');
+    expect(texto(el)).toContain('Couvert incluído.');
+    expect(botao(el, 'Incluir couvert')).toBeUndefined();
+  });
+
+  it('mostra a comanda da visita que tem o couvert e o histórico do não repetido', () => {
+    const el = montar({
+      ...CONTA,
+      couvertDetail: {
+        ...CONTA.couvertDetail,
+        mode: 'AUTOMATICO',
+        state: 'COBRADO_EM_OUTRA',
+        chargedOnTab: { id: 't-0', number: 7, name: 'Ana' },
+        history: [
+          {
+            id: 'k-2',
+            origin: 'AUTOMATICO',
+            amount: '15.00',
+            endKind: 'NAO_REPETIDO',
+            reasonKind: null,
+            reason: null,
+            endedBy: { id: 'u-1', name: 'Gui Gerente' },
+            endedAt: '2026-11-07T20:00:00Z',
+          },
+        ],
+      },
+    }).nativeElement as HTMLElement;
+    const t = texto(el);
+    expect(t).toContain('Couvert já cobrado na comanda 7, da mesma visita: não se repete.');
+    expect(t).toContain('Couvert de R$ 15,00 não repetido');
+    expect(botao(el, 'Cancelar couvert')).toBeUndefined();
+  });
+
+  it('cancela com motivo e texto; depois de correção inclui o valor correto', () => {
+    const cobrado: Bill = {
+      ...CONTA,
+      couvert: '15.00',
+      couvertDetail: {
+        ...CONTA.couvertDetail,
+        mode: 'AUTOMATICO',
+        state: 'COBRADO',
+        chargeId: 'k-1',
+        origin: 'AUTOMATICO',
+        amount: '15.00',
+        canCancel: true,
+      },
+    };
+    const fixture = montar(cobrado);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(texto(el)).toContain('R$ 15,00 automático');
+    const form = el.querySelector('form[aria-label="Cancelar couvert"]') as HTMLFormElement;
+    const motivo = form.querySelector('select') as HTMLSelectElement;
+    motivo.value = 'CORRECAO';
+    motivo.dispatchEvent(new Event('change'));
+    form.dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('por que o couvert sai');
+    digitar(form, 'input[formcontrolname="reason"]', 'Valor da semana passada');
+    form.dispatchEvent(new Event('submit'));
+    const cancelamento = http.expectOne(`${URL}/couvert/cancel`);
+    expect(cancelamento.request.body).toEqual({
+      chargeId: 'k-1',
+      reasonKind: 'CORRECAO',
+      reason: 'Valor da semana passada',
+    });
+    cancelamento.flush({
+      ...CONTA,
+      couvertDetail: { ...CONTA.couvertDetail, mode: 'AUTOMATICO', state: 'AGUARDANDO_CORRECAO', canCorrect: true },
+    });
+    fixture.detectChanges();
+    expect(texto(el)).toContain('aguarda a inclusão do valor correto');
+
+    const correcao = el.querySelector('form[aria-label="Incluir correção do couvert"]') as HTMLFormElement;
+    digitar(correcao, 'input[formcontrolname="amount"]', '10,00');
+    digitar(correcao, 'input[formcontrolname="reason"]', 'Valor desta semana');
+    correcao.dispatchEvent(new Event('submit'));
+    const pedido = http.expectOne(`${URL}/couvert/correction`);
+    expect(pedido.request.body).toEqual({ amount: '10.00', reason: 'Valor desta semana' });
+    pedido.flush(cobrado);
   });
 });

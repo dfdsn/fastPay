@@ -61,7 +61,13 @@ const STATUS_LABEL: Record<ConsumerIssue['status'], string> = {
             {{ issue.tab.table ? 'mesa ' + issue.tab.table : 'sem mesa' }}
           </div>
           <div>
-            {{ issue.item ? 'Item: ' + (issue.item.productName ?? 'item da comanda') : 'Sobre a conta' }}
+            {{
+              issue.item
+                ? 'Item: ' + (issue.item.productName ?? 'item da comanda')
+                : issue.aboutCouvert
+                  ? 'Contesta o couvert (quem pode cancelar o couvert faz isso na conta da comanda)'
+                  : 'Sobre a conta'
+            }}
           </div>
           <div class="description">"{{ issue.description }}"</div>
           @if (issue.afterClosure) {

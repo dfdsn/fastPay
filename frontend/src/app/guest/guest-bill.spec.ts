@@ -24,6 +24,7 @@ const CONTA: GuestBill = {
   consumption: '71.80',
   discount: '7.18',
   couvert: '15.00',
+  couvertState: 'COBRADO',
   service: {
     enabled: true,
     percent: '12.5000',
@@ -93,6 +94,16 @@ describe('Conta do cliente', () => {
       );
     fixture.detectChanges();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain('já foi encerrada');
+  });
+
+  it('couvert já cobrado em outra comanda da visita não se repete e aparece explicado (H26)', () => {
+    const t = texto(
+      montar({ ...CONTA, couvert: '0.00', couvertState: 'COBRADO_EM_OUTRA', total: '75.47' })
+        .nativeElement as HTMLElement,
+    );
+    expect(t).not.toContain('Couvert R$');
+    expect(t).toContain('Couvert já cobrado em outra comanda desta visita: não se repete.');
+    expect(t).not.toContain('Não concorda com o couvert?');
   });
 
   it('sem pedidos e conta encerrada: sem botão de serviço', () => {

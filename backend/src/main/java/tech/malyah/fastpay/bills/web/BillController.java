@@ -18,6 +18,7 @@ import tech.malyah.fastpay.identity.SessionContext;
 /**
  * Conta da comanda pela equipe da unidade escolhida na sessão (H22). Ver e retirar/devolver o serviço:
  * {@code OPERAR_COMANDA}; conceder, retirar e revisar desconto: {@code CONCEDER_DESCONTO}, dentro do limite da pessoa.
+ * Couvert (H26): incluir o manual com {@code OPERAR_COMANDA}; cancelar e incluir a correção com {@code CANCELAR_ITEM}.
  * Tudo conferido no servidor a cada chamada; valores vão e voltam como texto decimal.
  */
 @RestController
@@ -66,6 +67,29 @@ class BillController {
                 body.waived(), correlationId()));
     }
 
+    @PostMapping("/couvert")
+    Bills.Bill includeCouvert(@PathVariable UUID tabId, HttpServletRequest request) {
+        UUID actor = session.requireIdentity(request);
+        return Responses.respond(bills.includeCouvert(actor, session.requireSelectedUnit(request), tabId,
+                correlationId()));
+    }
+
+    @PostMapping("/couvert/cancel")
+    Bills.Bill cancelCouvert(@PathVariable UUID tabId, @RequestBody CouvertCancelRequest body,
+            HttpServletRequest request) {
+        UUID actor = session.requireIdentity(request);
+        return Responses.respond(bills.cancelCouvert(actor, session.requireSelectedUnit(request), tabId,
+                body.chargeId(), body.reasonKind(), body.reason(), correlationId()));
+    }
+
+    @PostMapping("/couvert/correction")
+    Bills.Bill correctCouvert(@PathVariable UUID tabId, @RequestBody CouvertCorrectionRequest body,
+            HttpServletRequest request) {
+        UUID actor = session.requireIdentity(request);
+        return Responses.respond(bills.correctCouvert(actor, session.requireSelectedUnit(request), tabId,
+                body.amount(), body.reason(), correlationId()));
+    }
+
     private static String correlationId() {
         return UUID.randomUUID().toString();
     }
@@ -80,5 +104,11 @@ class BillController {
     }
 
     record ServiceRequest(Boolean waived) {
+    }
+
+    record CouvertCancelRequest(UUID chargeId, String reasonKind, String reason) {
+    }
+
+    record CouvertCorrectionRequest(String amount, String reason) {
     }
 }

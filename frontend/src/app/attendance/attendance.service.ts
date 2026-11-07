@@ -40,6 +40,8 @@ export interface ConsumerIssue {
   mode: AttendanceMode;
   tab: { id: string; number: number; name: string; table: string | null };
   item: { orderLineId: string; productName: string | null } | null;
+  /** Contestação do couvert pelo cliente (H26). */
+  aboutCouvert: boolean;
   description: string;
   afterClosure: boolean;
   owner: { id: string; name: string } | null;
