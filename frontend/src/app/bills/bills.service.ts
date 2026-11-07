@@ -90,10 +90,14 @@ export interface CouvertDetail {
   history: EndedCouvert[];
 }
 
-/** Conta como a equipe vê (H22). {@code reviewPending}: desconto acima da autoridade, cobrança bloqueada. */
+/**
+ * Conta como a equipe vê (H22). {@code reviewPending}: desconto acima da autoridade, cobrança bloqueada.
+ * {@code closing}: em fechamento (H28), só o serviço muda.
+ */
 export interface Bill {
   tabId: string;
   open: boolean;
+  closing: boolean;
   lines: BillLine[];
   consumption: string;
   discount: BillDiscount | null;
@@ -109,6 +113,7 @@ export interface Bill {
 export interface GuestBill {
   tabId: string;
   open: boolean;
+  closing: boolean;
   lines: BillLine[];
   consumption: string;
   discount: string | null;
@@ -116,6 +121,78 @@ export interface GuestBill {
   couvertState: CouvertState;
   service: BillService;
   total: string;
+}
+
+/** Atendimento da comanda (H28). */
+export type ClosingState = 'ABERTA' | 'EM_FECHAMENTO' | 'ENCERRADA';
+export type PendingStage = 'AGUARDANDO_PRODUCAO' | 'AGUARDANDO_PREPARO' | 'EM_PREPARO' | 'PRONTO' | 'IMPOSSIVEL';
+
+export interface PendingItem {
+  orderLineId: string;
+  productName: string;
+  quantity: number;
+  stage: PendingStage;
+}
+
+/** O que impede iniciar o fechamento agora (só enquanto aberta). */
+export interface ClosingBlockers {
+  pendingItems: PendingItem[];
+  openIssue: boolean;
+  discountReview: boolean;
+}
+
+/** Versão consolidada da conta: a que a cobrança usa. */
+export interface BillVersion {
+  id: string;
+  number: number;
+  total: string;
+  at: string;
+}
+
+/** Fechamento como a equipe vê (H28); o servidor confere de novo ao iniciar ou reabrir. */
+export interface Closing {
+  tabId: string;
+  state: ClosingState;
+  closingId: string | null;
+  startedAt: string | null;
+  version: BillVersion | null;
+  total: string;
+  blockers: ClosingBlockers | null;
+  canStart: boolean;
+  canReopen: boolean;
+}
+
+export interface GuestClosing {
+  tabId: string;
+  state: ClosingState;
+  startedAt: string | null;
+  versionNumber: number | null;
+  total: string;
+  blockers: ClosingBlockers | null;
+  canStart: boolean;
+}
+
+const STAGE_TEXT: Record<PendingStage, string> = {
+  AGUARDANDO_PRODUCAO: 'a caminho da produção',
+  AGUARDANDO_PREPARO: 'aguardando preparo',
+  EM_PREPARO: 'em preparo',
+  PRONTO: 'pronto, falta entregar',
+  IMPOSSIVEL: 'sem como atender, falta resolver',
+};
+
+/** Motivos que impedem o fechamento, em frases para a tela. */
+export function blockerTexts(blockers: ClosingBlockers | null): string[] {
+  if (!blockers) {
+    return [];
+  }
+  const texts = blockers.pendingItems.map((p) => `${p.quantity} × ${p.productName}: ${STAGE_TEXT[p.stage]}.`);
+  if (blockers.openIssue) {
+    texts.push('Há um problema informado ainda não resolvido.');
+  }
+  if (blockers.discountReview) {
+    texts.push('O desconto precisa ser revisado por alguém com limite.');
+  }
+  return texts;
 }
 
 /** Conta da comanda (H22): o servidor confere permissão, limite e formato a cada chamada. */
@@ -172,6 +249,31 @@ export class BillsService {
   correctCouvert(tabId: string, amount: string, reason: string): Observable<Bill> {
     return this.auth.withCsrf(() =>
       this.http.post<Bill>(`/api/v1/tabs/${tabId}/bill/couvert/correction`, { amount, reason }),
+    );
+  }
+
+  closing(tabId: string): Observable<Closing> {
+    return this.http.get<Closing>(`/api/v1/tabs/${tabId}/closing`);
+  }
+
+  /** {@code expectedTotal}: o total que a tela mostra; se a conta mudou, o servidor recusa. */
+  startClosing(tabId: string, expectedTotal: string): Observable<Closing> {
+    return this.auth.withCsrf(() => this.http.post<Closing>(`/api/v1/tabs/${tabId}/closing`, { expectedTotal }));
+  }
+
+  reopen(tabId: string, closingId: string, reason: string): Observable<Closing> {
+    return this.auth.withCsrf(() =>
+      this.http.post<Closing>(`/api/v1/tabs/${tabId}/closing/reopen`, { closingId, reason }),
+    );
+  }
+
+  guestClosing(tabId: string): Observable<GuestClosing> {
+    return this.http.get<GuestClosing>(`/api/v1/guest/tabs/${tabId}/closing`);
+  }
+
+  guestStartClosing(tabId: string, expectedTotal: string): Observable<GuestClosing> {
+    return this.auth.withCsrf(() =>
+      this.http.post<GuestClosing>(`/api/v1/guest/tabs/${tabId}/closing`, { expectedTotal }),
     );
   }
 

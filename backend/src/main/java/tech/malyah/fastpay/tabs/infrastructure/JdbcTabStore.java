@@ -31,7 +31,7 @@ public class JdbcTabStore {
     public record TabRow(UUID id, UUID visitId, int number, String displayName, String tableLabel,
             UUID settingsVersionId, Instant openedAt, Instant closedAt, Instant accessUntil, boolean guestLinked,
             String attendanceMode, UUID responsibleId, long version, UUID continuesTabId, Integer continuesNumber,
-            String continuesName) {
+            String continuesName, UUID closingId, Instant closingStartedAt) {
     }
 
     /** Visita (H26): {@code exitValidatedAt} gravado pela saída validada (H32). */
@@ -96,7 +96,10 @@ public class JdbcTabStore {
             (SELECT p.number FROM visit_link l JOIN tab p ON p.id = l.previous_tab_id WHERE l.tab_id = t.id)
                 AS continues_number,
             (SELECT p.display_name FROM visit_link l JOIN tab p ON p.id = l.previous_tab_id WHERE l.tab_id = t.id)
-                AS continues_name
+                AS continues_name,
+            (SELECT c.id FROM tab_closing c WHERE c.tab_id = t.id AND c.reopened_at IS NULL) AS closing_id,
+            (SELECT c.started_at FROM tab_closing c WHERE c.tab_id = t.id AND c.reopened_at IS NULL)
+                AS closing_started_at
             """;
 
     /** Comandas ativas da unidade, por número. */
@@ -110,10 +113,16 @@ public class JdbcTabStore {
                 .findFirst();
     }
 
-    /** Trava a comanda ativa: QR, recuperação e troca de mesa da mesma comanda não se cruzam. */
+    /**
+     * Trava a comanda ativa: QR, recuperação, troca de mesa, envio, fechamento (H28) e as correções da mesma comanda
+     * não se cruzam. A leitura vem num comando separado, depois da trava: em READ COMMITTED, quem esperou pela trava
+     * enxerga o que quem a segurava gravou em outras tabelas (o fechamento iniciado, por exemplo); as subconsultas do
+     * próprio {@code SELECT ... FOR UPDATE} usariam a foto de antes da espera.
+     */
     public Optional<TabRow> lockActiveTab(UUID id) {
-        return jdbc.query("SELECT " + TAB_COLUMNS + " FROM tab t WHERE t.id = ? AND t.closed_at IS NULL FOR UPDATE OF t",
-                JdbcTabStore::tab, id).stream().findFirst();
+        boolean locked = !jdbc.query("SELECT t.id FROM tab t WHERE t.id = ? AND t.closed_at IS NULL FOR UPDATE",
+                (rs, n) -> rs.getObject(1, UUID.class), id).isEmpty();
+        return locked ? tab(id) : Optional.empty();
     }
 
     public boolean updateTable(UUID id, long version, String table, UUID actorId, Instant now) {
@@ -187,6 +196,24 @@ public class JdbcTabStore {
         return jdbc.update("""
                 UPDATE visit SET exit_validated_at = ?, exit_tab_id = ? WHERE id = ? AND exit_validated_at IS NULL
                 """, Timestamp.from(now), tabId, visitId) == 1;
+    }
+
+    // Fechamento (H28)
+
+    /** Inicia o fechamento da comanda ativa, já travada por quem chama: a equipe ({@code actorId}) ou o cliente. */
+    public void insertClosing(UUID id, UUID tabId, UUID actorId, UUID grantId, Instant now) {
+        jdbc.update("""
+                INSERT INTO tab_closing (id, establishment_id, tab_id, started_at, started_by, started_by_grant)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?)
+                """, id, tabId, Timestamp.from(now), actorId, grantId);
+    }
+
+    /** Reabre: o fechamento em andamento termina com quem, quando e o motivo; {@code false} se já não estava. */
+    public boolean reopenClosing(UUID id, UUID actorId, String reason, Instant now) {
+        return jdbc.update("""
+                UPDATE tab_closing SET reopened_at = ?, reopened_by = ?, reopen_reason = ?
+                 WHERE id = ? AND reopened_at IS NULL
+                """, Timestamp.from(now), actorId, reason, id) == 1;
     }
 
     // QR de vínculo
@@ -304,7 +331,8 @@ public class JdbcTabStore {
                 instant(rs, "access_until"), rs.getBoolean("guest_linked"), rs.getString("attendance_mode"),
                 rs.getObject("responsible_id", UUID.class), rs.getLong("version"),
                 rs.getObject("continues_tab_id", UUID.class), (Integer) rs.getObject("continues_number"),
-                rs.getString("continues_name"));
+                rs.getString("continues_name"), rs.getObject("closing_id", UUID.class),
+                instant(rs, "closing_started_at"));
     }
 
     private static BindingRow binding(ResultSet rs, int n) throws SQLException {

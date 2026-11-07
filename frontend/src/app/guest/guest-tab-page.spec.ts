@@ -28,6 +28,7 @@ describe('Comanda do cliente', () => {
   afterEach(() => {
     // A conta (H22) tem testes próprios; aqui basta que a tela a releia junto.
     http.match('/api/v1/guest/tabs/t-1/bill');
+    http.match('/api/v1/guest/tabs/t-1/closing');
     http.verify();
   });
 

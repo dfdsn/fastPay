@@ -16,7 +16,7 @@ import { GuestService, GuestTab } from './guest.service';
 /**
  * Comanda do cliente avulso, sem login (H15, FR-09–FR-11). O servidor confere o acesso guardado neste aparelho; os
  * itens e a conta, com os valores calculados no servidor, chegam com os pedidos (H22), e o cliente pode retirar o serviço;
- * o fechamento é da H28. O cliente informa e acompanha problemas (H21).
+ * o cliente fecha a conta quando tudo foi entregue (H28). O cliente informa e acompanha problemas (H21).
  */
 @Component({
   selector: 'fp-guest-tab-page',

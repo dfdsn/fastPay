@@ -85,6 +85,8 @@ public class Cancellations {
         COMANDA_NAO_ENCONTRADA,
         /** Comanda encerrada ou paga: não se cancela; o caminho é a devolução. */
         COMANDA_ENCERRADA,
+        /** Comanda em fechamento (H28, FR-32): reabrir antes de cancelar. */
+        COMANDA_EM_FECHAMENTO,
         ITEM_NAO_ENCONTRADO,
         /** A produção ainda não recebeu a linha (encaminhamento pendente ou com falha). */
         ITEM_AGUARDANDO_PRODUCAO,
@@ -157,6 +159,9 @@ public class Cancellations {
             }
             if (target == OrderTarget.ENCERRADA) {
                 return new Refused<>(Refusal.COMANDA_ENCERRADA);
+            }
+            if (target == OrderTarget.EM_FECHAMENTO) {
+                return new Refused<>(Refusal.COMANDA_EM_FECHAMENTO);
             }
             CancelTarget item = orders.cancelTargetInCurrentUnit(orderLineId, tabId).orElse(null);
             if (item == null) {

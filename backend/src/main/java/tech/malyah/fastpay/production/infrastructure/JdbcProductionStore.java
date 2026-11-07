@@ -67,6 +67,28 @@ public class JdbcProductionStore {
     }
 
     /** Fila da produção: aguardando e em preparo, com setor (todos ou um), das mais antigas às mais novas. */
+    /**
+     * Unidades ativas da comanda que ainda não foram entregues (H28, FR-31): sem linha de produção ainda (encaminhamento
+     * pendente) ou com ela aguardando, em preparo ou pronta, com impossibilidade aberta ou não. Por envio e posição.
+     */
+    public record PendingRow(UUID orderLineId, String productName, int quantity, Status status, boolean impossible) {
+    }
+
+    public List<PendingRow> pendingOfTab(UUID tabId) {
+        return jdbc.query("""
+                SELECT a.order_line_id, l.product_name, a.quantity, p.status, p.impossible_at IS NOT NULL AS impossible
+                  FROM tab_allocation a
+                  JOIN order_line l ON l.id = a.order_line_id
+                  JOIN customer_order o ON o.id = l.order_id
+                  LEFT JOIN production_line p ON p.order_line_id = a.order_line_id
+                 WHERE a.tab_id = ? AND a.quantity > 0
+                   AND (p.id IS NULL OR p.status NOT IN ('ENTREGUE', 'CANCELADA'))
+                 ORDER BY o.sent_at, l.position, a.order_line_id
+                """, (rs, n) -> new PendingRow(rs.getObject("order_line_id", UUID.class), rs.getString("product_name"),
+                        rs.getInt("quantity"), rs.getString("status") == null ? null : Status.valueOf(rs.getString("status")),
+                        rs.getBoolean("impossible")), tabId);
+    }
+
     public List<LineRow> queue(UUID sectorId) {
         return jdbc.query("SELECT " + COLUMNS + """
                   FROM production_line

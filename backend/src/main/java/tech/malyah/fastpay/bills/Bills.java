@@ -59,7 +59,8 @@ import tech.malyah.fastpay.tabs.Tabs.BillTab;
  * <li><b>Serviço (S)</b>: percentual e base da configuração capturada na abertura; o cliente (ou a equipe por ele)
  * retira ou devolve sem autorização enquanto a comanda está aberta e sem cobrança.</li>
  * </ul>
- * Comanda encerrada não muda; "em fechamento" (H28) e cobrança existente (H30) passam a recusar quando existirem.
+ * Comanda encerrada não muda. Em fechamento (H28, FR-32) só o serviço muda, e cada mudança grava uma nova versão da
+ * conta consolidada ({@link Closings}); cobrança existente (H30) passa a recusar quando existir.
  */
 @Service
 public class Bills {
@@ -121,14 +122,19 @@ public class Bills {
             boolean canCorrect, List<EndedCouvert> history) {
     }
 
-    /** Conta como a equipe a vê. {@code reviewPending}: desconto acima da autoridade, cobrança bloqueada. */
-    public record Bill(UUID tabId, boolean open, List<Line> lines, String consumption, DiscountView discount,
+    /**
+     * Conta como a equipe a vê. {@code reviewPending}: desconto acima da autoridade, cobrança bloqueada.
+     * {@code closing}: em fechamento (H28), só o serviço muda.
+     */
+    public record Bill(UUID tabId, boolean open, boolean closing, List<Line> lines, String consumption,
+            DiscountView discount,
             String couvert, CouvertView couvertDetail, ServiceView service, String total, boolean reviewPending,
             DiscountPolicy policy) {
     }
 
     /** Conta como o cliente a vê: valores, sem motivo nem nomes da equipe. */
-    public record GuestBill(UUID tabId, boolean open, List<Line> lines, String consumption, String discount,
+    public record GuestBill(UUID tabId, boolean open, boolean closing, List<Line> lines, String consumption,
+            String discount,
             String couvert, CouvertState couvertState, ServiceView service, String total) {
     }
 
@@ -139,8 +145,20 @@ public class Bills {
 
     public enum Refusal {
         COMANDA_NAO_ENCONTRADA,
-        /** Comanda encerrada (ou em fechamento, H28): a conta não muda. */
+        /** Comanda encerrada: a conta não muda. */
         COMANDA_ENCERRADA,
+        /** Comanda em fechamento (H28, FR-32): só o serviço muda; o resto exige reabrir. */
+        COMANDA_EM_FECHAMENTO,
+        /** Reabrir uma comanda que não está em fechamento (H28). */
+        COMANDA_NAO_EM_FECHAMENTO,
+        /** Item enviado ainda não entregue nem cancelado (H28, FR-31, CA-08). */
+        ITENS_PENDENTES,
+        /** Problema do consumidor ainda não tratado (H28, FR-24). */
+        PROBLEMA_EM_ABERTO,
+        /** Desconto acima da autoridade aguardando revisão (H28, FR-68). */
+        DESCONTO_EM_REVISAO,
+        /** O total mudou desde que a tela foi carregada (H28, FR-32). */
+        CONTA_MUDOU,
         /** O desconto mudou desde que a tela foi carregada. */
         VERSAO_DESATUALIZADA,
         /** A configuração vigente não aceita este formato de desconto. */
@@ -469,6 +487,9 @@ public class Bills {
         if (tab.isEmpty()) {
             return Optional.of(Refusal.COMANDA_NAO_ENCONTRADA);
         }
+        if (tab.get().closingId() != null) {
+            return Optional.of(Refusal.COMANDA_EM_FECHAMENTO);
+        }
         tabs.visitInCurrentUnit(tabId, true);
         return endCouvert(load(tab.get()), chargeId, EndKind.DEVOLVIDO, reason, null, actorId, correlationId);
     }
@@ -544,11 +565,12 @@ public class Bills {
      * dela na cobrança). Vazio se a comanda não existe na unidade.
      */
     public Optional<Snapshot> snapshotInCurrentUnit(UUID tabId) {
-        return tabs.forBillInCurrentUnit(tabId, false).map(tab -> {
-            Loaded l = load(tab);
-            return new Snapshot(tabId, tab.settingsVersionId(), l.discount().map(DiscountRow::id).orElse(null),
-                    l.composition(), l.waived(), l.reviewPending());
-        });
+        return tabs.forBillInCurrentUnit(tabId, false).map(tab -> snapshot(load(tab)));
+    }
+
+    private static Snapshot snapshot(Loaded l) {
+        return new Snapshot(l.tab().id(), l.tab().settingsVersionId(),
+                l.discount().map(DiscountRow::id).orElse(null), l.composition(), l.waived(), l.reviewPending());
     }
 
     /**
@@ -595,8 +617,20 @@ public class Bills {
         return new Loaded(tab, lines, captured, discount, waived, composition, reviewPending, visitCouverts, valid);
     }
 
-    /** Comanda inexistente ou encerrada não muda de conta. */
+    /** Comanda inexistente, encerrada ou em fechamento (H28) não muda de conta. */
     private static <T> Optional<Outcome<T>> refuseChange(Optional<BillTab> tab) {
+        Optional<Outcome<T>> closed = refuseClosed(tab);
+        if (closed.isPresent()) {
+            return closed;
+        }
+        if (tab.get().closingId() != null) {
+            return Optional.of(new Refused<>(Refusal.COMANDA_EM_FECHAMENTO));
+        }
+        return Optional.empty();
+    }
+
+    /** Comanda inexistente ou encerrada; em fechamento ainda aceita a escolha do serviço (FR-28, FR-32). */
+    private static <T> Optional<Outcome<T>> refuseClosed(Optional<BillTab> tab) {
         if (tab.isEmpty()) {
             return Optional.of(new Refused<>(Refusal.COMANDA_NAO_ENCONTRADA));
         }
@@ -612,7 +646,7 @@ public class Bills {
             return new Invalid<>("waived", "Diga se o serviço sai ou volta para a conta.");
         }
         Optional<BillTab> tab = tabs.forBillInCurrentUnit(tabId, true);
-        Optional<Outcome<Loaded>> refused = refuseChange(tab);
+        Optional<Outcome<Loaded>> refused = refuseClosed(tab);
         if (refused.isPresent()) {
             return refused.get();
         }
@@ -623,13 +657,35 @@ public class Bills {
         if (current.waived() == waived) {
             return new Done<>(current);
         }
-        store.insertServiceChoice(tabId, waived, actorId, grantId, clock.instant());
+        Instant at = clock.instant();
+        store.insertServiceChoice(tabId, waived, actorId, grantId, at);
         store.audit(waived ? "servico.retirado" : "servico.devolvido", tabId, actorId,
                 actorId == null ? "pelo consumidor" : "pela equipe", correlationId);
+        Loaded after = load(tab.get());
+        // Na conferência (H28, CA-11) o total muda: nova versão da conta consolidada, que a cobrança vai usar.
+        UUID closingId = tab.get().closingId();
+        if (closingId != null) {
+            int number = recordVersion(closingId, snapshot(after), actorId, grantId, at);
+            store.audit("conta.versao", tabId, actorId, "fechamento " + closingId + "; versao " + number + "; total "
+                    + text(after.composition().total()), correlationId);
+        }
         changes.publishInCurrentTransaction(Topic.CONTA, tabId);
         log.info("Serviço {} na comanda {} ({})", waived ? "retirado" : "devolvido", tabId,
                 actorId == null ? "consumidor" : actorId);
-        return new Done<>(load(tab.get()));
+        return new Done<>(after);
+    }
+
+    /**
+     * Grava a próxima versão da conta consolidada do fechamento (H28), com a comanda travada por quem chama: a equipe
+     * ({@code actorId}) ou o cliente pelo acesso ({@code grantId}). Devolve o número da versão.
+     */
+    int recordVersion(UUID closingId, Snapshot s, UUID actorId, UUID grantId, Instant at) {
+        int number = store.lastBillVersion(closingId) + 1;
+        Composition c = s.composition();
+        store.insertBillVersion(UUID.randomUUID(), s.tabId(), closingId, number, s.settingsVersionId(), s.discountId(),
+                s.serviceWaived(), c.consumption(), c.discount(), c.couvert(), c.service(), c.total(), actorId,
+                grantId, at);
+        return number;
     }
 
     private Bill bill(Loaded l, UnitMembership me) {
@@ -637,9 +693,10 @@ public class Bills {
         DiscountView discount = l.discount().map(r -> discountView(r, l, c)).orElse(null);
         SettingsValues now = settings.currentInCurrentUnit().values();
         DiscountPolicy policy = new DiscountPolicy(now.discountFixedAllowed(), now.discountPercentAllowed(),
-                me.has(Permission.CONCEDER_DESCONTO) && l.tab().open(),
+                me.has(Permission.CONCEDER_DESCONTO) && l.tab().openForConsumption(),
                 me.discountLimitPercent().toPlainString());
-        return new Bill(l.tab().id(), l.tab().open(), lines(l), text(c.consumption()), discount, text(c.couvert()),
+        return new Bill(l.tab().id(), l.tab().open(), l.tab().closingId() != null, lines(l), text(c.consumption()),
+                discount, text(c.couvert()),
                 couvertView(l, me, now), service(l), text(c.total()), l.reviewPending(), policy);
     }
 
@@ -670,7 +727,7 @@ public class Bills {
         List<EndedCouvert> history = ended.stream().map(r -> new EndedCouvert(r.id(), r.origin(), text(r.amount()),
                 r.endKind(), r.endReasonKind(), r.endReason(), new Person(r.endedBy(), names.get(r.endedBy())),
                 r.endedAt())).toList();
-        boolean open = l.tab().open();
+        boolean open = l.tab().openForConsumption();
         boolean manual = l.captured().couvertEnabled() && l.captured().couvertMode() == CouvertMode.MANUAL;
         boolean canInclude = open && manual && state == CouvertState.SEM_COUVERT && now.couvertEnabled();
         boolean cancelling = open && me.has(Permission.CANCELAR_ITEM);
@@ -698,7 +755,8 @@ public class Bills {
 
     private GuestBill guestBill(Loaded l) {
         Composition c = l.composition();
-        return new GuestBill(l.tab().id(), l.tab().open(), lines(l), text(c.consumption()),
+        return new GuestBill(l.tab().id(), l.tab().open(), l.tab().closingId() != null, lines(l),
+                text(c.consumption()),
                 l.discount().isPresent() ? text(c.discount()) : null, text(c.couvert()), couvertState(l), service(l),
                 text(c.total()));
     }

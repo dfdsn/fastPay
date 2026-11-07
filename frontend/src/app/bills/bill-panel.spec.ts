@@ -4,13 +4,14 @@ import { TestBed } from '@angular/core/testing';
 
 import { comCookieCsrf } from '../auth/auth-testing';
 import { BillPanel } from './bill-panel';
-import { Bill } from './bills.service';
+import { Bill, Closing } from './bills.service';
 
 const URL = '/api/v1/tabs/t-1/bill';
 
 const CONTA: Bill = {
   tabId: 't-1',
   open: true,
+  closing: false,
   lines: [
     {
       orderLineId: 'l-1',
@@ -73,6 +74,38 @@ const COM_DESCONTO_EM_REVISAO: Bill = {
   reviewPending: true,
 };
 
+const PENDENTE: Closing = {
+  tabId: 't-1',
+  state: 'ABERTA',
+  closingId: null,
+  startedAt: null,
+  version: null,
+  total: '78.98',
+  blockers: {
+    pendingItems: [{ orderLineId: 'l-1', productName: 'Batata frita', quantity: 2, stage: 'PRONTO' }],
+    openIssue: true,
+    discountReview: false,
+  },
+  canStart: false,
+  canReopen: false,
+};
+
+const ELEGIVEL: Closing = {
+  ...PENDENTE,
+  blockers: { pendingItems: [], openIssue: false, discountReview: false },
+  canStart: true,
+};
+
+const EM_FECHAMENTO: Closing = {
+  ...PENDENTE,
+  state: 'EM_FECHAMENTO',
+  closingId: 'f-1',
+  startedAt: '2026-11-04T19:30:00Z',
+  version: { id: 'v-1', number: 1, total: '78.98', at: '2026-11-04T19:30:00Z' },
+  blockers: null,
+  canReopen: true,
+};
+
 /** Texto visível com um espaço entre os elementos (o real formata R$ com espaço não separável). */
 function texto(el: HTMLElement): string {
   const partes: string[] = [];
@@ -104,7 +137,11 @@ describe('Conta da comanda (equipe)', () => {
     return fixture;
   }
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // O fechamento (H28) tem testes próprios abaixo; nos outros basta que a tela o releia junto.
+    http.match('/api/v1/tabs/t-1/closing');
+    http.verify();
+  });
 
   it('mostra consumo, serviço e total como o servidor calculou', () => {
     const el = montar(CONTA).nativeElement as HTMLElement;
@@ -216,7 +253,10 @@ describe('Couvert na conta da comanda (H26)', () => {
     return Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes(rotulo)) as HTMLButtonElement;
   }
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.match('/api/v1/tabs/t-1/closing');
+    http.verify();
+  });
 
   it('inclui o couvert manual com o valor que o servidor informa', () => {
     const fixture = montar({
@@ -320,5 +360,51 @@ describe('Couvert na conta da comanda (H26)', () => {
     const pedido = http.expectOne(`${URL}/couvert/correction`);
     expect(pedido.request.body).toEqual({ amount: '10.00', reason: 'Valor desta semana' });
     pedido.flush(cobrado);
+  });
+  it('mostra o que impede o fechamento e não deixa iniciar', () => {
+    const fixture = montar(CONTA);
+    http.expectOne('/api/v1/tabs/t-1/closing').flush(PENDENTE);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const t = texto(el);
+    expect(t).toContain('2 × Batata frita: pronto, falta entregar.');
+    expect(t).toContain('Há um problema informado ainda não resolvido.');
+    const iniciar = Array.from(el.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Iniciar fechamento'),
+    ) as HTMLButtonElement;
+    expect(iniciar.disabled).toBe(true);
+  });
+
+  it('inicia o fechamento com o total da tela e reabre com motivo', () => {
+    const fixture = montar(CONTA);
+    http.expectOne('/api/v1/tabs/t-1/closing').flush(ELEGIVEL);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const botao = (rotulo: string) =>
+      Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes(rotulo)) as HTMLButtonElement;
+    botao('Iniciar fechamento').click();
+    const inicio = http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/tabs/t-1/closing');
+    expect(inicio.request.body).toEqual({ expectedTotal: '78.98' });
+    inicio.flush(EM_FECHAMENTO);
+    http.expectOne(URL).flush({ ...CONTA, closing: true });
+    http.expectOne('/api/v1/tabs/t-1/closing').flush(EM_FECHAMENTO);
+    fixture.detectChanges();
+    expect(texto(el)).toContain('conta consolidada em R$ 78,98 (versão 1)');
+
+    botao('Reabrir comanda').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('5 a 300 caracteres');
+    const motivo = Array.from(el.querySelectorAll('input')).find(
+      (i) => i.closest('mat-form-field')?.textContent?.includes('Motivo para reabrir'),
+    ) as HTMLInputElement;
+    motivo.value = 'Cliente quer mais um chopp';
+    motivo.dispatchEvent(new Event('input'));
+    botao('Reabrir comanda').click();
+    const reabrir = http.expectOne('/api/v1/tabs/t-1/closing/reopen');
+    expect(reabrir.request.body).toEqual({ closingId: 'f-1', reason: 'Cliente quer mais um chopp' });
+    reabrir.flush(ELEGIVEL);
+    http.expectOne(URL).flush(CONTA);
+    fixture.detectChanges();
+    expect(el.querySelector('[role="status"]')?.textContent).toContain('Comanda reaberta.');
   });
 });

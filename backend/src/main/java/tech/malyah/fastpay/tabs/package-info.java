@@ -5,7 +5,8 @@
  * consulta a própria comanda sem login, pelo acesso guardado no navegador. APIs públicas:
  * {@link tech.malyah.fastpay.tabs.Tabs} (equipe) e {@link tech.malyah.fastpay.tabs.GuestAccess} (consumidor).
  * Continuação de visita (H26): vínculo explícito à visita de uma comanda anterior, com a permanência confirmada.
- * Pedidos chegam com H16; fechamento com H28/H29.
+ * Pedidos chegam com H16. Fechamento (H28): a comanda guarda o estado "em fechamento" (início e reabertura com
+ * motivo), e a trava da comanda é a mesma do envio, do cancelamento, da transferência e do desfazer entrega.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Comandas e acesso")
 package tech.malyah.fastpay.tabs;

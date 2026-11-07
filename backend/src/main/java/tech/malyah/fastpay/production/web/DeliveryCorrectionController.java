@@ -86,6 +86,8 @@ class DeliveryCorrectionController {
             case COMANDA_ENCERRADA -> error(HttpStatus.CONFLICT, refusal.name(),
                     "Uma comanda deste item já foi encerrada: a entrega não pode ser desfeita. Registre uma "
                             + "ocorrência; devolução, se couber, é feita pelo gerente.");
+            case COMANDA_EM_FECHAMENTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Uma comanda deste item está em fechamento: a entrega não pode ser desfeita agora. Para mudar, reabra a comanda com o motivo.");
             case ENTREGA_PODE_SER_DESFEITA -> error(HttpStatus.CONFLICT, refusal.name(),
                     "As comandas deste item estão abertas: desfaça a entrega em vez de registrar ocorrência.");
         };

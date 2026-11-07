@@ -121,6 +121,31 @@ public class Production {
         this.clock = clock;
     }
 
+    /**
+     * Em que ponto está um item que ainda impede o fechamento (H28, FR-31): {@code AGUARDANDO_PRODUCAO} quando o
+     * encaminhamento ainda não chegou à produção; {@code IMPOSSIVEL} com a sinalização aberta.
+     */
+    public enum PendingStage {
+        AGUARDANDO_PRODUCAO, AGUARDANDO_PREPARO, EM_PREPARO, PRONTO, IMPOSSIVEL
+    }
+
+    /** Unidades ativas de um item na comanda que ainda não foram entregues. */
+    public record PendingItem(UUID orderLineId, String productName, int quantity, PendingStage stage) {
+    }
+
+    /**
+     * Itens da comanda que impedem o fechamento (H28, FR-31, CA-08): unidades ativas não entregues nem canceladas, na
+     * transação de unidade de quem chama (que confere a permissão ou o acesso). Vazia quando tudo foi entregue ou
+     * cancelado. Lida com a comanda travada, ela não muda até o fim da transação: envio, cancelamento, transferência e
+     * desfazer entrega travam a mesma comanda.
+     */
+    public List<PendingItem> pendingOfTabInCurrentUnit(UUID tabId) {
+        return store.pendingOfTab(tabId).stream().map(r -> new PendingItem(r.orderLineId(), r.productName(),
+                r.quantity(), r.status() == null ? PendingStage.AGUARDANDO_PRODUCAO
+                        : r.impossible() ? PendingStage.IMPOSSIVEL : PendingStage.valueOf(r.status().name())))
+                .toList();
+    }
+
     /** Fila da produção (aguardando e em preparo), de um setor ou de todos, das mais antigas às mais novas. */
     public Board queue(UUID actorId, UUID establishmentId, UUID sectorId) {
         return memberships.inUnit(actorId, establishmentId, Permission.OPERAR_PRODUCAO,

@@ -63,6 +63,10 @@ class TransferController {
                     "Comanda de destino não encontrada nesta unidade. Atualize a lista de comandas.");
             case DESTINO_ENCERRADO -> error(HttpStatus.CONFLICT, refusal.name(),
                     "A comanda de destino já foi encerrada. Escolha uma comanda aberta.");
+            case COMANDA_EM_FECHAMENTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "A comanda está em fechamento: os itens dela não podem ser transferidos agora. Para mudar, reabra a comanda com o motivo.");
+            case DESTINO_EM_FECHAMENTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "A comanda de destino está em fechamento. Escolha outra comanda ou peça para reabri-la.");
             case ITEM_NAO_ENCONTRADO -> error(HttpStatus.NOT_FOUND, refusal.name(),
                     "Item não encontrado nesta comanda. Atualize a tela.");
             case ITEM_AGUARDANDO_PRODUCAO -> error(HttpStatus.CONFLICT, refusal.name(),

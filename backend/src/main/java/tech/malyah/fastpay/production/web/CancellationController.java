@@ -77,6 +77,8 @@ class CancellationController {
             case COMANDA_ENCERRADA -> error(HttpStatus.CONFLICT, refusal.name(),
                     "A comanda já foi encerrada: o item não pode mais ser cancelado. Se houve pagamento, o gerente "
                             + "registra a devolução.");
+            case COMANDA_EM_FECHAMENTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "A comanda está em fechamento: o item não pode ser cancelado agora. Para mudar, reabra a comanda com o motivo.");
             case ITEM_NAO_ENCONTRADO -> error(HttpStatus.NOT_FOUND, refusal.name(),
                     "Item não encontrado nesta comanda. Atualize a tela.");
             case ITEM_AGUARDANDO_PRODUCAO -> error(HttpStatus.CONFLICT, refusal.name(),

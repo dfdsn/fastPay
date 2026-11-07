@@ -36,6 +36,20 @@ final class Responses {
                     "Comanda não encontrada nesta unidade. Atualize a lista.");
             case COMANDA_ENCERRADA -> error(HttpStatus.CONFLICT, refusal.name(),
                     "Esta comanda já foi encerrada: a conta não muda mais.");
+            case COMANDA_EM_FECHAMENTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda está em fechamento: só a taxa de serviço pode mudar. Para corrigir a conta, reabra "
+                            + "a comanda com o motivo.");
+            case COMANDA_NAO_EM_FECHAMENTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Esta comanda não está em fechamento. Atualize a tela.");
+            case ITENS_PENDENTES -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Ainda há itens aguardando, em preparo, prontos ou sem atendimento. Entregue ou cancele antes de "
+                            + "fechar a conta.");
+            case PROBLEMA_EM_ABERTO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "Há um problema informado ainda não resolvido. Resolva o problema antes de fechar a conta.");
+            case DESCONTO_EM_REVISAO -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "O desconto precisa ser revisado por alguém com limite antes de fechar a conta.");
+            case CONTA_MUDOU -> error(HttpStatus.CONFLICT, refusal.name(),
+                    "A conta mudou desde que a tela foi carregada. Confira o novo total e tente de novo.");
             case VERSAO_DESATUALIZADA -> error(HttpStatus.CONFLICT, refusal.name(),
                     "O desconto mudou desde que a tela foi carregada. Confira a conta e tente de novo.");
             case FORMATO_NAO_ACEITO -> error(HttpStatus.CONFLICT, refusal.name(),

@@ -36,6 +36,41 @@ public class JdbcBillStore {
         this.jdbc = jdbc;
     }
 
+    // Versões da conta consolidada (H28)
+
+    /** Número da última versão do fechamento; 0 se ainda não há. */
+    public int lastBillVersion(UUID closingId) {
+        Integer n = jdbc.queryForObject("SELECT max(number) FROM bill_version WHERE closing_id = ?", Integer.class,
+                closingId);
+        return n == null ? 0 : n;
+    }
+
+    public void insertBillVersion(UUID id, UUID tabId, UUID closingId, int number, UUID settingsVersionId,
+            UUID discountId, boolean serviceWaived, BigDecimal consumption, BigDecimal discount, BigDecimal couvert,
+            BigDecimal service, BigDecimal total, UUID actorId, UUID grantId, Instant now) {
+        jdbc.update("""
+                INSERT INTO bill_version (id, establishment_id, tab_id, closing_id, number, settings_version_id,
+                                          discount_id, service_waived, consumption, discount, couvert, service, total,
+                                          created_by, guest_grant_id, created_at)
+                VALUES (?, current_establishment_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, id, tabId, closingId, number, settingsVersionId, discountId, serviceWaived, consumption, discount,
+                couvert, service, total, actorId, grantId, Timestamp.from(now));
+    }
+
+    /** Versão consolidada da conta. */
+    public record BillVersionRow(UUID id, UUID closingId, int number, BigDecimal total, Instant createdAt) {
+    }
+
+    /** A versão mais alta do fechamento: a que vale para a cobrança. */
+    public Optional<BillVersionRow> currentBillVersion(UUID closingId) {
+        return jdbc.query("""
+                SELECT id, closing_id, number, total, created_at FROM bill_version
+                 WHERE closing_id = ? ORDER BY number DESC LIMIT 1
+                """, (rs, n) -> new BillVersionRow(rs.getObject("id", UUID.class),
+                        rs.getObject("closing_id", UUID.class), rs.getInt("number"), rs.getBigDecimal("total"),
+                        rs.getTimestamp("created_at").toInstant()), closingId).stream().findFirst();
+    }
+
     /** Desconto ativo. {@code value}: reais (fixo) ou percentual. */
     public record DiscountRow(UUID id, UUID tabId, Kind kind, BigDecimal value, String reason, UUID grantedBy,
             Instant grantedAt, BigDecimal granterLimitPercent, BigDecimal consumptionAtGrant,
